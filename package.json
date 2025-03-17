@@ -1,0 +1,22 @@
+{
+  "name": "vain-project",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.8.0",
+    "ethers": "^5.7.0",
+    "hardhat": "^2.12.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "web3": "^1.8.0"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "lint": "eslint . --ext .js,.ts",
+    "format": "prettier --write \"**/*.{js,ts,json}\"",
+    "solhint": "solhint contracts/**/*.sol",
+    "cleanup": "python scripts/cleanup.py"
+  }
+}

@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  backend:
+    build: 
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file: ../.env
+
+  frontend:
+    build:
+      context: ../frontend
+    ports:
+      - "3000:3000"
+
+  database:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: vain_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

@@ -1,0 +1,16 @@
+{
+  "mainnet": {
+    "vain_token": "",
+    "staking_contract": "",
+    "liquidity_pool": "",
+    "governance_contract": "",
+    "reputation_contract": ""
+  },
+  "testnet": {
+    "vain_token": "",
+    "staking_contract": "",
+    "liquidity_pool": "", 
+    "governance_contract": "",
+    "reputation_contract": ""
+  }
+}

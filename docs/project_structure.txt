@@ -1,0 +1,7 @@
+vAIn Project Structure
+=====================
+
+vain_vAIn_project/
+│── main.py                        # Entry point for training execution
+│── config.py                      # Configuration settings (hyperparameters, paths)
+// ...rest of the structure as provided...
