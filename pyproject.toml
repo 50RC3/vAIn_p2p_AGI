@@ -6,13 +6,18 @@ include = '\.pyi?$'
 [tool.isort]
 profile = "black"
 multi_line_output = 3
+line_length = 88
 
 [tool.mypy]
 python_version = "3.8"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+strict = true  # Enforce stricter type checking
 
 [tool.pylint]
 max-line-length = 88
 disable = ["C0111", "R0903"]
+
+[tool.pylint."MESSAGES CONTROL"]
+disable = ["C0111", "R0903", "C0103"]  # Ignore docstrings, small classes, and naming style warnings
