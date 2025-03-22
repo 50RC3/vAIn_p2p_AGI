@@ -1,7 +1,28 @@
 const express = require('express');
 const router = express.Router();
 const { ethers } = require('ethers');
+const rateLimit = require('express-rate-limit');
 const { calculateRewards } = require('../utils/reward-calculator');
+const logger = require('../utils/logger');
+const metrics = require('../utils/metrics');
+
+// Initialize provider
+const provider = new ethers.providers.JsonRpcProvider(process.env.ETH_RPC_URL);
+
+// Rate limiting
+const rateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20 // Maximum 20 requests per window
+});
+
+// Validation middleware
+const validateRequest = (req, res, next) => {
+    const { address } = req.user;
+    if (!ethers.utils.isAddress(address)) {
+        return res.status(400).json({ error: 'Invalid Ethereum address' });
+    }
+    next();
+};
 
 /**
  * @typedef {Object} RewardsResponse
@@ -16,22 +37,44 @@ const { calculateRewards } = require('../utils/reward-calculator');
  * @throws {400} If user address is invalid
  * @throws {500} If calculation fails
  */
-router.get('/pending', async (req, res) => {
+router.get('/pending', rateLimiter, validateRequest, async (req, res) => {
+    const startTime = Date.now();
     try {
         const { address } = req.user;
         
-        if (!ethers.utils.isAddress(address)) {
-            return res.status(400).json({ 
-                error: "Invalid ethereum address" 
-            });
-        }
+        // Add timeout for reward calculation
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Request timeout')), 5000);
+        });
 
-        const rewards = await calculateRewards(address);
-        res.json({ rewards: rewards.toString() });
+        const rewards = await Promise.race([
+            calculateRewards(address),
+            timeoutPromise
+        ]);
+
+        // Cache headers
+        res.set('Cache-Control', 'private, max-age=60');
+        
+        metrics.recordRewardsCheck(address, Date.now() - startTime);
+        
+        res.json({ 
+            rewards: rewards.toString(),
+            timestamp: Date.now()
+        });
+
     } catch (error) {
+        logger.error(`Rewards error for ${req.user.address}: ${error}`);
+        
+        if (error.message === 'Request timeout') {
+            return res.status(504).json({ error: 'Request timed out' });
+        }
+        if (error.code === 'NETWORK_ERROR') {
+            return res.status(503).json({ error: 'Network error' });
+        }
+        
         res.status(500).json({ 
-            error: "Failed to calculate rewards",
-            details: error.message 
+            error: 'Failed to calculate rewards',
+            timestamp: Date.now()
         });
     }
 });
@@ -44,22 +87,39 @@ router.get('/pending', async (req, res) => {
  * @throws {400} If user address is invalid
  * @throws {500} If claim fails
  */
-router.post('/claim', async (req, res) => {
+router.post('/claim', rateLimiter, validateRequest, async (req, res) => {
+    const startTime = Date.now();
     try {
         const { address } = req.user;
+        
+        // Get contract instance
+        const rewardsContract = new ethers.Contract(
+            process.env.REWARDS_CONTRACT_ADDRESS,
+            RewardsContractABI,
+            provider.getSigner(address)
+        );
 
-        if (!ethers.utils.isAddress(address)) {
-            return res.status(400).json({ 
-                error: "Invalid ethereum address" 
-            });
-        }
+        const tx = await rewardsContract.claimRewards();
+        await tx.wait(); // Wait for confirmation
 
-        // Implementation for claiming rewards
-        res.json({ success: true });
+        metrics.recordRewardsClaim(address, tx.hash, Date.now() - startTime);
+
+        res.json({
+            success: true,
+            txHash: tx.hash,
+            timestamp: Date.now()
+        });
+
     } catch (error) {
-        res.status(500).json({ 
-            error: "Failed to claim rewards",
-            details: error.message 
+        logger.error(`Claim error for ${req.user.address}: ${error}`);
+        
+        if (error.code === 4001) { // User rejected
+            return res.status(400).json({ error: 'Transaction rejected' });
+        }
+        
+        res.status(500).json({
+            error: 'Failed to claim rewards',
+            timestamp: Date.now()
         });
     }
 });

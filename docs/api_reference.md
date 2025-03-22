@@ -1,35 +1,58 @@
-# vAIn API Reference
+# vAIn API Reference - Development Build
+
+> Note: This API is under active development by me (Vincent). Breaking changes should be expected.
+> Current Version: 0.2.1
+> Last Updated: [current date]
 
 ## REST API Endpoints
 
+### Currently Implemented
+- Basic authentication with ECDSA ✓
+- Simple staking operations ✓
+- Basic training status queries ✓
+- Node health monitoring ✓
+
+### Rate Limiting
+Current implementation:
+- Auth endpoints: 30 requests/minute
+- General endpoints: 10 requests/minute
+- Websocket connections: 1 per node
+- TODO: Dynamic rate limiting
+- TODO: Reputation-based limits
+
 ### Authentication
-- POST `/api/auth/login`
-  - Body: `{ "address": string, "signature": string }`
-  - Returns: `{ "token": string }`
+POST `/api/auth/login`
+```json
+{
+  "address": string,  // Ethereum address
+  "signature": string // ECDSA signature
+}
+```
+Note: Currently using basic ECDSA verification. Will be enhanced with hardware attestation in future versions.
 
-### Staking
-- POST `/api/staking/stake`
-  - Body: `{ "amount": string, "address": string }`
-  - Returns: `{ "success": boolean, "txHash": string }`
-
-### Training
-- GET `/api/training/status`
-  - Returns: `{ "currentRound": number, "accuracy": number, "participation": number }`
+### Core Endpoints
+- POST `/api/staking/stake` ✓
+- GET `/api/training/status` ✓
+- POST `/api/training/control` (Partially implemented)
+- GET `/api/node/health` ✓
+- POST `/api/node/resources` ✓
 
 ## WebSocket Events
 
-### Node Communication
-- `node:discovery` - Broadcast node presence
-- `node:metrics` - Share node performance metrics
-- `model:update` - Share model updates
+Currently working:
+- `node:discovery` ✓
+- `node:metrics` ✓
+- `model:update` (Basic implementation)
+- `health:status` ✓
+
+TODO:
+- Robust error handling
+- Advanced monitoring
+- Full metrics system
+- Training coordination
+- P2P message routing
 
 ## Smart Contract Methods
 
-### vAInToken
-- `stake(uint256 amount)`
-- `withdraw(uint256 amount)`
-- `getRewards()`
-
-### Governance
-- `propose(bytes[] calldata, string memory description)`
-- `castVote(uint256 proposalId, uint8 support)`
+Basic implementation is working but needs expansion. See `contracts/` directory for current state.
+Full documentation coming in v0.3.0.

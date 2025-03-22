@@ -13,11 +13,50 @@ python_version = "3.8"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
-strict = true  # Enforce stricter type checking
+strict = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
 
 [tool.pylint]
 max-line-length = 88
 disable = ["C0111", "R0903"]
+enable = [
+    "useless-suppression",
+    "deprecated-pragma", 
+    "use-symbolic-message-instead",
+    "use-implicit-booleaness-not-comparison",
+]
 
 [tool.pylint."MESSAGES CONTROL"]
-disable = ["C0111", "R0903", "C0103"]  # Ignore docstrings, small classes, and naming style warnings
+disable = ["C0111", "R0903", "C0103"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --cov=. --cov-report=xml --cov-report=term-missing"
+testpaths = ["tests"]
+asyncio_mode = "strict"
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["."]
+omit = ["tests/*", "setup.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+]

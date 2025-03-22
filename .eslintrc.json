@@ -11,6 +11,32 @@
   "rules": {
     "no-unused-vars": "error",
     "no-console": "warn",
-    "semi": ["error", "always"]
-  }
+    "semi": ["error", "always"],
+    "no-async-promise-executor": "error",
+    "no-await-in-loop": "warn",
+    "require-await": "error",
+    "no-promise-executor-return": "error",
+    "max-nested-callbacks": ["error", 3],
+    "no-var": "error",
+    "prefer-const": "error",
+    "no-undefined": "error",
+    "no-process-env": ["error", { 
+      "allow": ["NODE_ENV", "INTERACTION_LEVEL", "TIMEOUT_MS"]
+    }],
+    "complexity": ["error", 15],
+    "max-depth": ["error", 4],
+    "max-lines-per-function": ["warn", {
+      "max": 50,
+      "skipBlankLines": true,
+      "skipComments": true
+    }]
+  },
+  "overrides": [{
+    "files": ["**/interactive/**/*.js"],
+    "rules": {
+      "max-lines-per-function": "off",
+      "complexity": ["error", 20],
+      "no-await-in-loop": "off"
+    }
+  }]
 }

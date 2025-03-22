@@ -36,6 +36,16 @@ contract StakingContract is ReentrancyGuard, Pausable, Ownable {
     uint256 public constant MIN_STAKE = 1000 * 1e18; // 1000 VAIN
     uint256 public constant BASE_APR = 500; // 5%
     
+    // Add validation constants
+    uint256 public constant MAX_LOCK_PERIOD = 365 days;
+    uint256 public constant MIN_LOCK_PERIOD = 30 days;
+    uint256 public constant MAX_APPEALS_PER_USER = 3;
+    uint256 public constant COOLDOWN_PERIOD = 1 days;
+    
+    // Add tracking
+    mapping(address => uint256) public lastStakeTime;
+    mapping(address => uint256) public appealCount;
+    
     event Staked(address indexed user, uint256 amount, uint256 lockPeriod);
     event Withdrawn(address indexed user, uint256 amount, uint256 reward);
     event AppealFiled(address indexed user, uint256 slashAmount, string reason);
@@ -49,11 +59,40 @@ contract StakingContract is ReentrancyGuard, Pausable, Ownable {
         lockPeriodMultipliers[180] = 150;  // 1.5x for 180 days
     }
     
-    function stake(uint256 amount, uint256 lockPeriod) external nonReentrant whenNotPaused {
-        require(amount >= MIN_STAKE, "Below minimum stake amount");
+    // Add validation modifiers
+    modifier validateLockPeriod(uint256 lockPeriod) {
+        require(lockPeriod >= MIN_LOCK_PERIOD, "Lock period too short");
+        require(lockPeriod <= MAX_LOCK_PERIOD, "Lock period too long");
         require(lockPeriodMultipliers[lockPeriod] > 0, "Invalid lock period");
+        _;
+    }
+    
+    modifier enforceStakingCooldown() {
+        require(
+            block.timestamp >= lastStakeTime[msg.sender] + COOLDOWN_PERIOD,
+            "Must wait cooldown period"
+        );
+        _;
+    }
+
+    function stake(uint256 amount, uint256 lockPeriod) 
+        external 
+        nonReentrant 
+        whenNotPaused
+        validateLockPeriod(lockPeriod)
+        enforceStakingCooldown 
+    {
+        require(amount >= MIN_STAKE, "Below minimum stake amount");
+        require(amount <= stakingToken.balanceOf(msg.sender), "Insufficient balance");
         
-        stakingToken.transferFrom(msg.sender, address(this), amount);
+        // Update cooldown
+        lastStakeTime[msg.sender] = block.timestamp;
+        
+        // Transfer tokens
+        require(
+            stakingToken.transferFrom(msg.sender, address(this), amount),
+            "Token transfer failed"
+        );
         
         stakes[msg.sender] = Stake({
             amount: amount,
@@ -98,6 +137,10 @@ contract StakingContract is ReentrancyGuard, Pausable, Ownable {
     function fileAppeal(string calldata reason) external payable {
         require(msg.value >= APPEAL_FEE, "Insufficient appeal fee");
         require(stakes[msg.sender].amount > 0, "No active stake");
+        require(appealCount[msg.sender] < MAX_APPEALS_PER_USER, "Too many appeals");
+        require(bytes(reason).length <= 200, "Reason too long");
+        
+        appealCount[msg.sender]++;
         
         appeals[msg.sender].push(Appeal({
             slashAmount: stakes[msg.sender].amount,
@@ -124,6 +167,26 @@ contract StakingContract is ReentrancyGuard, Pausable, Ownable {
         }
         
         emit AppealResolved(user, accepted);
+    }
+
+    // Add view functions for frontend
+    function getStakeInfo(address user) external view returns (
+        uint256 amount,
+        uint256 startTime,
+        uint256 lockPeriod,
+        uint256 rewardMultiplier
+    ) {
+        Stake memory stake = stakes[user];
+        return (
+            stake.amount,
+            stake.startTime,
+            stake.lockPeriod,
+            stake.rewardMultiplier
+        );
+    }
+    
+    function getAppealCount(address user) external view returns (uint256) {
+        return appealCount[user];
     }
 
     function pause() external onlyOwner {

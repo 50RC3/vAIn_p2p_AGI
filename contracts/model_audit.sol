@@ -42,11 +42,15 @@ contract ModelAudit is Ownable, ReentrancyGuard, Pausable, VRFConsumerBaseV2 {
         bool verified;
     }
 
+    enum VerificationStatus { Pending, InProgress, Verified, Failed }
+    
     struct HardwareVerification {
         uint256 verificationCount;
         mapping(address => bool) verifiers;
         uint256 lastVerificationTime;
         bool isVerified;
+        VerificationStatus status;
+        string statusDetails;
     }
 
     mapping(string => ModelValidation[]) public modelValidations;
@@ -80,7 +84,15 @@ contract ModelAudit is Ownable, ReentrancyGuard, Pausable, VRFConsumerBaseV2 {
     event VerifiersAssigned(address indexed validator, address[] verifiers);
     event BatchVerificationSubmitted(uint256 batchId, uint256 nodesCount);
     event ByzantineThresholdUpdated(uint256 newThreshold);
+    event StakeUpdated(address indexed validator, uint256 amount);
+    event ValidationRejected(string modelHash, address validator, string reason);
+    event BatchProcessed(uint256 indexed batchId, uint256 successCount, uint256 failCount);
+    event VerificationStatusUpdated(address indexed validator, VerificationStatus status);
     
+    uint256 public constant MAX_VALIDATIONS_PER_MODEL = 100;
+    uint256 public constant CLEANUP_THRESHOLD = 1000;
+    uint256 public lastCleanupTime;
+
     constructor(
         uint256 _minValidatorStake,
         address _vrfCoordinator,
@@ -118,7 +130,13 @@ contract ModelAudit is Ownable, ReentrancyGuard, Pausable, VRFConsumerBaseV2 {
         uint256 score
     ) external nonReentrant whenNotPaused validateModelHash(modelHash) validateScore(score) {
         require(validatorStakes[msg.sender] >= minValidatorStake, "Insufficient stake");
+        require(modelValidations[modelHash].length < MAX_VALIDATIONS_PER_MODEL, "Max validations reached");
         
+        // Check for duplicate validation
+        for(uint i = 0; i < modelValidations[modelHash].length; i++) {
+            require(modelValidations[modelHash][i].validator != msg.sender, "Duplicate validation");
+        }
+
         modelValidations[modelHash].push(ModelValidation({
             modelHash: modelHash,
             timestamp: block.timestamp,
@@ -128,6 +146,11 @@ contract ModelAudit is Ownable, ReentrancyGuard, Pausable, VRFConsumerBaseV2 {
         }));
         
         emit ModelValidated(modelHash, msg.sender, approved, score);
+
+        // Trigger cleanup if needed
+        if(block.timestamp >= lastCleanupTime + 1 days) {
+            _cleanupOldValidations();
+        }
     }
 
     function submitHardwareAttestation(bytes32 _tpmHash, bytes32 _gpuFingerprint) external {
@@ -151,6 +174,8 @@ contract ModelAudit is Ownable, ReentrancyGuard, Pausable, VRFConsumerBaseV2 {
         
         validatorStakes[msg.sender] += msg.value;
         lastStakeChange[msg.sender] = block.timestamp;
+
+        emit StakeUpdated(msg.sender, validatorStakes[msg.sender]);
     }
 
     // P2P Hardware verification
@@ -271,5 +296,68 @@ contract ModelAudit is Ownable, ReentrancyGuard, Pausable, VRFConsumerBaseV2 {
         require(newThreshold > 0 && newThreshold < 50, "Invalid threshold");
         byzantineThreshold = newThreshold;
         emit ByzantineThresholdUpdated(newThreshold);
+    }
+
+    function getHardwareVerificationStatus(address validator) external view returns (
+        VerificationStatus status,
+        uint256 verificationCount,
+        uint256 lastVerificationTime,
+        string memory statusDetails
+    ) {
+        HardwareVerification storage verification = hardwareVerifications[validator];
+        return (
+            verification.status,
+            verification.verificationCount,
+            verification.lastVerificationTime,
+            verification.statusDetails
+        );
+    }
+
+    function getBatchStatus(uint256 batchId) external view returns (
+        bool processed,
+        uint256 nodeCount,
+        address[] memory nodes,
+        bytes32[] memory tpmHashes
+    ) {
+        BatchVerification storage batch = batchVerifications[batchId];
+        return (
+            batch.processed,
+            batch.nodes.length,
+            batch.nodes,
+            batch.tpmHashes
+        );
+    }
+
+    // Emergency functions
+    function emergencyPauseValidations() external onlyOwner {
+        _pause();
+    }
+
+    function resumeValidations() external onlyOwner {
+        _unpause();
+    }
+
+    // Internal helper functions
+    function _cleanupOldValidations() internal {
+        // Remove old validations to prevent unbounded growth
+        if(block.timestamp < lastCleanupTime + 1 days) {
+            return;
+        }
+        
+        lastCleanupTime = block.timestamp;
+        uint256 cutoffTime = block.timestamp - 30 days;
+        
+        // Cleanup logic would go here
+        // Note: Full implementation would need to be gas-optimized
+    }
+
+    function _updateVerificationStatus(
+        address validator,
+        VerificationStatus status,
+        string memory details
+    ) internal {
+        hardwareVerifications[validator].status = status;
+        hardwareVerifications[validator].statusDetails = details;
+        emit VerificationStatusUpdated(validator, status);
     }
 }

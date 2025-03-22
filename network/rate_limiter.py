@@ -1,14 +1,23 @@
 from datetime import datetime, timedelta
 from collections import defaultdict
 import asyncio
-from typing import Dict
+from typing import Dict, Optional
 import time
+import logging
+from core.constants import INTERACTION_TIMEOUTS, InteractionLevel
+from core.interactive_utils import InteractiveSession, InteractiveConfig
+
+logger = logging.getLogger(__name__)
 
 class RateLimiter:
-    def __init__(self, max_requests: int, time_window: int):
+    def __init__(self, max_requests: int, time_window: int, interactive: bool = True):
         self.max_requests = max_requests
         self.time_window = time_window
         self.requests = defaultdict(list)
+        self.interactive = interactive
+        self.session = None
+        self._cleanup_event = asyncio.Event()
+        self._interrupt_requested = False
         
     async def allow_request(self, client_id: str) -> bool:
         now = datetime.now()
@@ -27,13 +36,58 @@ class RateLimiter:
         self.requests[client_id].append(now)
         return True
 
+    async def allow_request_interactive(self, client_id: str) -> bool:
+        """Interactive request handling with monitoring"""
+        try:
+            if self.interactive:
+                self.session = InteractiveSession(
+                    level=InteractionLevel.NORMAL,
+                    config=InteractiveConfig(
+                        timeout=INTERACTION_TIMEOUTS["default"],
+                        persistent_state=True,
+                        safe_mode=True
+                    )
+                )
+
+            async with self.session:
+                allowed = await self.allow_request(client_id)
+                if not allowed and self.interactive:
+                    logger.warning(f"Rate limit exceeded for client {client_id}")
+                return allowed
+
+        except Exception as e:
+            logger.error(f"Rate limit check failed: {str(e)}")
+            return False
+        finally:
+            if self.session:
+                await self.session.__aexit__(None, None, None)
+
+    async def cleanup(self):
+        """Cleanup resources"""
+        try:
+            self._cleanup_event.set()
+            self.requests.clear()
+            logger.info("Rate limiter cleanup completed")
+        except Exception as e:
+            logger.error(f"Cleanup failed: {str(e)}")
+
+    def request_shutdown(self):
+        """Request graceful shutdown"""
+        self._interrupt_requested = True
+
 class AdaptiveRateLimiter:
-    def __init__(self, initial_rate: float = 1000.0, window_size: int = 60):
+    def __init__(self, initial_rate: float = 1000.0, window_size: int = 60, 
+                 interactive: bool = True):
         self.base_rate = initial_rate  # bytes per second
         self.window_size = window_size  # seconds
         self.usage = defaultdict(list)
         self.last_adjustment = time.time()
-        
+        self.interactive = interactive
+        self.session = None
+        self._cleanup_event = asyncio.Event()
+        self._interrupt_requested = False
+        self.adjustment_history = []
+
     def can_send(self, node_id: str, size: int) -> bool:
         now = time.time()
         self._cleanup_old_data(node_id, now)
@@ -57,3 +111,71 @@ class AdaptiveRateLimiter:
         """Adjust rate based on network congestion (0-1 scale)"""
         self.base_rate *= (1 - congestion_level)
         self.last_adjustment = time.time()
+
+    async def can_send_interactive(self, node_id: str, size: int) -> bool:
+        """Interactive send check with monitoring"""
+        try:
+            if self.interactive:
+                self.session = InteractiveSession(
+                    level=InteractionLevel.NORMAL,
+                    config=InteractiveConfig(
+                        timeout=INTERACTION_TIMEOUTS["default"],
+                        persistent_state=True,
+                        safe_mode=True
+                    )
+                )
+
+            async with self.session:
+                if size > self.base_rate * 2:  # Large message warning
+                    if self.interactive:
+                        logger.warning(f"Large message detected: {size} bytes")
+
+                allowed = self.can_send(node_id, size)
+                if not allowed and self.interactive:
+                    logger.warning(f"Rate limit exceeded for node {node_id}")
+                return allowed
+
+        except Exception as e:
+            logger.error(f"Send check failed: {str(e)}")
+            return False
+        finally:
+            if self.session:
+                await self.session.__aexit__(None, None, None)
+
+    async def adjust_rate_interactive(self, congestion_level: float):
+        """Interactive rate adjustment with validation"""
+        try:
+            if not 0 <= congestion_level <= 1:
+                raise ValueError("Congestion level must be between 0 and 1")
+
+            old_rate = self.base_rate
+            self.adjust_rate(congestion_level)
+            
+            self.adjustment_history.append({
+                'timestamp': time.time(),
+                'old_rate': old_rate,
+                'new_rate': self.base_rate,
+                'congestion': congestion_level
+            })
+
+            if self.interactive:
+                logger.info(f"Rate adjusted: {old_rate:.2f} -> {self.base_rate:.2f} B/s")
+
+        except Exception as e:
+            logger.error(f"Rate adjustment failed: {str(e)}")
+            raise
+
+    async def cleanup(self):
+        """Cleanup resources"""
+        try:
+            self._cleanup_event.set()
+            self.usage.clear()
+            self.adjustment_history.clear()
+            logger.info("Adaptive rate limiter cleanup completed")
+        except Exception as e:
+            logger.error(f"Cleanup failed: {str(e)}")
+
+    def request_shutdown(self):
+        """Request graceful shutdown"""
+        self._interrupt_requested = True
+        logger.info("Shutdown requested for rate limiter")

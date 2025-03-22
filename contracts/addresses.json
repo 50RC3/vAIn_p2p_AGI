@@ -4,13 +4,19 @@
     "staking_contract": "",
     "liquidity_pool": "",
     "governance_contract": "",
-    "reputation_contract": ""
+    "reputation_contract": "",
+    "validators": [],
+    "required_confirmations": 12,
+    "min_gas_price": "20000000000"
   },
   "testnet": {
     "vain_token": "",
-    "staking_contract": "",
-    "liquidity_pool": "", 
+    "staking_contract": "", 
+    "liquidity_pool": "",
     "governance_contract": "",
-    "reputation_contract": ""
+    "reputation_contract": "",
+    "validators": [],
+    "required_confirmations": 2,
+    "min_gas_price": "1000000000"
   }
 }

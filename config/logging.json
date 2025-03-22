@@ -4,14 +4,65 @@
     "file_logging": true,
     "max_bytes": 10485760,
     "backup_count": 5,
+    "interactive_mode": {
+        "enabled": true,
+        "progress_bar": true,
+        "refresh_rate": 1.0,
+        "silence_repeated_errors": true,
+        "error_cooldown": 300
+    },
     "handlers": {
         "console": {
             "enabled": true,
-            "level": "INFO"
+            "level": "INFO",
+            "format_production": "%(asctime)s [%(levelname)s] %(message)s",
+            "format_development": "%(asctime)s | %(name)s | %(levelname)s | [%(filename)s:%(lineno)d] | %(message)s",
+            "colors": true
         },
         "file": {
             "enabled": true,
-            "level": "DEBUG"
+            "level": "DEBUG",
+            "filename": "logs/vain.log",
+            "max_size_mb": 10,
+            "backup_count": 5,
+            "encoding": "utf-8",
+            "mode": "a"
+        },
+        "metrics": {
+            "enabled": true,
+            "level": "INFO",
+            "host": "localhost",
+            "port": 8125,
+            "prefix": "vain.",
+            "tag_host": true
+        },
+        "alert": {
+            "enabled": true,
+            "level": "ERROR",
+            "cooldown": 300,
+            "aggregation_window": 60,
+            "threshold": 10
+        }
+    },
+    "filters": {
+        "rate_limit": {
+            "enabled": true,
+            "burst": 100,
+            "rate": 10
+        },
+        "sensitive_data": {
+            "enabled": true,
+            "mask_pattern": ["password", "secret", "token", "key"]
+        }
+    },
+    "formatters": {
+        "detailed": {
+            "format": "%(asctime)s | %(name)s | %(levelname)s | [%(filename)s:%(lineno)d] | %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S"
+        },
+        "simple": {
+            "format": "%(asctime)s [%(levelname)s] %(message)s",
+            "datefmt": "%H:%M:%S"
         }
     }
 }

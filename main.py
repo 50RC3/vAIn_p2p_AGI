@@ -8,15 +8,122 @@ import logging
 from utils.logger_init import init_logger
 import signal
 import sys
+import asyncio
+from core.interactive_utils import InteractiveSession, InteractiveConfig, InteractionLevel
+from core.constants import INTERACTION_TIMEOUTS
+import psutil
 
-def setup_signal_handlers(network: P2PNetwork):
+MAX_RETRY_ATTEMPTS = 3
+STARTUP_TIMEOUT = 60
+
+async def cleanup_resources(session, network):
+    """Cleanup resources gracefully"""
+    try:
+        if network:
+            network.stop()
+        if session:
+            await session.__aexit__(None, None, None)
+    except Exception as e:
+        logging.error(f"Error during cleanup: {e}")
+
+def setup_signal_handlers(network: P2PNetwork, session: InteractiveSession):
     def signal_handler(sig, frame):
-        logging.info("Shutting down vAIn node...")
-        network.stop()
-        sys.exit(0)
+        logging.info("Initiating graceful shutdown...")
+        try:
+            # Run cleanup in event loop
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(cleanup_resources(session, network))
+        except Exception as e:
+            logging.error(f"Error during shutdown: {e}")
+        finally:
+            sys.exit(0)
     
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
+
+async def verify_system_resources():
+    """Verify sufficient system resources before startup"""
+    try:
+        memory = psutil.virtual_memory()
+        cpu_percent = psutil.cpu_percent(interval=1)
+        disk = psutil.disk_usage('/')
+        
+        if memory.percent > 90:
+            raise RuntimeError("Insufficient memory available")
+        if cpu_percent > 90:
+            raise RuntimeError("CPU usage too high")
+        if disk.percent > 95:
+            raise RuntimeError("Insufficient disk space")
+            
+        return True
+    except Exception as e:
+        logging.error(f"Resource verification failed: {e}")
+        return False
+
+async def run_node(config: Config, logger: logging.Logger):
+    """Run node with enhanced interactive session management"""
+    session = None
+    network = None
+    
+    try:
+        # Verify resources first
+        if not await verify_system_resources():
+            logger.error("Failed system resource verification")
+            return
+
+        # Initialize interactive session with recovery
+        session = InteractiveSession(
+            level=InteractionLevel.NORMAL,
+            config=InteractiveConfig(
+                timeout=INTERACTION_TIMEOUTS["default"],
+                persistent_state=True,
+                safe_mode=True,
+                recovery_enabled=True,
+                max_cleanup_wait=30,
+                max_retries=MAX_RETRY_ATTEMPTS,
+                heartbeat_interval=30,
+                memory_threshold=0.9
+            )
+        )
+
+        async with session:
+            # Monitor system resources
+            resource_monitor = asyncio.create_task(session.monitor_resources())
+            
+            try:
+                network = P2PNetwork(config.node_id, config.network)
+                setup_signal_handlers(network, session)
+                
+                logger.info(f"Starting vAIn node {config.node_id}...")
+                
+                # Enhanced interactive startup with timeout
+                if session.level != InteractionLevel.NONE:
+                    async with session.timeout(STARTUP_TIMEOUT):
+                        proceed = await session.confirm_with_timeout(
+                            "\nStart node with current configuration?",
+                            timeout=INTERACTION_TIMEOUTS["confirmation"]
+                        )
+                        if not proceed:
+                            logger.info("Node startup cancelled by user")
+                            return
+
+                # Register cleanup handlers
+                session.register_cleanup(network.cleanup)
+                
+                # Start network with monitoring and auto-recovery
+                await network.start_interactive()
+
+            except asyncio.TimeoutError:
+                logger.error("Node startup timed out")
+                raise
+            finally:
+                resource_monitor.cancel()
+
+    except Exception as e:
+        logger.error(f"Error running vAIn node: {e}")
+        raise
+    finally:
+        await cleanup_resources(session, network)
 
 def main():
     # Initialize logger first
@@ -30,16 +137,12 @@ def main():
         # Initialize config with environment variables
         config = Config()
         
-        # Initialize P2P network with new config structure
-        network = P2PNetwork(config.node_id, config.network)
-        setup_signal_handlers(network)
-        
-        logger.info(f"Starting vAIn node {config.node_id}...")
-        network.start()
+        # Run node with asyncio
+        asyncio.run(run_node(config, logger))
+    except KeyboardInterrupt:
+        logger.info("Received shutdown signal")
     except Exception as e:
-        logger.error(f"Error running vAIn node: {e}")
-        if 'network' in locals():
-            network.stop()
+        logger.error(f"Fatal error: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
