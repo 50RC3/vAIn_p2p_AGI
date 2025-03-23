@@ -18,23 +18,25 @@ class RateLimiter:
         self.session = None
         self._cleanup_event = asyncio.Event()
         self._interrupt_requested = False
+        self._lock = asyncio.Lock()
         
     async def allow_request(self, client_id: str) -> bool:
-        now = datetime.now()
-        window_start = now - timedelta(seconds=self.time_window)
-        
-        # Clean old requests
-        self.requests[client_id] = [
-            req_time for req_time in self.requests[client_id]
-            if req_time > window_start
-        ]
-        
-        # Check rate limit
-        if len(self.requests[client_id]) >= self.max_requests:
-            return False
+        async with self._lock:
+            now = datetime.now()
+            window_start = now - timedelta(seconds=self.time_window)
             
-        self.requests[client_id].append(now)
-        return True
+            # Clean old requests
+            self.requests[client_id] = [
+                req_time for req_time in self.requests[client_id]
+                if req_time > window_start
+            ]
+            
+            # Check rate limit
+            if len(self.requests[client_id]) >= self.max_requests:
+                return False
+                
+            self.requests[client_id].append(now)
+            return True
 
     async def allow_request_interactive(self, client_id: str) -> bool:
         """Interactive request handling with monitoring"""
@@ -87,30 +89,42 @@ class AdaptiveRateLimiter:
         self._cleanup_event = asyncio.Event()
         self._interrupt_requested = False
         self.adjustment_history = []
+        self._lock = asyncio.Lock()
 
-    def can_send(self, node_id: str, size: int) -> bool:
-        now = time.time()
-        self._cleanup_old_data(node_id, now)
+    async def can_send(self, node_id: str, size: int) -> bool:
+        async with self._lock:
+            try:
+                now = time.time()
+                await self._cleanup_old_data(node_id, now)
+                
+                current_usage = sum(usage[1] for usage in self.usage[node_id])
+                allowed_usage = self.base_rate * self.window_size
+                
+                if current_usage + size <= allowed_usage:
+                    self.usage[node_id].append((now, size))
+                    return True
+                return False
+            except Exception as e:
+                logger.error(f"Error in can_send for node {node_id}: {str(e)}")
+                return False
         
-        current_usage = sum(usage[1] for usage in self.usage[node_id])
-        allowed_usage = self.base_rate * self.window_size
-        
-        if current_usage + size <= allowed_usage:
-            self.usage[node_id].append((now, size))
-            return True
-        return False
-        
-    def _cleanup_old_data(self, node_id: str, now: float):
-        cutoff = now - self.window_size
-        self.usage[node_id] = [
-            (t, s) for t, s in self.usage[node_id] 
-            if t > cutoff
-        ]
+    async def _cleanup_old_data(self, node_id: str, now: float):
+        async with self._lock:
+            try:
+                cutoff = now - self.window_size
+                self.usage[node_id] = [
+                    (t, s) for t, s in self.usage[node_id] 
+                    if t > cutoff
+                ]
+            except Exception as e:
+                logger.error(f"Error cleaning old data for node {node_id}: {str(e)}")
+                raise
 
-    def adjust_rate(self, congestion_level: float):
+    async def adjust_rate(self, congestion_level: float):
         """Adjust rate based on network congestion (0-1 scale)"""
-        self.base_rate *= (1 - congestion_level)
-        self.last_adjustment = time.time()
+        async with self._lock:
+            self.base_rate *= (1 - congestion_level)
+            self.last_adjustment = time.time()
 
     async def can_send_interactive(self, node_id: str, size: int) -> bool:
         """Interactive send check with monitoring"""
@@ -130,7 +144,7 @@ class AdaptiveRateLimiter:
                     if self.interactive:
                         logger.warning(f"Large message detected: {size} bytes")
 
-                allowed = self.can_send(node_id, size)
+                allowed = await self.can_send(node_id, size)
                 if not allowed and self.interactive:
                     logger.warning(f"Rate limit exceeded for node {node_id}")
                 return allowed
@@ -149,7 +163,7 @@ class AdaptiveRateLimiter:
                 raise ValueError("Congestion level must be between 0 and 1")
 
             old_rate = self.base_rate
-            self.adjust_rate(congestion_level)
+            await self.adjust_rate(congestion_level)
             
             self.adjustment_history.append({
                 'timestamp': time.time(),

@@ -45,6 +45,7 @@ class ValidationCoordinator:
         self._consensus_strategy = consensus_strategy or self._default_consensus
         self.active_validations: Dict[str, ValidationProgress] = {}
         self._progress_callbacks: List[Callable[[str, ValidationProgress], None]] = []
+        self.error_manager = ErrorFeedbackManager(interactive=True)
 
     def register_progress_callback(self, callback: Callable[[str, ValidationProgress], None]):
         """Register a callback to receive validation progress updates"""
@@ -111,6 +112,26 @@ class ValidationCoordinator:
             }
             
         except Exception as e:
+            error_context = {
+                'source': 'validation_coordinator',
+                'model_hash': model_hash,
+                'validators': validators,
+                'metrics': self.metrics.get(model_hash, {})
+            }
+            
+            error_response = await self.error_manager.process_error(e, error_context)
+            
+            if error_response['action'] == 'critical_intervention':
+                if interactive:
+                    self._notify_progress(model_hash, ValidationProgress(
+                        total=len(validators),
+                        completed=0,
+                        successful=0,
+                        failed=1,
+                        consensus_reached=False,
+                        progress_event=asyncio.Event()
+                    ))
+                    
             logger.error(f"Validation coordination failed: {str(e)}")
             if model_hash in self.active_validations:
                 del self.active_validations[model_hash]

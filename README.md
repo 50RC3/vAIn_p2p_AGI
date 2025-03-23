@@ -7,11 +7,27 @@
   - No central authority; governance and decisions are distributed.
   - Nodes communicate directly through a mix of UDP broadcasting and DHT (Distributed Hash Table).
   - Self-organizing structure, where nodes discover peers and form a dynamic, reputation-based hierarchy.
+  - **Production Security**:
+    - TLS 1.3+ encryption for all node communications
+    - Rate limiting and DoS protection
+    - Automatic malicious node detection and blacklisting
+    - Multi-region failover support
 
 ##### 2. Node Structure
-- **Nodes contribute computational resources, storage, and bandwidth**.
-- **Each node has an identity** (public-private key pair) used for authentication.
-- **Nodes are tiered based on reputation and contributions**.
+- **Nodes contribute computational resources, storage, and bandwidth**:
+  - Resource verification using hardware attestation
+  - Real-time monitoring with automatic scaling
+  - Configurable resource limits and throttling
+- **Each node has an identity** (public-private key pair) used for authentication:
+  - ED25519 keypairs for optimal security/performance
+  - Hierarchical deterministic key generation
+  - Automatic key rotation every 90 days
+  - Hardware security module (HSM) support
+- **Nodes are tiered based on reputation and contributions**:
+  - Configurable tier thresholds and requirements
+  - Automatic tier adjustment based on performance metrics
+  - Byzantine fault tolerance up to f=(n-1)/3 malicious nodes
+  - Proof-of-stake weighted voting rights
 
 #### Peer Discovery & Network Connectivity
 

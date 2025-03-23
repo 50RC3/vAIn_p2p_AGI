@@ -1,6 +1,12 @@
 from dataclasses import dataclass, field
 from typing import Dict, List
 from statistics import mean
+import torch
+import numpy as np
+from typing import Dict, Any, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelMetrics:
@@ -48,3 +54,28 @@ class ModelMetrics:
             "total_epochs": sum(self.epoch_counts),
             "total_batches": sum(self.batch_counts)
         }
+
+def calculate_training_metrics(model_outputs: torch.Tensor, 
+                             targets: torch.Tensor) -> Dict[str, float]:
+    """Calculate core training metrics"""
+    with torch.no_grad():
+        loss = torch.nn.functional.cross_entropy(model_outputs, targets)
+        predictions = model_outputs.argmax(dim=1)
+        accuracy = (predictions == targets).float().mean().item()
+        
+        return {
+            'loss': loss.item(),
+            'accuracy': accuracy,
+            'perplexity': torch.exp(loss).item()
+        }
+
+def calculate_model_complexity(model: torch.nn.Module) -> Dict[str, int]:
+    """Calculate model complexity metrics"""
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    
+    return {
+        'total_parameters': total_params,
+        'trainable_parameters': trainable_params,
+        'layers': len(list(model.modules()))
+    }

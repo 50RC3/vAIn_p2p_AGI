@@ -17,23 +17,54 @@ class FederatedTrainingError(Exception):
 
 class FederatedLearning:
     def __init__(self, config):
+        if not hasattr(config, 'min_clients') or not hasattr(config, 'clients_per_round'):
+            raise ValueError("Config missing required attributes: min_clients, clients_per_round")
+            
         self.config = config
+        self.clients = []  # Initialize empty client list
+        self.global_model = None
+        self.lr = getattr(config, 'learning_rate', 0.01)
+        self.local_epochs = getattr(config, 'local_epochs', 1)
+        self.rounds = getattr(config, 'rounds', 10)
+        self.criterion = getattr(config, 'criterion', nn.CrossEntropyLoss())
+        
+        # Validate config parameters
+        if self.config.min_clients < 2:
+            raise ValueError("min_clients must be at least 2")
+        if self.config.clients_per_round < self.config.min_clients:
+            raise ValueError("clients_per_round must be >= min_clients")
+            
         self.clusters = self._initialize_clusters()
         self.aggregation_threshold = 0.01  # Only sync gradients > 1%
-        self.byzantine_threshold = 0.33  # Max fraction of Byzantine nodes
+        self.byzantine_threshold = min(0.33, getattr(config, 'byzantine_threshold', 0.33))
+        self.min_byzantine_threshold = 0.15
+        self.max_byzantine_threshold = 0.49
+        self.byzantine_window = getattr(config, 'byzantine_window', 100)
         self.krum_neighbors = max(2, int(len(self.clients) * (1 - self.byzantine_threshold)))
-        self.min_byzantine_threshold = 0.15  # Minimum threshold
-        self.max_byzantine_threshold = 0.49  # Maximum threshold
-        self.byzantine_window = 100  # Number of rounds to consider
-        self.fraud_history = []  # Track fraud metrics
-        self.compression = AdaptiveCompression()
-        self.local_cluster_size = 10  # Nodes per local cluster
-        self.compression_rate = 0.01  # Start with 1% of gradients
-        self.error_accumulator = {}  # Track accumulated errors
-        self.min_compression = 0.01  # Minimum 1% compression
-        self.max_compression = 0.3   # Maximum 30% compression
-        self.data_quality_threshold = 0.7
         
+        # Initialize tracking containers
+        self.fraud_history = []
+        self.error_accumulator = {}
+        
+        # Compression settings with validation
+        self.compression_rate = max(0.01, min(0.3, getattr(config, 'compression_rate', 0.01)))
+        self.min_compression = getattr(config, 'min_compression', 0.01)
+        self.max_compression = getattr(config, 'max_compression', 0.3)
+        self.local_cluster_size = max(2, min(10, getattr(config, 'local_cluster_size', 10)))
+        self.data_quality_threshold = max(0.1, min(1.0, getattr(config, 'data_quality_threshold', 0.7)))
+        
+        # Initialize compression
+        self.compression = AdaptiveCompression()
+        
+        logger.info("FederatedLearning initialized with %d clients minimum", self.config.min_clients)
+
+    def _validate_state(self):
+        """Validate internal state before operations"""
+        if not self.clients:
+            raise FederatedTrainingError("No clients registered")
+        if not self.global_model and not hasattr(self.config, 'model_initializer'):
+            raise FederatedTrainingError("No global model or model initializer defined")
+
     def _initialize_clusters(self) -> List[NodeCluster]:
         # Create hierarchical node clusters
         clusters = []
@@ -63,6 +94,8 @@ class FederatedLearning:
 
     def train(self) -> nn.Module:
         """Execute federated training across all clients."""
+        self._validate_state()
+        
         try:
             if len(self.clients) < self.config.min_clients:
                 msg = f"Insufficient clients: {len(self.clients)} < {self.config.min_clients}"
@@ -264,3 +297,24 @@ class FederatedLearning:
                 self.compression_rate * 1.2,  # Increase compression
                 self.max_compression
             )
+
+    def _track_training_progress(self, round_num: int, metrics: Dict[str, float]):
+        """Track training progress and detect anomalies"""
+        try:
+            self._progress[round_num] = metrics
+            
+            # Check for training anomalies
+            if round_num > 0:
+                loss_delta = metrics['loss'] - self._progress[round_num-1]['loss']
+                if abs(loss_delta) > self.config.loss_delta_threshold:
+                    logger.warning(f"Large loss change detected in round {round_num}")
+                    
+                acc_delta = metrics['accuracy'] - self._progress[round_num-1]['accuracy'] 
+                if acc_delta < -0.1:  # 10% drop in accuracy
+                    logger.warning(f"Accuracy drop detected in round {round_num}")
+                    
+            # Update compression rate based on metrics
+            self._adjust_compression_rate(metrics)
+            
+        except Exception as e:
+            logger.error(f"Error tracking progress: {str(e)}")

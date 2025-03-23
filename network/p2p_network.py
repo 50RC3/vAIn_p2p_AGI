@@ -15,6 +15,33 @@ from security.auth import NodeAuthenticator
 from network.consensus import ConsensusManager
 from .rate_limiter import RateLimiter
 from .circuit_breaker import CircuitBreaker
+from security.secure_key_manager import SecureKeyManager
+from .cluster_manager import ClusterManager
+from .admin_commands import AdminCommands
+
+class P2PNetworkError(Exception):
+    """Base exception for P2P network errors"""
+    pass
+
+class PeerConnectionError(P2PNetworkError):
+    """Raised when connection to a peer fails"""
+    pass
+
+class PeerAuthenticationError(P2PNetworkError):
+    """Raised when peer authentication fails"""
+    pass
+
+class MessageTimeoutError(P2PNetworkError):
+    """Raised when message sending times out"""
+    pass
+
+class NetworkTimeoutError(P2PNetworkError):
+    """Raised when network operations timeout"""
+    pass
+
+class MessageValidationError(P2PNetworkError):
+    """Raised when message validation fails"""
+    pass
 
 class P2PNetwork:
     def __init__(self, node_id: str, network_config: Dict, interactive: bool = True):
@@ -47,6 +74,14 @@ class P2PNetwork:
             network_config['encryption_key'].encode()
         )
         
+        # Add secure key manager
+        self.key_manager = SecureKeyManager()
+        
+        # Add cluster manager
+        self.cluster_manager = ClusterManager(network_config.get('cluster_config', {}))
+        self.cluster_id = None
+        self.peer_latencies = {}
+        
         # Setup logging
         self.logger = logging.getLogger('P2PNetwork')
         
@@ -61,6 +96,30 @@ class P2PNetwork:
         self._interrupt_requested = False
         self._progress_bar = None
         
+        # Initialize reputation manager with revalidation
+        self.reputation_manager = ReputationManager(
+            decay_factor=network_config.get('reputation_decay', 0.95),
+            min_reputation=network_config.get('min_reputation', -100),
+            interactive=interactive
+        )
+        await self.reputation_manager.start()
+        
+        # Add consensus states
+        self.pending_state_changes: Dict[str, Dict] = {}
+        self.consensus_thresholds = {
+            'peer_ban': 0.75,  # 75% agreement needed to ban peer
+            'reputation_update': 0.65,  # 65% for reputation changes
+            'cluster_reconfig': 0.80,  # 80% for cluster changes
+            'network_param': 0.90  # 90% for network parameter changes
+        }
+
+        # Add admin commands
+        self.admin = AdminCommands(self)
+
+        self._active_tasks = set()
+        self._cleanup_lock = asyncio.Lock()
+        self._shutdown_timeout = network_config.get('shutdown_timeout', 30)  # 30 second timeout
+        
     def start(self):
         """Start the P2P network node."""
         self.running = True
@@ -68,16 +127,37 @@ class P2PNetwork:
         asyncio.run(self._run_network())
         
     def stop(self):
-        """Gracefully stop the P2P network node."""
+        """Gracefully stop the P2P network node with task cleanup."""
         self.running = False
         self.logger.info(f"Stopping P2P node {self.node_id}")
-        asyncio.run(self._cleanup())
+        
+        try:
+            # Create event loop if needed
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+            # Run cleanup with timeout
+            cleanup_task = self._cleanup()
+            cleanup_future = asyncio.run_coroutine_threadsafe(cleanup_task, loop)
+            cleanup_future.result(timeout=self._shutdown_timeout)
+            
+        except TimeoutError:
+            self.logger.error("Shutdown timed out, forcing cleanup")
+            self._force_cleanup()
+        except Exception as e:
+            self.logger.error(f"Error during shutdown: {e}")
+            raise
+        finally:
+            self._interrupt_requested = False
         
     async def _run_network(self):
         """Run the main network loop."""
         # Start P2P services
         await self.udp_broadcast.start()
         await self.dht.start()
+        await self.reputation_manager.start_revalidation_loop()
         
         while self.running:
             try:
@@ -90,9 +170,53 @@ class P2PNetwork:
                 self.logger.error(f"Network error: {e}")
                 
     async def _cleanup(self):
-        """Clean up network resources."""
-        await self.udp_broadcast.stop()
-        await self.dht.stop()
+        """Enhanced cleanup with active task handling."""
+        async with self._cleanup_lock:
+            try:
+                # Cancel all active tasks
+                active_tasks = list(self._active_tasks)
+                if active_tasks:
+                    self.logger.info(f"Cancelling {len(active_tasks)} active tasks")
+                    for task in active_tasks:
+                        if not task.done():
+                            task.cancel()
+                    await asyncio.gather(*active_tasks, return_exceptions=True)
+                    self._active_tasks.clear()
+
+                # Run existing cleanup
+                await self._cleanup_interactive()
+
+            except Exception as e:
+                self.logger.error(f"Cleanup error: {e}")
+                raise
+
+    def _force_cleanup(self):
+        """Force cleanup of resources when graceful shutdown fails."""
+        try:
+            # Clear all collections immediately
+            self.peers.clear()
+            self.banned_peers.clear()
+            self.peer_reputation.clear()
+            self.suspicious_activity.clear()
+            self._active_tasks.clear()
+            
+            # Force close connections
+            if hasattr(self, 'connection_pool'):
+                self.connection_pool.force_close()
+                
+            self.logger.warning("Forced cleanup completed")
+        except Exception as e:
+            self.logger.error(f"Force cleanup error: {e}")
+
+    async def register_task(self, task: asyncio.Task):
+        """Register an active task for cleanup tracking."""
+        self._active_tasks.add(task)
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        finally:
+            self._active_tasks.discard(task)
         
     async def broadcast_message(self, message: Dict):
         """Broadcast a message to all peers."""
@@ -103,7 +227,7 @@ class P2PNetwork:
         return await self.dht.lookup(node_id)
 
     async def _discover_peers(self) -> Set[str]:
-        """Discover and authenticate new peers."""
+        """Discover and authenticate new peers with cluster-based routing"""
         # Combine multiple discovery methods
         dht_peers = await self.dht.discover()
         broadcast_peers = set(await self.udp_broadcast.get_peers())
@@ -119,18 +243,53 @@ class P2PNetwork:
                     authenticated.add(peer)
                     self.pex.add_peer(peer)
                     
+        # Measure latencies to new peers
+        for peer in all_peers:
+            if peer not in self.peer_latencies:
+                latency = await self._measure_latency(peer)
+                self.peer_latencies[peer] = latency
+                
+        # Join/update cluster assignment
+        self.cluster_id = await self.cluster_manager.add_node(
+            self.node_id,
+            self.peer_latencies
+        )
+        
         return authenticated
         
     async def _authenticate_peer(self, peer_id: str, token: str) -> bool:
-        """Authenticate a new peer."""
+        """Authenticate a new peer with E2EE session establishment"""
         try:
-            # Send authentication request
-            auth_msg = {"type": "auth", "token": token}
-            await self.node_comm.send_message(peer_id, auth_msg)
-            return True
+            # First authenticate using token
+            auth_msg = {
+                "type": "auth",
+                "token": token,
+                "public_key": self.key_manager.identity_public.public_bytes()
+            }
+            
+            # Add timeout for authentication
+            try:
+                async with asyncio.timeout(10):
+                    response = await self.node_comm.send_message(peer_id, auth_msg)
+                    if not response or 'public_key' not in response:
+                        return False
+                        
+                    # Establish E2EE session
+                    if not await self.key_manager.establish_session(
+                        peer_id, 
+                        response['public_key']
+                    ):
+                        raise PeerAuthenticationError("Failed to establish secure session")
+                        
+                    return True
+                    
+            except asyncio.TimeoutError:
+                raise PeerAuthenticationError(f"Authentication timeout for peer {peer_id}")
+                
+        except ConnectionError:
+            raise PeerConnectionError(f"Failed to connect to peer {peer_id}")
         except Exception as e:
-            self.logger.error(f"Authentication failed for peer {peer_id}: {e}")
-            return False
+            raise PeerAuthenticationError(f"Authentication failed: {str(e)}")
             
     async def _handle_messages(self):
         """Process incoming messages from peers."""
@@ -139,6 +298,7 @@ class P2PNetwork:
             await self._handle_message(msg, msg.get('sender'))
             
     async def _handle_message(self, message: Dict, addr):
+        """Handle incoming encrypted messages"""
         try:
             if not await self.rate_limiter.allow_request(addr):
                 raise RateLimitExceeded(f"Rate limit exceeded for {addr}")
@@ -146,19 +306,46 @@ class P2PNetwork:
             if not self.circuit_breaker.allow_request():
                 raise CircuitBreakerOpen("Circuit breaker is open")
 
-            await self._validate_message(message)
-            await self._process_message(message)
+            try:
+                async with asyncio.timeout(3):
+                    # Decrypt message first
+                    if 'nonce' not in message or 'ciphertext' not in message:
+                        raise MessageValidationError("Invalid encrypted message format")
+                        
+                    nonce = base64.b64decode(message['nonce'])
+                    ciphertext = base64.b64decode(message['ciphertext'])
+                    
+                    decrypted = self.key_manager.decrypt_message(
+                        message.get('sender'),
+                        nonce,
+                        ciphertext
+                    )
+                    
+                    if not decrypted:
+                        raise MessageValidationError("Failed to decrypt message")
+                    
+                    # Then validate and process
+                    await self._validate_message(decrypted)
+                    await self._process_message(decrypted)
+                    
+            except asyncio.TimeoutError:
+                raise MessageTimeoutError("Message processing timeout")
 
         except RateLimitExceeded as e:
             self.logger.warning(f"Rate limit exceeded: {e}")
         except CircuitBreakerOpen as e:
             self.logger.error(f"Circuit breaker open: {e}")
+        except MessageValidationError as e:
+            self.logger.error(f"Message validation error: {e}")
+            await self._record_suspicious_activity(message.get('sender'), "validation_error")
+        except MessageTimeoutError as e:
+            self.logger.error(f"Message handling timeout: {e}")
         except Exception as e:
-            self.logger.error(f"Error handling message: {e}")
+            self.logger.error(f"Unexpected error handling message: {e}")
             self.circuit_breaker.record_failure()
 
     async def _validate_message(self, message: Dict):
-        """Enhanced message validation with reputation checks."""
+        """Enhanced message validation with cooled reputation tracking"""
         sender = message.get('sender')
         if not sender:
             raise ValueError("Missing sender information")
@@ -171,7 +358,28 @@ class P2PNetwork:
             await self._record_suspicious_activity(sender, "invalid_signature")
             raise ValueError("Invalid message signature")
             
-        await self._update_peer_reputation(sender, 0.1)  # Reward valid messages
+        # Queue reputation adjustment with reason
+        reputation_delta = await self._calculate_reputation_delta(message)
+        await self.reputation_manager.update_reputation_interactive(
+            sender, 
+            reputation_delta,
+            reason=f"message_{message.get('type', 'unknown')}"
+        )
+
+    async def _calculate_reputation_delta(self, message: Dict) -> float:
+        """Calculate reputation change based on message quality and behavior"""
+        base_delta = 0.1  # Base reputation increase for valid messages
+        
+        # Adjust based on message size and processing cost
+        if len(str(message)) > 1024 * 1024:  # 1MB
+            base_delta *= 0.5  # Penalty for large messages
+            
+        # Adjust based on message type and value
+        if message.get('type') == 'resource_contribution':
+            base_delta *= 1.5  # Bonus for contributing resources
+            
+        # Additional adjustments can be added based on other factors
+        return base_delta
 
     async def _record_suspicious_activity(self, peer_id: str, activity_type: str):
         """Record suspicious activity for a peer"""
@@ -189,40 +397,162 @@ class P2PNetwork:
         if len(recent_activities) >= 5:  # Threshold for suspicious activity
             await self._ban_peer(peer_id)
             
-    async def _ban_peer(self, peer_id: str):
-        """Ban a peer from the network"""
+    async def _ban_peer(self, peer_id: str, reason: str = "suspicious_activity"):
+        """Enhanced ban peer with reason logging"""
         self.banned_peers.add(peer_id)
         self.peers.discard(peer_id)
         self.peer_reputation.pop(peer_id, None)
         
-        # Notify other peers about the banned node
+        # Log ban reason
+        self.logger.warning(f"Banned peer {peer_id}: {reason}")
+        
+        # Broadcast ban with reason
         await self.broadcast_message({
             'type': 'peer_banned',
             'peer_id': peer_id,
-            'reason': 'suspicious_activity'
+            'reason': reason,
+            'timestamp': time.time()
         })
             
     async def _process_message(self, message: Dict):
-        """Process a single message."""
+        """Process messages with consensus handling"""
         msg_type = message.get('type')
-        if msg_type == 'auth':
-            await self._handle_auth(message)
-        elif msg_type == 'data':
-            await self._handle_data(message)
+        if msg_type == 'consensus_proposal':
+            await self._handle_consensus_proposal(message)
+        elif msg_type == 'consensus_vote':
+            await self._handle_consensus_vote(message)
+        elif msg_type == 'state_change':
+            await self._handle_state_change(message)
+        else:
+            # ...existing message handling...
+            msg_type = message.get('type')
+            if msg_type == 'auth':
+                await self._handle_auth(message)
+            elif msg_type == 'data':
+                await self._handle_data(message)
             
-    async def send_message(self, peer_id: str, message: Dict) -> bool:
+    async def _handle_consensus_proposal(self, message: Dict):
+        """Handle incoming consensus proposals"""
+        proposal_id = message.get('proposal_id')
+        change_type = message.get('change_type')
+        proposed_change = message.get('change')
+
+        if not all([proposal_id, change_type, proposed_change]):
+            return
+
+        # Validate proposal based on type
+        if not await self._validate_proposal(change_type, proposed_change):
+            return
+
+        # Get voting power for proposal
+        voting_power = self.consensus.get_voting_power(self.node_id)
+        if voting_power <= 0:
+            return
+
+        # Cast vote
+        vote = await self._evaluate_proposal(change_type, proposed_change)
+        vote_msg = {
+            'type': 'consensus_vote',
+            'proposal_id': proposal_id,
+            'vote': vote,
+            'voter': self.node_id,
+            'voting_power': voting_power
+        }
+
+        # Broadcast vote
+        await self.broadcast_message(vote_msg)
+
+    async def _handle_consensus_vote(self, message: Dict):
+        """Process consensus votes and apply changes when threshold met"""
+        proposal_id = message.get('proposal_id')
+        if not proposal_id or proposal_id not in self.pending_state_changes:
+            return
+
+        proposal = self.pending_state_changes[proposal_id]
+        votes = proposal['votes']
+        votes[message['voter']] = message['vote']
+
+        # Calculate vote result
+        total_power = sum(
+            self.consensus.get_voting_power(voter)
+            for voter in votes.keys()
+        )
+        approve_power = sum(
+            self.consensus.get_voting_power(voter)
+            for voter, vote in votes.items() if vote
+        )
+
+        threshold = self.consensus_thresholds[proposal['change_type']]
+        if approve_power / total_power >= threshold:
+            await self._apply_state_change(proposal)
+            del self.pending_state_changes[proposal_id]
+
+    async def propose_state_change(self, change_type: str, change: Dict) -> bool:
+        """Propose network state change requiring consensus"""
+        if change_type not in self.consensus_thresholds:
+            raise ValueError(f"Invalid change type: {change_type}")
+
+        proposal_id = f"{self.node_id}_{int(time.time())}"
+        proposal = {
+            'type': 'consensus_proposal',
+            'proposal_id': proposal_id,
+            'change_type': change_type,
+            'change': change,
+            'proposer': self.node_id,
+            'timestamp': time.time()
+        }
+
+        # Store proposal
+        self.pending_state_changes[proposal_id] = {
+            'change_type': change_type,
+            'change': change,
+            'votes': {},
+            'timestamp': time.time()
+        }
+
+        # Broadcast proposal
+        await self.broadcast_message(proposal)
+        return True
+
+    async def _validate_proposal(self, change_type: str, change: Dict) -> bool:
+        """Validate proposed change based on type"""
         try:
-            conn = await self.connection_pool.get_connection(peer_id)
-            if not conn:
-                return False
-                
-            encoded = self.message_protocol.encode_message(message)
-            conn.writer.write(encoded)
-            await conn.writer.drain()
-            return True
-        except Exception as e:
-            self.logger.error(f"Failed to send message to {peer_id}: {e}")
+            if change_type == 'peer_ban':
+                return await self._validate_ban_proposal(change)
+            elif change_type == 'reputation_update':
+                return await self._validate_reputation_proposal(change)
+            elif change_type == 'cluster_reconfig':
+                return await self._validate_cluster_proposal(change)
+            elif change_type == 'network_param':
+                return await self._validate_param_proposal(change)
             return False
+        except Exception as e:
+            self.logger.error(f"Proposal validation error: {str(e)}")
+            return False
+
+    async def _apply_state_change(self, proposal: Dict):
+        """Apply approved state change"""
+        change_type = proposal['change_type']
+        change = proposal['change']
+
+        try:
+            if change_type == 'peer_ban':
+                await self._ban_peer(change['peer_id'])
+            elif change_type == 'reputation_update':
+                await self.reputation_manager.update_reputation_interactive(
+                    change['peer_id'],
+                    change['delta'],
+                    reason='consensus_approved'
+                )
+            elif change_type == 'cluster_reconfig':
+                await self.cluster_manager.reconfigure_clusters(change)
+            elif change_type == 'network_param':
+                await self._update_network_params(change)
+
+            self.logger.info(f"Applied {change_type} change: {change}")
+
+        except Exception as e:
+            self.logger.error(f"Failed to apply state change: {str(e)}")
 
     async def start_interactive(self):
         """Start the P2P network node with interactive controls"""
@@ -364,18 +694,37 @@ class P2PNetwork:
 
             conn = await self.connection_pool.get_connection(peer_id)
             if not conn:
-                return False
+                raise PeerConnectionError(f"No connection available for peer {peer_id}")
 
-            encoded = await self.message_protocol.encode_message_interactive(message)
-            if not encoded:
-                return False
+            try:
+                async with asyncio.timeout(5):  # 5 second timeout
+                    encoded = await self.message_protocol.encode_message_interactive(message)
+                    if not encoded:
+                        raise MessageValidationError("Failed to encode message")
 
-            conn.writer.write(encoded)
-            await conn.writer.drain()
-            return True
+                    conn.writer.write(encoded)
+                    await conn.writer.drain()
+                    return True
+            except asyncio.TimeoutError:
+                raise MessageTimeoutError(f"Message send timeout to peer {peer_id}")
 
+        except PeerConnectionError as e:
+            self.logger.error(f"Connection error: {str(e)}")
+            if self.interactive:
+                await self.session.log_error(f"Connection failed: {str(e)}")
+            return False
+        except MessageTimeoutError as e:
+            self.logger.error(f"Timeout error: {str(e)}")
+            if self.interactive:
+                await self.session.log_error(f"Message timeout: {str(e)}")
+            return False
+        except MessageValidationError as e:
+            self.logger.error(f"Validation error: {str(e)}")
+            if self.interactive:
+                await self.session.log_error(f"Message validation failed: {str(e)}")
+            return False
         except Exception as e:
-            self.logger.error(f"Failed to send message to {peer_id}: {str(e)}")
+            self.logger.error(f"Unexpected error sending message to {peer_id}: {str(e)}")
             if self.interactive:
                 await self.session.log_error(f"Message sending failed: {str(e)}")
             return False
@@ -415,3 +764,9 @@ class P2PNetwork:
         self._interrupt_requested = True
         self.running = False
         self.logger.info("Shutdown requested for P2P network")
+
+    async def start_admin_shell(self):
+        """Start interactive admin shell"""
+        if not self.interactive:
+            raise RuntimeError("Admin shell requires interactive mode")
+        await self.admin.start_interactive_shell()

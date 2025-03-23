@@ -55,6 +55,23 @@ INTERACTION_TIMEOUTS = {
     "graceful_shutdown": 30, # 30 seconds for graceful shutdown
 }
 
+INTERACTION_TIMEOUTS.update({
+    "discovery": 30,      # 30 seconds for peer discovery operations
+    "broadcast": 15,      # 15 seconds for broadcast operations
+    "response": 5,        # 5 seconds for peer responses
+    "peer_cleanup": 10,   # 10 seconds for peer cleanup operations
+    "peer_update": 20,    # 20 seconds for peer updates
+})
+
+# Sharding configuration
+SHARD_CONFIG = {
+    "max_peers_per_shard": 1000,
+    "num_shards": 16,  # Start with 16 shards
+    "replication_factor": 3,  # Each shard replicated 3 times
+    "shard_cleanup_interval": 300,  # 5 minutes
+    "reshard_threshold": 0.8,  # Trigger resharding at 80% capacity
+}
+
 # Input validation settings
 INPUT_VALIDATION = {
     "max_length": 1024,
