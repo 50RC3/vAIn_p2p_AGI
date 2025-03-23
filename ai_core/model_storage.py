@@ -9,6 +9,7 @@ from functools import lru_cache
 import time
 from retry import retry
 from tqdm import tqdm
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -195,3 +196,26 @@ class ModelStorage:
                   if v['expires'] < now]
         for k in expired:
             del self._model_cache[k]
+            
+    async def store_model_async(self, model: torch.nn.Module, metadata: Dict[str, Any],
+                              interactive: bool = True) -> Tuple[str, str]:
+        """Async version of store_model"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self.store_model, model, metadata, interactive
+        )
+        
+    async def load_model_async(self, ipfs_hash: str, interactive: bool = True) -> Optional[Dict]:
+        """Async version of load_model"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self.load_model, ipfs_hash, interactive
+        )
+        
+    def get_storage_status(self) -> Dict[str, Any]:
+        """Get status of storage systems"""
+        return {
+            "cache_size": len(self._model_cache),
+            "ipfs_connected": self._verify_connection(),
+            "last_error": getattr(self, '_last_error', None)
+        }

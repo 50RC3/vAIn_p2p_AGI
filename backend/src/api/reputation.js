@@ -3,6 +3,7 @@ const router = express.Router();
 const { ethers } = require('ethers');
 const rateLimit = require('express-rate-limit');
 const ReputationContract = require('../../contracts/reputationContract.json');
+const ipfs = require('../services/ipfs');
 
 // Initialize provider
 const provider = new ethers.providers.JsonRpcProvider(process.env.ETH_RPC_URL);
@@ -64,6 +65,65 @@ router.get('/score/:address', rateLimiter, validateAddress, async (req, res) => 
             error: 'Internal server error',
             timestamp: Date.now()
         });
+    }
+});
+
+router.post('/pheromone', async (req, res) => {
+    try {
+        const { nodeId, marker } = req.body;
+        
+        // Validate marker
+        if (!marker || !marker.type || typeof marker.strength !== 'number') {
+            return res.status(400).json({ error: 'Invalid marker format' });
+        }
+
+        const node = await Node.findById(nodeId);
+        if (!node) {
+            return res.status(404).json({ error: 'Node not found' });
+        }
+
+        // Store pheromone data in IPFS
+        const ipfsCID = await ipfs.store({
+            marker,
+            timestamp: Date.now(),
+            nodeId
+        });
+
+        // Update pheromone marker with IPFS reference
+        marker.ipfsCID = ipfsCID;
+        node.updatePheromone(marker);
+        await node.save();
+
+        // Find nearby nodes and apply diffusion
+        const nearbyNodes = await Node.findActive();
+        const diffusionPromises = nearbyNodes.map(async nearNode => {
+            if (nearNode.id !== nodeId) {
+                const diffusedMarker = {
+                    ...marker,
+                    strength: marker.strength * (marker.diffusionRate || 0.05)
+                };
+                nearNode.updatePheromone(diffusedMarker);
+                return nearNode.save();
+            }
+        });
+
+        await Promise.all(diffusionPromises);
+
+        // Broadcast updates
+        global.wss.clients.forEach(client => {
+            if (client.nodeId && nearbyNodes.find(n => n.id === client.nodeId)) {
+                client.send(JSON.stringify({
+                    type: 'pheromone:update',
+                    data: { nodeId, marker }
+                }));
+            }
+        });
+
+        res.json({ success: true, ipfsCID });
+
+    } catch (error) {
+        console.error('Pheromone update error:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 

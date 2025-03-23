@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import logging
 import asyncio
-from typing import List, Tuple, Dict, Optional
-from dataclasses import dataclass
+from typing import List, Tuple, Dict, Optional, Callable, Any
+from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,15 @@ class RLConfig:
     min_samples_to_train: int = 100
     max_batch_retries: int = 3
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    priority_alpha: float = 0.6  # Priority sampling parameter
+    priority_beta: float = 0.4   # Importance sampling parameter
+    grad_accum_steps: int = 4    # Number of steps for gradient accumulation
+
+@dataclass
+class TrainerState:
+    is_training: bool = False
+    total_steps: int = 0
+    callbacks: Dict[str, Callable] = field(default_factory=dict)
 
 class RLTrainer:
     def __init__(self, model: nn.Module, config: RLConfig):
@@ -29,6 +38,19 @@ class RLTrainer:
         self.training_lock = asyncio.Lock()
         self._latest_loss: Optional[float] = None
         self._training_stats = {"total_interactions": 0, "successful_updates": 0}
+        self.priorities = torch.ones(config.memory_size)
+        self.grad_step = 0
+        self.scaler = torch.cuda.amp.GradScaler()
+        self.state = TrainerState()
+        
+    def register_callback(self, event: str, callback: Callable):
+        """Register callback for trainer events"""
+        self.state.callbacks[event] = callback
+
+    async def _notify_callback(self, event: str, data: Any):
+        """Notify registered callback"""
+        if event in self.state.callbacks:
+            await self.state.callbacks[event](data)
         
     async def store_interaction(self, state: torch.Tensor, action: torch.Tensor, 
                               reward: float, next_state: torch.Tensor) -> None:
@@ -49,6 +71,7 @@ class RLTrainer:
             )
             self.memory.append(interaction)
             self._training_stats["total_interactions"] += 1
+            self.priorities[len(self.memory)-1] = 1.0  # New experiences get max priority
             
             # Clear old samples if needed
             await self.clear_old_samples()
@@ -58,6 +81,12 @@ class RLTrainer:
                 async with self.training_lock:
                     await self._update_policy()
                     
+            await self._notify_callback('interaction_stored', {
+                'state': state,
+                'action': action,
+                'reward': reward
+            })
+                    
         except Exception as e:
             logger.error(f"Error storing interaction: {str(e)}")
             raise
@@ -66,28 +95,41 @@ class RLTrainer:
         """Update policy using sampled batch with retry logic"""
         for attempt in range(self.config.max_batch_retries):
             try:
-                batch = await self._sample_batch()
-                states, actions, rewards, next_states = zip(*batch)
+                batch, indices, weights = await self._sample_batch()
                 
-                # Stack and move tensors
-                states_t = torch.stack(states)
-                next_states_t = torch.stack(next_states)
-                actions_t = torch.tensor(actions, device=self.config.device)
-                rewards_t = torch.tensor(rewards, device=self.config.device)
+                with torch.cuda.amp.autocast():
+                    states, actions, rewards, next_states = zip(*batch)
+                    
+                    # Stack and move tensors, ensuring proper shapes
+                    states_t = torch.stack(states).squeeze(1)  # Remove extra dim
+                    next_states_t = torch.stack(next_states).squeeze(1)
+                    actions_t = torch.stack(actions).to(self.config.device)
+                    rewards_t = torch.tensor(rewards, device=self.config.device).float()
 
-                # Compute TD error and update
-                with torch.no_grad():
-                    next_values = self.model(next_states_t)
-                current_values = self.model(states_t)
+                    # Compute TD error with proper dimensionality
+                    with torch.no_grad():
+                        next_values = self.model(next_states_t).detach()
+                    current_values = self.model(states_t)
+                    
+                    td_target = rewards_t + self.config.gamma * next_values.max(1)[0]
+                    td_error = td_target.unsqueeze(1) - current_values.gather(1, actions_t.unsqueeze(1))
+                    
+                    # Update model with gradient clipping
+                    loss = (td_error.pow(2) * weights.unsqueeze(1)).mean()
+                    
+                    # Scale loss for gradient accumulation
+                    loss = loss / self.config.grad_accum_steps
+
+                self.scaler.scale(loss).backward()
                 
-                td_target = rewards_t + self.config.gamma * next_values.max(1)[0]
-                td_error = td_target - current_values.gather(1, actions_t)
+                # Update priorities
+                self.priorities[indices] = td_error.abs().detach().cpu() ** self.config.priority_alpha
                 
-                # Update model
-                loss = td_error.pow(2).mean()
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
+                self.grad_step += 1
+                if self.grad_step % self.config.grad_accum_steps == 0:
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                    self.optimizer.zero_grad()
                 
                 self._latest_loss = loss.item()
                 self._training_stats["successful_updates"] += 1
@@ -98,14 +140,17 @@ class RLTrainer:
                     logger.error(f"Policy update failed after {attempt+1} attempts: {str(e)}")
                     raise
                 logger.warning(f"Policy update attempt {attempt+1} failed: {str(e)}")
-                await asyncio.sleep(0.1 * (attempt + 1))  # Exponential backoff
+                await asyncio.sleep(0.1 * (attempt + 1))
 
-    async def _sample_batch(self) -> List[Tuple]:
+    async def _sample_batch(self) -> Tuple[List[Tuple], torch.Tensor, torch.Tensor]:
         """Sample random batch from memory with validation"""
         if len(self.memory) < self.config.batch_size:
             raise ValueError(f"Not enough samples in memory: {len(self.memory)}")
-        indices = torch.randperm(len(self.memory))[:self.config.batch_size]
-        return [self.memory[i] for i in indices]
+        probs = self.priorities[:len(self.memory)] / self.priorities[:len(self.memory)].sum()
+        indices = torch.multinomial(probs, self.config.batch_size)
+        weights = (len(self.memory) * probs[indices]) ** -self.config.priority_beta
+        weights = weights / weights.max()
+        return [self.memory[i] for i in indices], indices, weights.to(self.config.device)
         
     async def clear_old_samples(self) -> None:
         """Remove old samples if memory exceeds max size"""

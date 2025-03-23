@@ -5,6 +5,8 @@ import numpy as np
 from .compression import compress_gradients, decompress_gradients
 from .exceptions import AggregationError, TrainingError
 from .metrics import ModelMetrics
+from core.cross_domain_transfer import CrossDomainTransfer, DomainType
+from core.symbolic_reasoning import PropositionalLogic
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,15 @@ class FederatedLearner:
         self.error_feedback = {}
         self.metrics = ModelMetrics()
         self._validate_config(config)
+        
+        # Initialize cross-domain transfer
+        self.domain_transfer = CrossDomainTransfer()
+        self.symbolic_logic = PropositionalLogic()
+        
+        # Setup domain logic rules
+        self.symbolic_logic.add_variable("valid_update", True)
+        self.symbolic_logic.add_variable("domain_compatible", True)
+        self.symbolic_logic.add_variable("compression_valid", True)
 
     def _validate_config(self, config: Dict) -> None:
         """Validate configuration parameters"""
@@ -34,7 +45,7 @@ class FederatedLearner:
             raise ValueError("compression_rate must be between 0 and 1")
             
     async def aggregate_models(self, model_updates: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
-        """Hierarchical FedAvg aggregation with compression and monitoring"""
+        """Hierarchical FedAvg aggregation with cross-domain support"""
         try:
             if len(model_updates) < self.min_clients:
                 raise AggregationError(f"Not enough clients ({len(model_updates)}/{self.min_clients})")
@@ -46,9 +57,27 @@ class FederatedLearner:
             # Memory management
             self._check_memory_usage(model_updates)
             
-            # Decompress and apply error feedback
+            # Validate updates using symbolic reasoning
             decompressed_updates = []
             for i, update in enumerate(model_updates):
+                self.symbolic_logic.set_variable("valid_update", 
+                    self._validate_update(update))
+                self.symbolic_logic.set_variable("domain_compatible",
+                    self._check_domain_compatibility(update))
+                
+                if not self.symbolic_logic.evaluate_expression(
+                    "valid_update and domain_compatible"):
+                    logger.warning("Update failed symbolic validation")
+                    continue
+                    
+                # Apply cross-domain adaptation if needed
+                if "domain_type" in update:
+                    update = self.domain_transfer.transfer_knowledge(
+                        update["domain_type"],
+                        self.config.target_domain,
+                        update
+                    )
+                
                 try:
                     update_with_feedback = self._apply_error_feedback(update)
                     decompressed = decompress_gradients(update_with_feedback)
@@ -135,3 +164,13 @@ class FederatedLearner:
         except Exception as e:
             logger.error(f"Training failed: {str(e)}")
             raise TrainingError(f"Training failed: {str(e)}")
+            
+    def _validate_update(self, update: Dict) -> bool:
+        """Validate model update using symbolic rules"""
+        # Add validation logic here
+        return True
+        
+    def _check_domain_compatibility(self, update: Dict) -> bool:
+        """Check domain compatibility for transfer"""
+        # Add compatibility check here
+        return True

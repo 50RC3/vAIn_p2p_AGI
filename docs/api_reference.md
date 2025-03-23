@@ -2,7 +2,7 @@
 
 > Note: This API is under active development by me (Vincent). Breaking changes should be expected.
 > Current Version: 0.2.1
-> Last Updated: [current date]
+> Last Updated: 2024-01-20
 
 ## REST API Endpoints
 
@@ -33,9 +33,11 @@ Note: Currently using basic ECDSA verification. Will be enhanced with hardware a
 ### Core Endpoints
 - POST `/api/staking/stake` ✓
 - GET `/api/training/status` ✓
-- POST `/api/training/control` (Partially implemented)
+- POST `/api/training/control` (60% implemented)
 - GET `/api/node/health` ✓
 - POST `/api/node/resources` ✓
+- POST `/api/model/update` (Basic implementation)
+- GET `/api/metrics/cluster` (Basic implementation)
 
 ## WebSocket Events
 

@@ -67,6 +67,41 @@ const nodeSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
         index: true
+    },
+    pheromoneMarkers: [{
+        type: {
+            type: String,
+            enum: ['resource', 'route', 'task'],
+            required: true
+        },
+        strength: {
+            type: Number,
+            default: 1.0,
+            min: 0,
+            max: 10
+        },
+        timestamp: {
+            type: Date,
+            default: Date.now
+        },
+        data: Schema.Types.Mixed,
+        decayRate: {
+            type: Number,
+            default: 0.1
+        },
+        diffusionRate: {
+            type: Number,
+            default: 0.05
+        },
+        ttl: {
+            type: Number,
+            default: 3600 // 1 hour in seconds
+        }
+    }],
+    ipfsData: {
+        modelCID: String,
+        metadataCID: String,
+        lastUpdate: Date
     }
 }, {
     timestamps: true,
@@ -139,6 +174,58 @@ nodeSchema.methods.checkHealth = function() {
     return health;
 };
 
+// Add pheromone methods
+nodeSchema.methods.decayPheromones = function() {
+    const now = Date.now();
+    this.pheromoneMarkers = this.pheromoneMarkers.filter(marker => {
+        const age = (now - marker.timestamp) / 1000; // age in seconds
+        if (age > marker.ttl) return false;
+        
+        marker.strength *= Math.exp(-marker.decayRate * age);
+        return marker.strength >= 0.1; // Remove if too weak
+    });
+};
+
+nodeSchema.methods.updatePheromone = function(marker) {
+    this.decayPheromones(); // Decay existing markers first
+    
+    const existingIndex = this.pheromoneMarkers.findIndex(
+        m => m.type === marker.type && 
+        _.isEqual(m.data, marker.data)
+    );
+    
+    if (existingIndex >= 0) {
+        const existing = this.pheromoneMarkers[existingIndex];
+        existing.strength = Math.min(10, existing.strength + marker.strength);
+        existing.timestamp = new Date();
+        existing.decayRate = marker.decayRate || existing.decayRate;
+        existing.diffusionRate = marker.diffusionRate || existing.diffusionRate;
+    } else {
+        this.pheromoneMarkers.push({
+            ...marker,
+            timestamp: new Date()
+        });
+    }
+};
+
+// Add IPFS methods
+nodeSchema.methods.storeIPFS = async function(data) {
+    const ipfs = require('../services/ipfs');
+    const cid = await ipfs.store(data);
+    this.ipfsData = {
+        ...this.ipfsData,
+        metadataCID: cid,
+        lastUpdate: new Date()
+    };
+    return this.save();
+};
+
+nodeSchema.methods.retrieveIPFS = async function() {
+    const ipfs = require('../services/ipfs');
+    if (!this.ipfsData?.metadataCID) return null;
+    return ipfs.retrieve(this.ipfsData.metadataCID);
+};
+
 // Virtuals
 nodeSchema.virtual('isStaked').get(function() {
     return BigInt(this.stake) > BigInt(0);
@@ -150,6 +237,14 @@ nodeSchema.pre('save', function(next) {
         this.lastHeartbeat = Date.now();
     }
     next();
+});
+
+// Add cleanup hook for old markers
+nodeSchema.pre('save', function() {
+    const ONE_HOUR = 60 * 60 * 1000;
+    this.pheromoneMarkers = this.pheromoneMarkers.filter(marker => {
+        return Date.now() - marker.timestamp.getTime() < ONE_HOUR;
+    });
 });
 
 // Static methods

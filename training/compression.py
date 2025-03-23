@@ -43,6 +43,10 @@ class AdaptiveCompression:
         self.stats_history: List[CompressionStats] = []
         self.stats_history_size = stats_history_size
         self._initialize_monitoring()
+        
+        # Add domain-aware compression tracking
+        self.domain_compression_rates = {}
+        self.cross_domain_stats = {}
 
     def _validate_init_params(self, base_rate: float, min_rate: float, max_rate: float) -> None:
         """Validate initialization parameters"""
@@ -57,14 +61,15 @@ class AdaptiveCompression:
         self._load_state()
 
     def compress_model_updates(self, model_update: Dict[str, torch.Tensor]) -> Tuple[Dict, float]:
-        """Compress model updates with validation and monitoring"""
+        """Compress model updates with domain awareness"""
         try:
             self._validate_model_updates(model_update)
             start_time = torch.cuda.Event(enable_timing=True)
             end_time = torch.cuda.Event(enable_timing=True)
             
             start_time.record()
-            compression_rate = self._calculate_compression_rate()
+            domain_type = model_update.get("domain_type", "default")
+            compression_rate = self._get_domain_compression_rate(domain_type)
             compressed = {}
             original_size = 0
             compressed_size = 0
@@ -103,6 +108,7 @@ class AdaptiveCompression:
                 accuracy_impact=0.0  # Will be updated later with update_reward
             )
             self._update_stats(stats)
+            self._update_domain_stats(domain_type, stats)
             self._save_state()
             
             return compressed, compression_rate
@@ -206,3 +212,19 @@ class AdaptiveCompression:
         self.reward_history.append(reward)
         if len(self.reward_history) > 100:
             self.reward_history.pop(0)
+
+    def _get_domain_compression_rate(self, domain_type: str) -> float:
+        """Get optimal compression rate for domain"""
+        if domain_type not in self.domain_compression_rates:
+            self.domain_compression_rates[domain_type] = self.base_rate
+        return self.domain_compression_rates[domain_type]
+        
+    def _update_domain_stats(self, domain_type: str, stats: Dict):
+        """Update compression statistics per domain"""
+        if domain_type not in self.cross_domain_stats:
+            self.cross_domain_stats[domain_type] = []
+        self.cross_domain_stats[domain_type].append(stats)
+        
+        # Prune old stats
+        if len(self.cross_domain_stats[domain_type]) > self.stats_history_size:
+            self.cross_domain_stats[domain_type].pop(0)

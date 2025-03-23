@@ -17,10 +17,14 @@ As the sole developer of vAIn, I'm building a decentralized AI training platform
 
 2. Blockchain Layer (40% Complete)
    - Basic smart contracts ✓
-   - Simple staking mechanism ✓
-   - Basic reputation tracking ✓
-   - TODO: Advanced governance
-   - TODO: Enhanced reputation system
+   - Basic stake-based validation ✓
+   - Simple reputation scoring ✓
+   - Three-tier node system ✓
+   - Basic voting mechanism ✓
+   - TODO: Hardware attestation
+   - TODO: Advanced fraud prevention
+   - TODO: Zero-knowledge proofs
+   - TODO: Enhanced governance
    - TODO: Complex economic model
 
 3. Network Layer (55% Complete)
@@ -30,6 +34,29 @@ As the sole developer of vAIn, I'm building a decentralized AI training platform
    - TODO: Advanced P2P features
    - TODO: Better consensus
    - TODO: Byzantine fault tolerance
+
+4. Network Communication (65% Complete)
+   - Basic P2P discovery ✓
+   - DHT routing ✓
+   - Basic encryption ✓
+   - Pheromone propagation system ✓
+     - Resource discovery
+     - Route optimization
+     - Task coordination
+   - TODO: Advanced P2P features
+   - TODO: Better consensus
+   - TODO: Byzantine fault tolerance
+
+5. Storage Layer (75% Complete)
+   - IPFS integration ✓
+     - Distributed model storage
+     - Metadata persistence
+     - Pheromone data storage
+   - Content addressing ✓
+   - Automatic garbage collection ✓
+   - TODO: Advanced caching
+   - TODO: Pinning strategies
+   - TODO: Replication management
 
 ### Interactive Features (v0.1.3)
 

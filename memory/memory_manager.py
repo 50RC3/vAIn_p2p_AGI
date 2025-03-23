@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from ..core.interactive_utils import InteractiveSession, InteractionLevel, InteractiveConfig
 from ..core.constants import INTERACTION_TIMEOUTS
+from ..ai_core.model_storage import ModelStorage
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,8 @@ class MemoryManager:
         self._max_recovery_attempts = 3
         self._last_error_time = 0
         self._error_cooldown = 60  # 60 seconds between recovery attempts
+        self.model_storage = ModelStorage()
+        self.storage_status = {}
         
     async def cache_tensor_interactive(self, key: str, tensor: torch.Tensor) -> bool:
         """Interactive tensor caching with validation and progress tracking"""
@@ -38,6 +42,26 @@ class MemoryManager:
             return False
 
         try:
+            # Store metadata for the tensor
+            metadata = {
+                "shape": tensor.shape,
+                "dtype": str(tensor.dtype),
+                "device": str(tensor.device),
+                "timestamp": time.time()
+            }
+            
+            # Store in both memory and IPFS
+            self.tensor_cache[key] = tensor.detach().clone()
+            model_hash, meta_hash = await self.model_storage.store_model_async(
+                tensor, metadata, interactive=self.interactive
+            )
+            
+            self.storage_status[key] = {
+                "memory": True,
+                "ipfs": model_hash,
+                "metadata": meta_hash
+            }
+            
             if self.interactive:
                 self.session = InteractiveSession(
                     level=InteractionLevel.NORMAL,
@@ -211,3 +235,20 @@ class MemoryManager:
             free=torch.cuda.memory_reserved(),
             cached_tensors=len(self.tensor_cache)
         )
+
+    async def _cleanup_storage(self):
+        """Coordinate cleanup across storage systems"""
+        try:
+            # Clear expired memory cache
+            self._evict_cache()
+            
+            # Clear expired IPFS cache
+            self.model_storage.clear_expired_cache()
+            
+            # Update storage status
+            for key in list(self.storage_status.keys()):
+                if key not in self.tensor_cache:
+                    del self.storage_status[key]
+                    
+        except Exception as e:
+            logger.error(f"Cleanup error: {e}")
