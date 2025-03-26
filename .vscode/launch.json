@@ -1,0 +1,49 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Launch Backend Server",
+      "program": "${workspaceFolder}/backend/server.js",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "args": [],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    },
+    {
+      "type": "python", 
+      "request": "launch",
+      "name": "Launch Main Python Program",
+      "program": "${workspaceFolder}/${input:pythonProgram}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "envFile": "${workspaceFolder}/.env"
+    }
+  ],
+  "inputs": [
+    {
+      "type": "pickString", 
+      "id": "pythonProgram",
+      "description": "Select the Python program to debug",
+      "options": [
+        "main.py",
+        "mobile_interface.py", 
+        "config/agent_config.py",
+        "config/blockchain_config.py",
+        "config/network_config.py",
+        "config/production.py",
+        "config/training_config.py",
+        "core/constants.py",
+        "core/interactive_config.py",
+        "core/interactive_utils.py"
+      ]
+    }
+  ]
+}

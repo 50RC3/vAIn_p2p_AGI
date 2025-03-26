@@ -6,6 +6,7 @@ from typing import Optional, Dict, Tuple
 import psutil
 import time
 from dataclasses import dataclass
+from .distillation import DistillationTrainer
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,10 @@ class FederatedClient:
             self.metrics = TrainingMetrics()
             self._validate_config()
             self._check_resources()
+            self.model_interface = ModelInterface(model, interactive=config.interactive)
+            self.data_shard = None
+            self.shard_id = None
+            self.initial_model_state = None
             logger.info(f"Initialized FederatedClient on device: {config.device}")
         except Exception as e:
             logger.error(f"Failed to initialize FederatedClient: {str(e)}")
@@ -68,54 +73,59 @@ class FederatedClient:
         self.metrics.cpu_usage = psutil.cpu_percent()
         self.metrics.loss = batch_loss
 
-    def train(self) -> Optional[Dict]:
-        """Train the model and return updated parameters"""
+    async def train(self) -> Optional[Dict]:
+        """Enhanced training with data parallelism"""
         try:
-            self.model.train()
-            start_time = time.time()
-            total_loss = 0
-            total_batches = len(self.data_loader) * self.config.num_epochs
+            if not self.data_shard:
+                raise ValueError("Data shard not assigned")
 
-            for epoch in range(self.config.num_epochs):
-                self._check_resources()  # Monitor resources each epoch
-                epoch_loss = 0
-                
-                for batch_idx, (data, target) in enumerate(self.data_loader):
+            # Store initial model state for computing updates
+            self.initial_model_state = {
+                k: v.clone() for k, v in self.model.state_dict().items()
+            }
+
+            total_batches = len(self.data_shard) * self.config.epochs
+            epoch_loss = 0
+            
+            for epoch in range(self.config.epochs):
+                for batch_idx, (data, target) in enumerate(self.data_shard):
                     try:
                         data, target = data.to(self.config.device), target.to(self.config.device)
-                        loss = self._train_batch(data, target)
-                        epoch_loss += loss
-                        self._update_metrics(loss)
+                        self.optimizer.zero_grad()
+                        output = await self.model_interface.forward(data) 
+                        loss = self._train_batch(output.output, target)
                         
-                        # Log progress
-                        if batch_idx % max(1, len(self.data_loader) // 10) == 0:
-                            progress = ((epoch * len(self.data_loader) + batch_idx + 1) / total_batches) * 100
-                            logger.info(f"Training progress: {progress:.1f}% - Loss: {loss:.4f}")
-                            
+                        # Update progress tracking
+                        progress = ((epoch * len(self.data_shard) + batch_idx + 1) / total_batches) * 100
+                        self._update_metrics(loss)
+                        logger.info(f"Shard {self.shard_id} - Progress: {progress:.1f}% Loss: {loss:.4f}")
+                        
+                        epoch_loss += loss
+                        
                     except RuntimeError as e:
                         if "out of memory" in str(e):
+                            logger.error("GPU OOM in training batch")
                             if hasattr(torch.cuda, 'empty_cache'):
                                 torch.cuda.empty_cache()
-                            logger.error("GPU OOM, attempting recovery")
-                            continue
-                        raise e
-                    except Exception as e:
-                        logger.error(f"Batch training failed: {str(e)}")
-                        continue
+                        raise
 
-                avg_epoch_loss = epoch_loss / len(self.data_loader)
-                logger.info(f"Epoch {epoch+1}/{self.config.num_epochs}, Loss: {avg_epoch_loss:.4f}")
-                total_loss += avg_epoch_loss
+            # Compute model updates
+            updates = {}
+            for key, final_param in self.model.state_dict().items():
+                updates[key] = final_param - self.initial_model_state[key]
 
-            self.metrics.duration = time.time() - start_time
-            return {
-                'state_dict': self.model.state_dict(),
-                'metrics': self.metrics.__dict__
-            }
+            # Compress updates before sending
+            compressed_updates = self.compression.compress_updates(updates)
             
+            return {
+                'shard_id': self.shard_id,
+                'updates': compressed_updates,
+                'metrics': self.metrics.to_dict()
+            }
+
         except Exception as e:
             logger.error(f"Training failed: {str(e)}")
-            return None
+            raise
 
     def _train_batch(self, data: torch.Tensor, target: torch.Tensor) -> float:
         """Train a single batch"""
@@ -131,3 +141,21 @@ class FederatedClient:
         
         self.optimizer.step()
         return loss.item()
+
+    async def coordinate_with_memory(self, memory_manager: MemoryManager) -> bool:
+        """Coordinate with memory manager for efficient resource usage"""
+        try:
+            model_id = id(self.model)
+            await memory_manager.coordinate_memory_systems(str(model_id))
+            
+            # Share model tensors
+            for name, param in self.model.named_parameters():
+                await memory_manager.share_tensor(
+                    str(model_id),
+                    'shared_pool',
+                    f'{name}_grad'
+                )
+            return True
+        except Exception as e:
+            logger.error(f"Memory coordination failed: {e}")
+            return False

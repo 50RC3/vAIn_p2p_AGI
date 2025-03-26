@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import asyncio
 import logging
 from datetime import datetime
@@ -10,9 +10,10 @@ from .interactive_utils import InteractiveSession, InteractionTimeout, Interacti
 logger = logging.getLogger(__name__)
 
 class TrainingCoordinator:
-    def __init__(self, min_nodes: int = 3, 
+    def __init__(self, min_nodes: int = 3,
                  interactive_level: InteractionLevel = InteractionLevel.NORMAL,
-                 progress_dir: str = "./progress"):
+                 progress_dir: str = "./progress",
+                 validation_timeout: int = 300):  # 5 minute default timeout
         self.min_nodes = min_nodes
         self.active_nodes = {}
         self.training_round = 0
@@ -24,6 +25,8 @@ class TrainingCoordinator:
         self._progress_file = self.progress_dir / "training_progress.json"
         self._interrupt_requested = False
         self._setup_logging()
+        self.validation_timeout = validation_timeout
+        self.validation_retries = 3
 
     def _setup_logging(self) -> None:
         """Configure logging for the coordinator"""
@@ -236,3 +239,77 @@ class TrainingCoordinator:
         except InteractionTimeout:
             logger.warning("Node failure handling timeout, skipping retry")
             return False
+
+    async def coordinate_validation(self, model: Any, validators: List[str]) -> Dict:
+        """Coordinate model validation across multiple validators"""
+        try:
+            result = await asyncio.wait_for(
+                self._validate_with_retry(model, validators),
+                timeout=self.validation_timeout
+            )
+            return result
+        except asyncio.TimeoutError:
+            await self._handle_timeout()
+            raise
+        except Exception as e:
+            await self._handle_error(e)
+            raise
+
+    async def _validate_with_retry(self, model: Any, validators: List[str]) -> Dict:
+        """Execute validation with retry logic"""
+        for attempt in range(self.validation_retries):
+            try:
+                results = await asyncio.gather(
+                    *[self._validate_on_node(model, node) for node in validators],
+                    return_exceptions=True
+                )
+                
+                successful = [r for r in results if isinstance(r, dict)]
+                if successful:
+                    return self._aggregate_validation_results(successful)
+                    
+                logger.warning(f"Validation attempt {attempt + 1} failed, retrying...")
+            except Exception as e:
+                logger.error(f"Validation error on attempt {attempt + 1}: {str(e)}")
+                if attempt == self.validation_retries - 1:
+                    raise
+
+        raise RuntimeError("Validation failed after all retry attempts")
+
+    async def _validate_on_node(self, model: Any, node: str) -> Dict:
+        """Execute validation on a single node"""
+        try:
+            logger.debug(f"Starting validation on node {node}")
+            # Implementation would integrate with actual validation logic
+            result = {
+                "node": node,
+                "status": "success",
+                "metrics": {},
+                "timestamp": datetime.now().isoformat()
+            }
+            logger.debug(f"Completed validation on node {node}")
+            return result
+        except Exception as e:
+            logger.error(f"Validation failed on node {node}: {str(e)}")
+            raise
+
+    async def _handle_timeout(self) -> None:
+        """Handle validation timeout"""
+        logger.error("Validation timeout exceeded")
+        if self.interactive_mode:
+            await self._notify_timeout()
+
+    async def _handle_error(self, error: Exception) -> None:
+        """Handle validation errors"""
+        logger.error(f"Validation error: {str(error)}")
+        if self.interactive_mode:
+            await self._notify_error(error)
+
+    def _aggregate_validation_results(self, results: List[Dict]) -> Dict:
+        """Aggregate validation results from multiple nodes"""
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "validator_count": len(results),
+            "successful_validations": len([r for r in results if r["status"] == "success"]),
+            "results": results
+        }

@@ -148,6 +148,54 @@ class UDPBroadcast:
         # Allow multicast on loopback
         self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
 
+        # Update socket configuration
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        optimize_socket_buffers(self.socket, is_udp=True)
+        
+        if self.reuse_addr:
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if hasattr(socket, 'SO_REUSEPORT'):
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        
+        # Set UDP specific optimizations
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        if hasattr(socket, 'SO_PRIORITY'):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_PRIORITY, 6)  # High priority
+
+        # Optimize multicast settings
+        self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)  # Increased TTL
+        self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 0)  # Disable loopback
+
+        # Update multicast settings for IPv6 support
+        self.ipv6_multicast_group = 'ff02::1'  # Link-local all-nodes multicast
+        self.ipv6_interface_index = 0  # Will be set during initialization
+        self._ipv6_socket = None
+        self._ipv6_transport = None
+        
+        # Create IPv6 multicast socket
+        self._init_ipv6_socket()
+
+    def _init_ipv6_socket(self):
+        """Initialize IPv6 multicast socket"""
+        try:
+            self._ipv6_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+            self._ipv6_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_MULTICAST_HOPS, 5)
+            
+            # Set socket options
+            self._ipv6_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if hasattr(socket, 'SO_REUSEPORT'):
+                self._ipv6_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+                
+            # Ensure socket can handle both IPv4 and IPv6
+            self._ipv6_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+            
+            # Optimize socket buffers
+            optimize_socket_buffers(self._ipv6_socket, is_udp=True)
+            
+        except Exception as e:
+            self.logger.error(f"Failed to initialize IPv6 socket: {e}")
+            self._ipv6_socket = None
+
     async def start(self):
         """Start UDP multicast service."""
         if self.running:
@@ -214,6 +262,8 @@ class UDPBroadcast:
         try:
             for iface in netifaces.interfaces():
                 addrs = netifaces.ifaddresses(iface)
+                
+                # Handle IPv4 multicast
                 for addr in addrs.get(netifaces.AF_INET, []):
                     ip = addr['addr']
                     try:
@@ -225,6 +275,22 @@ class UDPBroadcast:
                         self.logger.debug(f"Joined multicast group on interface {ip}")
                     except Exception as e:
                         self.logger.warning(f"Failed to join multicast on {ip}: {e}")
+
+                # Handle IPv6 multicast
+                if self._ipv6_socket:
+                    for addr in addrs.get(netifaces.AF_INET6, []):
+                        ip = addr['addr'].split('%')[0]  # Remove scope ID if present
+                        if ip.startswith('fe80:'):  # Only use link-local addresses
+                            try:
+                                iface_index = socket.if_nametoindex(iface)
+                                mreq = socket.inet_pton(socket.AF_INET6, self.ipv6_multicast_group) + \
+                                       struct.pack('@I', iface_index)
+                                self._ipv6_socket.setsockopt(socket.IPPROTO_IPV6, 
+                                                           socket.IPV6_JOIN_GROUP, mreq)
+                                self._joined_groups.add((self.ipv6_multicast_group, iface))
+                                self.logger.debug(f"Joined IPv6 multicast on {iface}")
+                            except Exception as e:
+                                self.logger.warning(f"Failed to join IPv6 multicast on {iface}: {e}")
 
         except Exception as e:
             self.logger.error(f"Error setting up multicast: {e}")
@@ -251,6 +317,22 @@ class UDPBroadcast:
                     self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_DROP_MEMBERSHIP, mreq)
                 except Exception as e:
                     self.logger.warning(f"Error leaving multicast group on {iface}: {e}")
+
+            # Leave IPv6 multicast groups and close socket
+            if self._ipv6_socket:
+                try:
+                    for group, iface in self._joined_groups:
+                        if ':' in group:  # IPv6 group
+                            iface_index = socket.if_nametoindex(iface)
+                            mreq = socket.inet_pton(socket.AF_INET6, group) + \
+                                   struct.pack('@I', iface_index)
+                            self._ipv6_socket.setsockopt(socket.IPPROTO_IPV6,
+                                                       socket.IPV6_LEAVE_GROUP, mreq)
+                except Exception as e:
+                    self.logger.warning(f"Error leaving IPv6 multicast groups: {e}")
+                finally:
+                    self._ipv6_socket.close()
+                    self._ipv6_socket = None
 
             # Close transport and socket
             if self.transport:
@@ -397,10 +479,19 @@ class UDPBroadcast:
                     await self._send_fragment(fragment)
                 return
                 
-            # Send to multicast group
+            # Send to IPv4 multicast group
             if self.protocol and self.protocol.transport:
                 self.protocol.transport.sendto(data, (self.multicast_group, self.port))
             self.socket.sendto(data, (self.multicast_group, self.port))
+            
+            # Send to IPv6 multicast group
+            if self._ipv6_socket:
+                scope_id = 0  # Default interface
+                dest = (self.ipv6_multicast_group, self.port, 0, scope_id)
+                try:
+                    self._ipv6_socket.sendto(data, dest)
+                except Exception as e:
+                    self.logger.warning(f"IPv6 multicast send failed: {e}")
 
         except (socket.error, socket.timeout) as e:
             self._record_error("network_error", str(e), "multicast", 

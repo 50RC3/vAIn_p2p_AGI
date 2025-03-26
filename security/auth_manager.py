@@ -29,8 +29,16 @@ class AuthManager:
         self._stats = {
             'sessions_created': 0,
             'verifications': 0,
-            'key_rotations': 0
+            'key_rotations': 0,
+            'auth_attempts': 0,
+            'failed_auths': 0,
+            'rate_limited': 0
         }
+        self.auth_limits = {
+            'max_attempts': 5,
+            'window_seconds': 60
+        }
+        self.auth_attempts = {}
 
     def create_session(self, peer_id: str) -> Tuple[bytes, float]:
         """Create new session with expiry"""
@@ -108,6 +116,11 @@ class AuthManager:
                                       signature: bytes) -> bool:
         """Interactive message verification with safety controls"""
         try:
+            self._stats['auth_attempts'] += 1
+            if not self._check_rate_limit(peer_id):
+                logger.warning(f"Rate limit exceeded for peer {peer_id}")
+                return False
+
             if self.interactive:
                 self.session = InteractiveSession(
                     level=InteractionLevel.NORMAL,
@@ -133,11 +146,24 @@ class AuthManager:
                 return result
 
         except Exception as e:
+            self._stats['failed_auths'] += 1
             logger.error(f"Message verification failed: {str(e)}")
             return False
         finally:
             if self.session:
                 await self.session.__aexit__(None, None, None)
+
+    def _check_rate_limit(self, peer_id: str) -> bool:
+        """Check if peer is rate limited"""
+        current = time.time()
+        if peer_id in self.auth_attempts:
+            attempts = [t for t in self.auth_attempts[peer_id] 
+                       if current - t < self.auth_limits['window_seconds']]
+            self.auth_attempts[peer_id] = attempts
+            if len(attempts) >= self.auth_limits['max_attempts']:
+                self._stats['rate_limited'] += 1
+                return False
+        return True
 
     async def _cleanup_expired(self):
         """Clean up expired sessions"""

@@ -1,6 +1,6 @@
 from enum import Enum
-from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from dataclasses import dataclass, field
+from typing import Optional, Dict, Any, List
 import os
 
 class InteractionLevel(Enum:
@@ -20,6 +20,32 @@ class InteractiveConfig:
     memory_threshold: float = float(os.getenv('INTERACTIVE_MEMORY_THRESHOLD', 0.9))
     log_interactions: bool = os.getenv('INTERACTIVE_LOG_INTERACTIONS', 'true').lower() == 'true'
     heartbeat_interval: int = int(os.getenv('INTERACTIVE_HEARTBEAT_INTERVAL', 30))
+    
+    # Enhanced NORMAL mode settings
+    progress_format: str = "bar"  # or "text" for non-graphical
+    confirm_critical: bool = True
+    status_interval: int = 5
+    resource_monitoring: bool = True
+    operation_logging: bool = True
+    recovery_attempts: int = 2
+    validation_level: str = "normal"
+    feedback_verbosity: int = 2
+    auto_reconnect: bool = True
+    session_persistence: bool = True
+    interactive_debug: bool = False
+    progress_callback: Optional[callable] = None
+    resource_thresholds: Dict[str, float] = field(default_factory=lambda: {
+        'cpu': 0.85,
+        'memory': 0.80,
+        'disk': 0.90,
+        'network': 0.75
+    })
+    operation_timeouts: Dict[str, int] = field(default_factory=lambda: {
+        'connect': 30,
+        'transfer': 60,
+        'compute': 120,
+        'sync': 45
+    })
 
     def validate(self) -> bool:
         if not os.getenv('NODE_ENV') == 'production':
@@ -36,6 +62,10 @@ class InteractiveConfig:
             raise ValueError("Production cleanup timeout must be between 0 and 300 seconds")
         if not 0 < self.heartbeat_interval < 300:
             raise ValueError("Production heartbeat interval must be between 0 and 300 seconds")
+        if os.getenv('NODE_ENV') == 'production':
+            self.interactive_debug = False
+            self.confirm_critical = True
+            self.validation_level = "strict"
         return True
 
 # Enhanced timeouts for production

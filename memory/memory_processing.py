@@ -25,33 +25,32 @@ class MemoryProcessor:
         self._last_error_time = time.time()
         self._error_cooldown = 60  # 60 seconds between recovery attempts
         self._batch_size_limit = 1024 * 1024 * 1024  # 1GB
+        self.batch_stats = {
+            'avg_latency': 0.0,
+            'processed_count': 0,
+            'last_adjustment': time.time(),
+            'optimal_size': self._batch_size_limit
+        }
+        self.min_batch_size = 1024  # 1KB
 
     async def process_batch_interactive(self, data: torch.Tensor) -> Optional[torch.Tensor]:
-        """Process batch with interactive controls and progress tracking"""
+        """Process batch with interactive controls and edge computing support"""
         if not self._validate_input_tensor(data):
             logger.error("Invalid input tensor")
             return None
 
         try:
-            self.session = InteractiveSession(
-                level=InteractionLevel.NORMAL if self.interactive else InteractionLevel.NONE,
-                config=InteractiveConfig(
-                    timeout=INTERACTION_TIMEOUTS["batch"],
-                    persistent_state=True,
-                    safe_mode=True,
-                    recovery_enabled=True,
-                    max_cleanup_wait=30
+            # Offload preprocessing to edge if available
+            if self.edge_service and not self._interrupt_requested:
+                processed = await self.edge_service.offload_task(
+                    "preprocessing",
+                    data
                 )
-            )
-
-            async with self.session:
-                if not await self._check_resources():
-                    return None
-
-                try:
-                    return await self._process_with_monitoring(data)
-                except Exception as e:
-                    return await self._handle_processing_error(e, data)
+                if processed is not None:
+                    return processed
+                    
+            # Fallback to local processing if edge fails
+            return await self._process_with_monitoring(data)
 
         except Exception as e:
             return await self._handle_fatal_error(e)
@@ -95,21 +94,51 @@ class MemoryProcessor:
     async def _process_with_monitoring(self, data: torch.Tensor) -> Optional[torch.Tensor]:
         """Process data with resource monitoring"""
         try:
-            # Start monitoring task
+            start_time = time.time()
             monitor_task = asyncio.create_task(self._monitor_resources())
             
-            processed = await self._preprocess_with_validation(data)
-            if processed is not None:
-                await self._cache_result_safely(processed)
-                
-            return processed
+            # Split into optimal sized batches
+            batch_size = self.batch_stats['optimal_size']
+            batches = torch.split(data, batch_size)
+            results = []
+            
+            for batch in batches:
+                if await self._check_resources():
+                    processed = await self._preprocess_with_validation(batch)
+                    if processed is not None:
+                        results.append(processed)
+                        
+            # Update batch statistics        
+            latency = (time.time() - start_time) / len(batches)
+            self._adjust_batch_size(latency)
+            self.batch_stats['avg_latency'] = latency
+            self.batch_stats['processed_count'] += len(batches)
+            
+            return torch.cat(results) if results else None
+            
         finally:
-            # Cancel monitoring
             monitor_task.cancel()
             try:
                 await monitor_task
             except asyncio.CancelledError:
                 pass
+
+    def _adjust_batch_size(self, latency: float):
+        """Dynamically adjust batch size based on processing latency"""
+        target_latency = 0.1  # 100ms target
+        
+        if latency > target_latency * 1.2:  # Too slow
+            self.batch_stats['optimal_size'] = max(
+                self.min_batch_size,
+                int(self.batch_stats['optimal_size'] * 0.8)
+            )
+        elif latency < target_latency * 0.8:  # Too fast
+            self.batch_stats['optimal_size'] = min(
+                self.batch_stats['optimal_size'] * 1.2,
+                self._batch_size_limit
+            )
+        
+        self.batch_stats['last_adjustment'] = time.time()
 
     async def _cache_result_safely(self, tensor: torch.Tensor) -> None:
         """Safely cache processed tensor"""

@@ -1,5 +1,5 @@
 import torch
-from typing import Dict, Tuple, Optional, Any
+from typing import Dict, Tuple, Optional, Any, List
 from torch import nn
 import numpy as np
 import logging
@@ -7,6 +7,8 @@ import warnings
 from dataclasses import dataclass
 import json
 import os
+import asyncio
+from .feature_optimization import FeatureOptimizer
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,15 @@ class AdaptiveCompression:
         self.domain_compression_rates = {}
         self.cross_domain_stats = {}
 
+        self.batch_config = {
+            'target_latency': 0.05,  # 50ms target
+            'min_size': 1024,        # Minimum batch 1KB
+            'max_size': 1024*1024,   # Maximum batch 1MB
+            'parallel_limit': 4       # Max parallel compression tasks
+        }
+        self.compression_queue = asyncio.Queue()
+        self.feature_optimizer = FeatureOptimizer()
+
     def _validate_init_params(self, base_rate: float, min_rate: float, max_rate: float) -> None:
         """Validate initialization parameters"""
         if not (0 < min_rate <= base_rate <= max_rate < 1):
@@ -61,40 +72,39 @@ class AdaptiveCompression:
         self._load_state()
 
     def compress_model_updates(self, model_update: Dict[str, torch.Tensor]) -> Tuple[Dict, float]:
-        """Compress model updates with domain awareness"""
+        """Compress model updates with advanced optimization"""
         try:
             self._validate_model_updates(model_update)
             start_time = torch.cuda.Event(enable_timing=True)
             end_time = torch.cuda.Event(enable_timing=True)
             
             start_time.record()
-            domain_type = model_update.get("domain_type", "default")
-            compression_rate = self._get_domain_compression_rate(domain_type)
+            
+            # Optimize features and compress data
+            optimized_update, selected_features = self.feature_optimizer.select_features(model_update)
+            
+            # Apply quantization to compressed updates
             compressed = {}
             original_size = 0
             compressed_size = 0
             
-            for name, tensor in model_update.items():
-                if not tensor.is_floating_point():
-                    raise CompressionError(f"Non-floating point tensor found: {name}")
-                    
-                device = tensor.device
+            for name, tensor in optimized_update.items():
                 original_size += tensor.numel() * tensor.element_size()
                 
-                # Handle numerically stable compression
-                k = max(1, int(tensor.numel() * compression_rate))
-                values, indices = torch.topk(tensor.abs().flatten(), k)
-                threshold = values[-1].item() + self.eps
-                
-                mask = tensor.abs() >= threshold
-                compressed[name] = {
-                    'values': tensor[mask].cpu(),  # Always store compressed values on CPU
-                    'indices': mask.nonzero().cpu(),
-                    'shape': tensor.shape,
-                    'device': str(device)
-                }
-                compressed_size += compressed[name]['values'].numel() * 4  # 4 bytes per float
-                
+                if name in selected_features:
+                    # Quantize to 8-bit precision
+                    scale = tensor.abs().max() / 127
+                    quantized = torch.quantize_per_tensor(
+                        tensor.float(), scale=scale, zero_point=0, dtype=torch.qint8
+                    )
+                    
+                    compressed[name] = {
+                        'values': quantized.dequantize(),
+                        'scale': scale,
+                        'shape': tensor.shape,
+                    }
+                    compressed_size += compressed[name]['values'].numel()
+
             end_time.record()
             torch.cuda.synchronize()
             self.compression_time += start_time.elapsed_time(end_time)
@@ -228,3 +238,66 @@ class AdaptiveCompression:
         # Prune old stats
         if len(self.cross_domain_stats[domain_type]) > self.stats_history_size:
             self.cross_domain_stats[domain_type].pop(0)
+
+    async def compress_batch_parallel(self, updates: List[Dict[str, torch.Tensor]]) -> List[Tuple[Dict, float]]:
+        """Process compression in optimized parallel batches"""
+        tasks = []
+        results = []
+        
+        for i in range(0, len(updates), self.batch_config['parallel_limit']):
+            batch = updates[i:i + self.batch_config['parallel_limit']]
+            batch_tasks = [
+                asyncio.create_task(self.compress_model_updates(update))
+                for update in batch
+            ]
+            tasks.extend(batch_tasks)
+            
+            if len(tasks) >= self.batch_config['parallel_limit']:
+                done, tasks = await asyncio.wait(
+                    tasks, return_when=asyncio.FIRST_COMPLETED
+                )
+                results.extend([t.result() for t in done])
+        
+        if tasks:
+            done, _ = await asyncio.wait(tasks)
+            results.extend([t.result() for t in done])
+            
+        return results
+
+    def compress_updates(self, updates: Dict[str, torch.Tensor]) -> Dict:
+        """Compress model updates with sparse encoding"""
+        try:
+            compressed = {}
+            for key, tensor in updates.items():
+                # Use top-k sparsification
+                k = max(1, int(tensor.numel() * self.base_rate))
+                values, indices = torch.topk(tensor.abs().flatten(), k)
+                threshold = values[-1].item()
+                
+                # Create sparse tensor
+                mask = tensor.abs() >= threshold
+                compressed[key] = {
+                    'values': tensor[mask].cpu(),
+                    'indices': mask.nonzero().cpu(),
+                    'shape': tensor.shape
+                }
+
+            return compressed
+
+        except Exception as e:
+            logger.error(f"Update compression failed: {str(e)}")
+            raise
+
+    def decompress_updates(self, compressed: Dict) -> Dict[str, torch.Tensor]:
+        """Decompress model updates"""
+        try:
+            decompressed = {}
+            for key, data in compressed.items():
+                tensor = torch.zeros(data['shape'])
+                tensor[data['indices'][:, 0], data['indices'][:, 1]] = data['values']
+                decompressed[key] = tensor
+            return decompressed
+
+        except Exception as e:
+            logger.error(f"Update decompression failed: {str(e)}")
+            raise

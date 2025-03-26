@@ -63,6 +63,25 @@ INTERACTION_TIMEOUTS.update({
     "peer_update": 20,    # 20 seconds for peer updates
 })
 
+# Enhanced timeouts for NORMAL mode
+INTERACTION_TIMEOUTS.update({
+    "normal_op": 60,        # Standard operation timeout
+    "normal_confirm": 45,   # Normal confirmation timeout
+    "normal_retry": 30,     # Retry operation timeout
+    "normal_sync": 90,      # Synchronization timeout
+    "normal_recovery": 120,  # Recovery operation timeout
+    "normal_backup": 75,    # Backup operation timeout
+})
+
+# NORMAL mode specific constants
+NORMAL_MODE_SETTINGS = {
+    'max_concurrent_ops': 5,
+    'min_progress_interval': 1,
+    'max_recovery_attempts': 3,
+    'resource_check_interval': 2,
+    'status_update_interval': 5
+}
+
 # Sharding configuration
 SHARD_CONFIG = {
     "max_peers_per_shard": 1000,
@@ -70,6 +89,24 @@ SHARD_CONFIG = {
     "replication_factor": 3,  # Each shard replicated 3 times
     "shard_cleanup_interval": 300,  # 5 minutes
     "reshard_threshold": 0.8,  # Trigger resharding at 80% capacity
+}
+
+# Load balancing configuration
+LOAD_BALANCING = {
+    "max_load": 0.8,  # 80% max load per node
+    "min_load": 0.2,  # 20% min load before rebalance
+    "check_interval": 60,  # Check every 60 seconds
+    "rebalance_threshold": 0.3  # 30% load difference triggers rebalance
+}
+
+# Traffic shaping configuration
+TRAFFIC_SHAPING = {
+    "critical_allocation": 0.4,
+    "high_allocation": 0.3, 
+    "medium_allocation": 0.2,
+    "low_allocation": 0.1,
+    "burst_multiplier": 2.0,  # Allow burst for critical traffic
+    "window_size": 1.0  # 1 second measurement window
 }
 
 # Input validation settings

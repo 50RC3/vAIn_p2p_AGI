@@ -4,8 +4,9 @@ import torch.optim as optim
 import copy
 import logging
 import psutil
-from typing import Tuple, Optional, Dict
+from typing import Tuple, Optional, Dict, List
 from contextlib import contextmanager
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,13 @@ class MetaReptile:
         self.meta_optimizer = optim.Adam(self.model.parameters(), lr=self.meta_lr)
         self.task_loss = nn.CrossEntropyLoss()
         self._interrupt_requested = False
+        
+        # Add cognitive evolution tracking
+        self.cognitive_stats = {
+            'adaptation_speed': [],
+            'learning_efficiency': [],
+            'memory_retention': []
+        }
 
     @contextmanager
     def _resource_check(self):
@@ -150,3 +158,58 @@ class MetaReptile:
         """Request graceful interruption of training"""
         self._interrupt_requested = True
         logger.info("Interrupt requested for MetaReptile")
+        
+    async def evolve_cognitive_abilities(self, 
+                                       support_set: List[torch.Tensor],
+                                       steps: int) -> Dict:
+        """Evolve and enhance cognitive capabilities"""
+        try:
+            stats = {}
+            
+            # Measure initial capabilities
+            initial_perf = await self._evaluate_cognitive_metrics(support_set)
+            
+            # Evolutionary adaptation
+            for step in range(steps):
+                # Adapt and measure improvements
+                adapted_state = await self.adapt_interactive(support_set, 1)
+                if adapted_state is None:
+                    break
+                    
+                current_perf = await self._evaluate_cognitive_metrics(support_set)
+                
+                # Track cognitive evolution
+                for metric in self.cognitive_stats:
+                    improvement = current_perf[metric] - initial_perf[metric]
+                    self.cognitive_stats[metric].append(improvement)
+                    
+                stats[f'step_{step}'] = current_perf
+                
+            return stats
+            
+        except Exception as e:
+            logger.error(f"Cognitive evolution failed: {str(e)}")
+            raise
+            
+    async def _evaluate_cognitive_metrics(self, 
+                                        test_set: List[torch.Tensor]) -> Dict:
+        """Evaluate current cognitive capabilities"""
+        try:
+            metrics = {}
+            
+            # Test adaptation speed
+            start_time = time.time()
+            adapted = await self.adapt_interactive(test_set, 1)
+            metrics['adaptation_speed'] = time.time() - start_time
+            
+            # Test learning efficiency
+            metrics['learning_efficiency'] = self._measure_learning_rate(test_set)
+            
+            # Test memory retention
+            metrics['memory_retention'] = self._test_memory_retention(test_set)
+            
+            return metrics
+            
+        except Exception as e:
+            logger.error(f"Metrics evaluation failed: {str(e)}")
+            raise

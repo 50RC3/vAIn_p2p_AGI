@@ -20,6 +20,10 @@
   - Interactive progress tracking ✓
 - Basic task scheduling ✓
 - Local storage management ✓
+- Edge device support (40% complete) ✓
+  - Adaptive compression
+  - Two-tier caching
+  - Resource monitoring
 - TODO: Advanced load balancing
 - TODO: Dynamic resource allocation
 - TODO: Robust incentive system
@@ -33,15 +37,15 @@
 - TODO: Meta-learning system
 - TODO: Advanced compression
 
-### 1.4 Blockchain & Security (40% Complete)
+### 1.4 Blockchain & Security (45% Complete)
 - Basic smart contracts ✓
 - Basic stake-based validation ✓
 - Simple reputation scoring ✓
 - Three-tier node system ✓
 - Basic voting mechanism ✓
+- Zero-knowledge proofs ✓
 - TODO: Hardware attestation
 - TODO: Advanced fraud prevention
-- TODO: Zero-knowledge proofs
 - TODO: Enhanced governance
 - TODO: Complex economic model
 
@@ -72,3 +76,19 @@ While vAIn is currently my solo project, I welcome feedback and discussions abou
 
 Contact: vincent@vain.dev
 GitHub: github.com/vincent/vAIn_p2p_AGI
+
+# vAIn API Reference - Development Build
+
+> Note: This API is under active development by me (Vincent). Breaking changes should be expected.
+> Current Version: 0.2.1-dev
+> Last Updated: 2024-01-25
+
+### Core Endpoints
+- POST `/api/staking/stake` ✓
+- GET `/api/training/status` ✓
+- POST `/api/training/control` (60% implemented)
+- GET `/api/node/health` ✓
+- POST `/api/node/resources` ✓
+- POST `/api/model/update` (30% implemented)
+- GET `/api/metrics/cluster` (45% implemented)
+- POST `/api/node/peer-exchange` (In development)

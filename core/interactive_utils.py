@@ -10,6 +10,9 @@ from typing import Optional, Any, Callable, List, Dict
 from functools import wraps
 from dataclasses import dataclass, field
 from core.constants import INTERACTION_TIMEOUTS, InteractionLevel
+from tqdm import tqdm
+import psutil
+import aiofiles
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +39,16 @@ class InteractiveConfig:
     recovery_attempts: int = 3
     heartbeat_interval: int = 60
     memory_threshold: float = 0.9  # 90% memory usage threshold
+    resource_monitoring: bool = True
+    status_interval: int = 10
+    session_persistence: bool = True
+    feedback_verbosity: int = 2
+    resource_thresholds: Dict[str, float] = field(default_factory=lambda: {
+        'cpu': 0.8,
+        'memory': 0.8,
+        'disk': 0.8
+    })
+    progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None
 
 class InteractionTimeout(Exception):
     """Raised when an interactive operation times out"""
@@ -53,10 +66,12 @@ def with_timeout(timeout_sec: int):
         return wrapper
     return decorator
 
-class InteractiveSession:
     def __init__(self, 
-                 level: InteractionLevel = InteractionLevel.NORMAL,
-                 config: Optional[InteractiveConfig] = None):
+                level: InteractionLevel = InteractionLevel.NORMAL,
+                config: Optional[InteractiveConfig] = None):
+        self._last_input = None
+        self._backup_task = None
+        self._restore_session = self._restore_progress
         self.level = level
         self.config = config or InteractiveConfig()
         self._platform = platform.system()
@@ -71,30 +86,32 @@ class InteractiveSession:
         self._recovery_mode = False
         self._memory_monitor = None
         self._heartbeat_task = None
+        self._status_task = None
+        self._resource_stats = {}
+        self._operation_history = []
+        self._active_operations = set()
         
     async def __aenter__(self):
-        """Improved context manager entry"""
+        """Enhanced context manager entry with NORMAL mode features"""
         try:
-            # Start background tasks
-            self._backup_task = None
-            if self.config.backup_enabled:
-                self._backup_task = asyncio.create_task(self._periodic_backup())
-                self._active_tasks.add(self._backup_task)
-            
             self._setup_handlers()
-            if self.config.persistent_state:
-                await self._restore_progress()
             
-            # Register cleanup handlers
-            atexit.register(self._emergency_cleanup)
-            
-            # Start resource monitoring
-            self._memory_monitor = asyncio.create_task(self.monitor_resources())
-            self._active_tasks.add(self._memory_monitor)
-            
+            if self.level == InteractionLevel.NORMAL:
+                # Start monitoring tasks
+                if self.config.resource_monitoring:
+                    self._start_resource_monitoring()
+                    
+                if self.config.status_interval > 0:
+                    self._status_task = asyncio.create_task(self._periodic_status())
+                    
+                # Restore session if enabled
+                if self.config.session_persistence:
+                    await self._restore_session()
+                    
             return self
+            
         except Exception as e:
-            logger.error(f"Failed to initialize session: {e}")
+            logger.error(f"Session initialization failed: {e}")
             await self.__aexit__(type(e), e, e.__traceback__)
             raise
         
@@ -174,19 +191,22 @@ class InteractiveSession:
     
     def _setup_timeout(self, timeout: int):
         """Setup cross-platform timeout handlers"""
-        def timeout_handler(signum, frame):
-            raise InteractionTimeout()
-            
+        if hasattr(signal, 'SIGALRM'):
+            self._prev_handlers[signal.SIGALRM] = signal.getsignal(signal.SIGALRM)
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(timeout)
         if self._platform != 'Windows':  # Unix-like systems
             self._prev_handlers[signal.SIGALRM] = signal.getsignal(signal.SIGALRM)
             signal.signal(signal.SIGALRM, timeout_handler)
             signal.alarm(timeout)
         else:  # Windows fallback using asyncio
-            asyncio.get_event_loop().call_later(timeout, timeout_handler, None, None)
+            if hasattr(signal, 'alarm'):
+                signal.alarm(0)
 
     def _restore_handlers(self):
         """Restore original signal handlers"""
-        signal.alarm(0)
+        if platform.system() != 'Windows':
+            signal.alarm(0)
         for sig, handler in self._prev_handlers.items():
             signal.signal(sig, handler)
         self._prev_handlers.clear()
@@ -397,10 +417,78 @@ class InteractiveSession:
         """Monitor system resources during interactive session"""
         while True:
             try:
-                memory_usage = psutil.Process().memory_percent()
-                if memory_usage > self.config.memory_threshold:
-                    logger.warning(f"High memory usage: {memory_usage}%")
+                metrics = await self.system_monitor.get_metrics()
+                if metrics.memory_usage > self.config.memory_threshold:
+                    logger.warning(f"High memory usage: {metrics.memory_usage}%")
                     await self._save_progress()
+                    
+                if self.system_monitor._check_critical_levels(metrics):
+                    if not await self.get_confirmation(
+                        "Critical resource usage detected. Continue?",
+                        timeout=INTERACTION_TIMEOUTS["emergency"]
+                    ):
+                        await self.cleanup()
+                        break
+                        
                 await asyncio.sleep(self.config.heartbeat_interval)
             except Exception as e:
                 logger.error(f"Resource monitoring error: {e}")
+                self.system_monitor.track_error(e, {"context": "resource_monitoring"})
+
+    async def _periodic_status(self):
+        """Periodic status updates for NORMAL mode"""
+        while not self._interrupt_flag:
+            try:
+                if self._active_operations:
+                    status = self._get_operations_status()
+                    if self.config.progress_callback:
+                        await self.config.progress_callback(status)
+                    else:
+                        logger.info(f"Active operations: {status}")
+                        
+                await asyncio.sleep(self.config.status_interval)
+                
+            except Exception as e:
+                logger.error(f"Status update failed: {e}")
+
+    async def confirm_with_feedback(self, prompt: str, 
+                                  details: Optional[Dict] = None) -> bool:
+        """Enhanced confirmation with detailed feedback for NORMAL mode"""
+        if self.level != InteractionLevel.NORMAL:
+            return await self.get_confirmation(prompt)
+            
+        try:
+            if details and self.config.feedback_verbosity > 1:
+                print("\nOperation Details:")
+                for key, value in details.items():
+                    print(f"  {key}: {value}")
+                    
+            return await self.get_confirmation(f"\n{prompt}")
+            
+        except Exception as e:
+            logger.error(f"Confirmation dialog failed: {e}")
+            return False
+            
+    def _start_resource_monitoring(self):
+        """Start resource monitoring for NORMAL mode"""
+        async def monitor_resources():
+            while not self._interrupt_flag:
+                try:
+                    self._resource_stats = {
+                        'cpu': psutil.cpu_percent(interval=1) / 100,
+                        'memory': psutil.virtual_memory().percent / 100,
+                        'disk': psutil.disk_usage('/').percent / 100
+                    }
+                    
+                    # Check thresholds
+                    for resource, value in self._resource_stats.items():
+                        threshold = self.config.resource_thresholds.get(resource)
+                        if threshold and value > threshold:
+                            logger.warning(f"{resource.upper()} usage above threshold: {value:.1%}")
+                            
+                    await asyncio.sleep(2)
+                    
+                except Exception as e:
+                    logger.error(f"Resource monitoring failed: {e}")
+                    
+        self._active_tasks.add(asyncio.create_task(monitor_resources()))

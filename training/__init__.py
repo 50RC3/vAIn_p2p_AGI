@@ -8,6 +8,8 @@ try:
     from .contrastive_loss import ContrastiveLoss
     from .clustering_loss import ClusteringLoss
     from .meta_reptile import MetaReptile
+    from .distillation import DistillationTrainer
+    from .local_trainer import LocalTrainer
 except ImportError as e:
     raise ImportError(f"Failed to import required training components: {e}")
 
@@ -16,5 +18,7 @@ __all__ = [
     'FederatedClient', 
     'ContrastiveLoss',
     'ClusteringLoss',
-    'MetaReptile'
+    'MetaReptile',
+    'DistillationTrainer',
+    'LocalTrainer'
 ]

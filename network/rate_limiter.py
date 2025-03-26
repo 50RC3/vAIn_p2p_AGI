@@ -6,6 +6,7 @@ import time
 import logging
 from core.constants import INTERACTION_TIMEOUTS, InteractionLevel
 from core.interactive_utils import InteractiveSession, InteractiveConfig
+from .traffic_shaper import TrafficShaper, TrafficPriority
 
 logger = logging.getLogger(__name__)
 
@@ -90,10 +91,16 @@ class AdaptiveRateLimiter:
         self._interrupt_requested = False
         self.adjustment_history = []
         self._lock = asyncio.Lock()
+        self.traffic_shaper = TrafficShaper(initial_rate)
 
-    async def can_send(self, node_id: str, size: int) -> bool:
+    async def can_send(self, node_id: str, size: int, priority: TrafficPriority = TrafficPriority.MEDIUM) -> bool:
         async with self._lock:
             try:
+                # First check traffic shaping rules
+                if not await self.traffic_shaper.can_send(size, priority, node_id):
+                    return False
+                    
+                # Then apply general rate limiting
                 now = time.time()
                 await self._cleanup_old_data(node_id, now)
                 
@@ -104,6 +111,7 @@ class AdaptiveRateLimiter:
                     self.usage[node_id].append((now, size))
                     return True
                 return False
+                
             except Exception as e:
                 logger.error(f"Error in can_send for node {node_id}: {str(e)}")
                 return False

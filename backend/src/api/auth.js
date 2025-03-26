@@ -1,24 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
-const rateLimit = require('express-rate-limit');
 const { ethers } = require('ethers');
-const { body, validationResult } = require('express-validator');
+const { validationResult } = require('express-validator');
 
-// Rate limiting
-const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // 5 attempts per window
-    message: { error: 'Too many login attempts, please try again later' }
-});
+const { authLimiter } = require('../middleware/rateLimiter');
+const { loginValidation } = require('../middleware/validator');
+const { verifySignature } = require('../middleware/auth');
 
-// Validation middleware
-const validateLogin = [
-    body('address').isEthereumAddress(),
-    body('signature').isString().isLength({ min: 132, max: 132 }),
-];
-
-router.post('/login', loginLimiter, validateLogin, async (req, res) => {
+router.post('/login', authLimiter, loginValidation, async (req, res) => {
     try {
         // Validation check
         const errors = validationResult(req);
@@ -27,12 +17,9 @@ router.post('/login', loginLimiter, validateLogin, async (req, res) => {
         }
 
         const { address, signature } = req.body;
-
-        // Verify Ethereum signature
         const message = `Login to vAIn: ${new Date().toISOString().slice(0,10)}`;
-        const recoveredAddress = ethers.utils.verifyMessage(message, signature);
 
-        if (recoveredAddress.toLowerCase() !== address.toLowerCase()) {
+        if (!verifySignature(message, signature, address)) {
             return res.status(401).json({ error: 'Invalid signature' });
         }
 
@@ -64,10 +51,7 @@ router.post('/login', loginLimiter, validateLogin, async (req, res) => {
     }
 });
 
-router.post('/refresh', rateLimit({
-    windowMs: 60 * 60 * 1000, // 1 hour
-    max: 10 // 10 attempts per hour
-}), async (req, res) => {
+router.post('/refresh', authLimiter, async (req, res) => {
     try {
         const { refreshToken } = req.body;
         

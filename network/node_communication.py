@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional
 from core.constants import INTERACTION_TIMEOUTS, InteractionLevel
 from core.interactive_utils import InteractiveSession, InteractiveConfig
 from .rate_limiter import AdaptiveRateLimiter
+from training.compression import AdaptiveCompression
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,24 @@ class NodeCommunication:
         )
         self._pending_messages: Dict[str, asyncio.Queue] = defaultdict(asyncio.Queue)
         self._worker_tasks: Set[asyncio.Task] = set()
+        
+        # Add compression
+        self.compressor = AdaptiveCompression(
+            base_compression_rate=0.1,  # Start with 10x compression
+            min_rate=0.01,
+            max_rate=0.3
+        )
+        self._compression_stats = {
+            'total_original': 0,
+            'total_compressed': 0,
+            'compression_ratio': 1.0
+        }
+        self._compression_stats.update({
+            'feature_reduction': 0.0,
+            'bandwidth_saved': 0.0
+        })
+        self.msg_queue = AsyncMessageQueue()
+        self.gossip = GossipManager()
 
     async def _get_client_session(self, target_node: str) -> aiohttp.ClientSession:
         """Get or create a ClientSession from the pool"""
@@ -65,39 +84,86 @@ class NodeCommunication:
             return session
 
     async def _message_worker(self, target_node: str):
-        """Background worker to process messages for a target node"""
+        """Background worker with gossip protocol"""
         try:
             while not self._interrupt_requested:
-                message = await self._pending_messages[target_node].get()
-                size = len(str(message))  # Approximate message size
-                
-                while not await self._rate_limiter.can_send_interactive(target_node, size):
-                    if self._interrupt_requested:
-                        return
-                    await asyncio.sleep(1)
-                
-                await self._send_message_internal(target_node, message)
-                self._pending_messages[target_node].task_done()
+                message = await self.msg_queue.get()
+                if message and await self.gossip.should_propagate(message['id']):
+                    peers = self.gossip.select_peers(self._get_peers(), {target_node})
+                    for peer in peers:
+                        await self._send_message_internal(peer, message)
+                await asyncio.sleep(0.1)
         except Exception as e:
-            logger.error(f"Message worker error for {target_node}: {str(e)}")
-        finally:
-            self._worker_tasks.discard(asyncio.current_task())
-
-    async def send_message_interactive(self, target_node: str, message: Dict[str, Any]) -> bool:
-        """Queue message for sending with rate limiting"""
-        try:
-            # Ensure worker exists for target node
-            if target_node not in self._worker_tasks:
-                task = asyncio.create_task(self._message_worker(target_node))
-                self._worker_tasks.add(task)
+            logger.error(f"Worker error: {str(e)}")
             
-            # Queue message
-            await self._pending_messages[target_node].put(message)
+    async def send_message_interactive(self, target_node: str, message: Dict[str, Any]) -> bool:
+        """Queue message for asynchronous sending"""
+        try:
+            msg_id = f"{self.node_id}_{time.time()}_{target_node}"
+            await self.msg_queue.put(msg_id, message)
+            
+            # Select peers for gossip propagation
+            peers = self.gossip.select_peers(self._get_peers(), {target_node})
+            
+            # Asynchronously propagate to peers
+            propagation_tasks = [
+                asyncio.create_task(self._send_message_internal(peer, message))
+                for peer in peers
+            ]
+            
+            # Don't wait for responses
+            asyncio.gather(*propagation_tasks, return_exceptions=True)
             return True
+            
+        except Exception as e:
+            logger.error(f"Failed to queue message: {str(e)}")
+            return False
+
+    async def _compress_message(self, message: Dict[str, Any]) -> tuple[Dict, float]:
+        """Compress message using edge computing when available"""
+        try:
+            # Attempt edge compression
+            if self.edge_service:
+                compressed = await self.edge_service.offload_task(
+                    "compression",
+                    message
+                )
+                if compressed:
+                    return compressed, compressed.get('ratio', 1.0)
+            
+            # Fallback to local compression
+            msg_tensor = self._dict_to_tensor(message)
+            original_size = len(str(message))
+            
+            # Continue with existing compression logic
+            compressed, ratio = await self.compressor.compress_model_updates({
+                'message': msg_tensor
+            })
+            
+            compressed_size = len(str(compressed))
+            
+            # Update compression statistics
+            self._compression_stats.update({
+                'total_original': self._compression_stats['total_original'] + original_size,
+                'total_compressed': self._compression_stats['total_compressed'] + compressed_size,
+                'compression_ratio': ratio,
+                'feature_reduction': 1.0 - (len(compressed) / len(message)),
+                'bandwidth_saved': (original_size - compressed_size) / original_size
+            })
+            
+            return compressed, ratio
 
         except Exception as e:
-            logger.error(f"Error queueing message: {str(e)}")
-            return False
+            logger.warning(f"Compression failed, sending uncompressed: {e}")
+            return message, 1.0
+
+    def _dict_to_tensor(self, d: Dict) -> torch.Tensor:
+        """Convert dictionary to tensor for compression"""
+        import torch
+        import json
+        # Convert dict to bytes then to tensor
+        bytes_data = json.dumps(d).encode()
+        return torch.tensor([int(b) for b in bytes_data], dtype=torch.float32)
 
     async def _send_message_internal(self, target_node: str, message: Dict[str, Any]) -> bool:
         """Internal message sending implementation"""
@@ -164,6 +230,39 @@ class NodeCommunication:
         """Legacy method, redirects to interactive version"""
         return await self.send_message_interactive(target_node, message)
 
+    async def send_message_mobile(self, target_node: str, message: Dict[str, Any]) -> bool:
+        """Send optimized message to mobile node"""
+        try:
+            if not hasattr(self, 'mobile_optimizer'):
+                self.mobile_optimizer = MobileOptimizer()
+
+            # Compress message for mobile
+            compressed_msg = self.mobile_optimizer.compress_for_mobile(message)
+            
+            # Add metadata for mobile handling
+            compressed_msg['_mobile'] = True
+            compressed_msg['_timestamp'] = time.time()
+            
+            # Track metrics
+            metrics = {
+                'original_size': len(str(message)),
+                'compressed_size': len(str(compressed_msg)),
+                'target_node': target_node
+            }
+            
+            # Only send if compression achieved meaningful reduction
+            if metrics['compressed_size'] < metrics['original_size'] * 0.8:
+                success = await self.send_message(target_node, compressed_msg)
+                if success:
+                    self.mobile_optimizer.update_history.append(metrics)
+                return success
+            
+            return False
+
+        except Exception as e:
+            logger.error(f"Failed to send mobile message: {str(e)}")
+            return False
+
     async def adjust_rate(self, target_node: str, congestion_level: float):
         """Adjust send rate based on observed congestion"""
         await self._rate_limiter.adjust_rate_interactive(congestion_level)
@@ -173,7 +272,8 @@ class NodeCommunication:
         self._interrupt_requested = True
 
     async def cleanup(self):
-        """Cleanup resources"""
+        """Enhanced cleanup with message queue"""
+        await self.msg_queue.cleanup_old_messages()
         try:
             # Cancel all worker tasks
             for task in self._worker_tasks:
@@ -194,3 +294,17 @@ class NodeCommunication:
             logger.info("Communication cleanup completed")
         except Exception as e:
             logger.error(f"Error during cleanup: {str(e)}")
+
+    async def handle_mobile_connection(self, mobile_node: str):
+        """Configure connection for mobile optimization"""
+        self.compression.set_target_rate(0.1)  # Increase compression
+        self.batch_size = self._calculate_mobile_batch_size()
+
+    def _calculate_mobile_batch_size(self) -> int:
+        """Calculate optimal batch size for mobile connections"""
+        base_size = 32
+        if hasattr(self, 'network_monitor'):
+            quality = self.network_monitor.get_quality_sync()
+            # Adjust batch size based on network quality (0-1)
+            return max(1, int(base_size * quality))
+        return base_size

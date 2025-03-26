@@ -10,6 +10,8 @@ from collections import defaultdict, Counter
 from time import monotonic
 import ipaddress
 import numpy as np
+import os
+from .memory_monitor import MemoryMonitor
 
 @dataclass
 class ReputationMetrics:
@@ -34,7 +36,7 @@ class PendingChange(NamedTuple):
 
 class ReputationManager:
     def __init__(self, decay_factor: float = 0.95, min_reputation: float = -100, 
-                 interactive: bool = True):
+                 interactive: bool = True, **kwargs):
         self.reputation_scores: Dict[str, ReputationMetrics] = {}
         self.decay_factor = decay_factor
         self.min_reputation = min_reputation
@@ -107,11 +109,10 @@ class ReputationManager:
 
         # Add batch processing configuration
         self.batch_config = {
-            'max_batch_size': 1000,  # Maximum updates per batch
-            'min_batch_size': 10,    # Minimum updates to trigger processing
-            'target_latency': 0.1,   # Target processing time per batch (seconds)
-            'max_parallel': 4,       # Maximum parallel processing tasks
-            'priority_threshold': 0.5 # Minimum impact score for high priority
+            'max_batch_size': kwargs.get('max_batch_size', 1000),
+            'min_batch_size': kwargs.get('min_batch_size', 50),
+            'max_parallel': kwargs.get('max_parallel', min(os.cpu_count() * 2, 16)),
+            'target_latency': kwargs.get('target_latency', 0.5)
         }
         
         # Batch processing state
@@ -122,6 +123,27 @@ class ReputationManager:
             'avg_latency': 0.0,
             'last_adjustment': time.time()
         }
+
+        # Initialize memory monitor
+        self.memory_monitor = MemoryMonitor(
+            threshold=kwargs.get('memory_threshold', 0.9),
+            check_interval=kwargs.get('memory_check_interval', 60)
+        )
+
+        # Add memory callback
+        async def on_high_memory(usage: float):
+            # Reduce batch size to manage memory
+            self.batch_config['max_batch_size'] = max(
+                self.batch_config['min_batch_size'],
+                int(self.batch_config['max_batch_size'] * 0.8)
+            )
+            self.logger.warning(
+                f"Reduced max batch size to {self.batch_config['max_batch_size']} "
+                f"due to high memory usage ({usage:.1%})"
+            )
+
+        # Start memory monitoring in start() method
+        self._memory_callback = on_high_memory
 
     def update_reputation(self, node_id: str, score_delta: float):
         """Update node's reputation score with dynamic decay."""
@@ -165,6 +187,7 @@ class ReputationManager:
         await self.start_revalidation_loop()
         self._pending_task = asyncio.create_task(self._process_pending_changes())
         self._analysis_task = asyncio.create_task(self._analyze_malicious_behavior())
+        await self.memory_monitor.start_monitoring(self._memory_callback)
 
     async def update_reputation_interactive(self, node_id: str, 
                                          score_delta: float, reason: str = "") -> bool:
@@ -749,7 +772,7 @@ class ReputationManager:
             self.logger.error(f"Cleanup failed: {str(e)}")
 
     async def cleanup(self):
-        """Enhanced cleanup with pending changes task"""
+        """Enhanced cleanup with memory monitor"""
         self._interrupt_requested = True
         if self._pending_task:
             self._pending_task.cancel()
@@ -769,4 +792,5 @@ class ReputationManager:
                 await self._analysis_task
             except asyncio.CancelledError:
                 pass
+        self.memory_monitor.stop()
         await self._cleanup()

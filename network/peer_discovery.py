@@ -7,10 +7,11 @@ from typing import List, Dict, Optional, Set
 from tqdm import tqdm
 from core.constants import INTERACTION_TIMEOUTS, InteractionLevel
 from core.interactive_utils import InteractiveSession, InteractiveConfig
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from functools import lru_cache
 from operator import itemgetter
 from .shard_manager import ShardManager
+from .circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,25 @@ class PeerDiscovery:
         }
         
         self.shard_manager = ShardManager()
+        
+        # Add pheromone tracking
+        self.pheromone_trails = defaultdict(dict)
+        self.pheromone_decay = 0.95  # 5% decay per interval
+        self.pheromone_strength = 1.0
+        
+        # Add circuit breaker
+        self.circuit_breaker = CircuitBreaker(
+            failure_threshold=5,
+            reset_timeout=60
+        )
+        
+        # Add metrics
+        self.discovery_metrics = {
+            'attempts': 0,
+            'successes': 0, 
+            'failures': 0,
+            'latencies': []
+        }
         
     def broadcast_presence(self):
         """Broadcast presence with peer ID"""
@@ -93,28 +113,56 @@ class PeerDiscovery:
             await self._cleanup()
 
     async def _run_discovery_loop(self) -> None:
-        """Main discovery loop with progress tracking"""
-        retry_count = 0
-        
+        """Enhanced discovery loop with pheromones and circuit breaker"""
         while not self._interrupt_requested:
             try:
-                if self.interactive:
-                    with tqdm(total=100, desc="Discovering Peers") as pbar:
-                        await self._broadcast_with_progress(pbar)
-                else:
-                    await self._broadcast_safely()
+                if not self.circuit_breaker.allow_request():
+                    await asyncio.sleep(self.circuit_breaker.reset_timeout)
+                    continue
 
-                retry_count = 0
-                await asyncio.sleep(self.broadcast_interval)
+                start_time = time.time()
+                
+                # Update pheromone trails
+                self._decay_pheromones()
+                discovered = await self._broadcast_safely()
+                
+                if discovered:
+                    # Strengthen successful paths
+                    for peer in discovered:
+                        self._update_pheromone(peer)
+                    
+                    latency = time.time() - start_time
+                    self.discovery_metrics['latencies'].append(latency)
+                    self.discovery_metrics['successes'] += 1
+                    self.circuit_breaker.record_success()
+                
+                self.discovery_metrics['attempts'] += 1
+                
+                # Use exponential backoff for retry delay
+                retry_delay = min(
+                    self.broadcast_interval * (2 ** self.circuit_breaker.failure_count),
+                    300  # Max 5 minute delay
+                )
+                await asyncio.sleep(retry_delay)
 
             except Exception as e:
-                retry_count += 1
-                if retry_count >= self.max_retries:
-                    logger.error("Max retries exceeded, stopping discovery")
-                    break
-                    
-                logger.warning(f"Discovery error, retrying ({retry_count}/{self.max_retries}): {str(e)}")
+                self.discovery_metrics['failures'] += 1
+                self.circuit_breaker.record_failure()
+                logger.error(f"Discovery error: {str(e)}")
                 await asyncio.sleep(self.retry_delay)
+
+    def _decay_pheromones(self):
+        """Decay pheromone trail strengths"""
+        for peer_trails in self.pheromone_trails.values():
+            for path, strength in peer_trails.items():
+                peer_trails[path] *= self.pheromone_decay
+
+    def _update_pheromone(self, peer_id: str, path: str = 'default'):
+        """Update pheromone strength for successful discovery path"""
+        self.pheromone_trails[peer_id][path] = min(
+            self.pheromone_trails[peer_id].get(path, 0) + self.pheromone_strength,
+            5.0  # Max strength cap
+        )
 
     async def _broadcast_safely(self) -> None:
         """Send broadcast with error handling and confirmation for retries"""

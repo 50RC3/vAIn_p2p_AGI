@@ -10,6 +10,7 @@ import time
 from retry import retry
 from tqdm import tqdm
 import asyncio
+from network.caching import CacheManager, CacheLevel, CachePolicy
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,10 @@ class ModelStorage:
         self.progress_callback = progress_callback
         self._model_cache = {}
         self._verify_connection()
+        self.cache_manager = CacheManager({
+            CacheLevel.MEMORY: CachePolicy(max_size=100, ttl=3600, level=CacheLevel.MEMORY),
+            CacheLevel.DISK: CachePolicy(max_size=1000, ttl=86400, level=CacheLevel.DISK)
+        })
         
     def _verify_connection(self):
         """Verify IPFS connection is working"""
@@ -113,11 +118,18 @@ class ModelStorage:
     @lru_cache(maxsize=100)
     def get_metadata(self, metadata_hash: str) -> Optional[Dict]:
         """Retrieve and cache metadata for a model."""
-        if not metadata_hash:
-            raise ValueError("Metadata hash cannot be empty")
+        if cached := self.cache_manager.get(metadata_hash):
+            return cached
             
         try:
-            return self.ipfs.get_json(metadata_hash)
+            metadata = self.ipfs.get_json(metadata_hash)
+            self.cache_manager.put(
+                metadata_hash,
+                metadata,
+                metadata={"type": "metadata"},
+                level=CacheLevel.MEMORY
+            )
+            return metadata
         except Exception as e:
             logger.error("Error loading metadata %s: %s", metadata_hash, e)
             return None
@@ -184,10 +196,12 @@ class ModelStorage:
 
     def _cache_model(self, ipfs_hash: str, metadata: Dict, ttl: int = 3600):
         """Cache model with TTL"""
-        self._model_cache[ipfs_hash] = {
-            'data': metadata,
-            'expires': time.time() + ttl
-        }
+        return self.cache_manager.put(
+            ipfs_hash, 
+            metadata,
+            metadata={"type": "model", "ttl": ttl},
+            level=CacheLevel.MEMORY
+        )
 
     def clear_expired_cache(self):
         """Clear expired items from cache"""

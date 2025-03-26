@@ -4,11 +4,9 @@ import copy
 from torch import nn, optim
 from torch.utils.data import DataLoader
 from .federated_client import FederatedClient
-from .aggregation import aggregate_models
 import logging
 from .compression import compress_gradients, decompress_gradients
-from .hierarchy import NodeCluster
-from .metrics import calculate_data_quality
+from .privacy import add_differential_privacy_noise
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +54,24 @@ class FederatedLearning:
         # Initialize compression
         self.compression = AdaptiveCompression()
         
+        # Add AGI evolution tracking
+        self.global_intelligence_score = 0.0
+        self.evolution_history = []
+        self.cognitive_metrics = {}
+        self.meta_learning_state = {}
+        
+        # Add privacy and compression settings
+        self.epsilon = getattr(config, 'privacy_epsilon', 1.0)
+        self.delta = getattr(config, 'privacy_delta', 1e-5)
+        self.clip_norm = getattr(config, 'gradient_clip_norm', 1.0)
+        self.compression_rate = getattr(config, 'compression_rate', 0.1)
+        self.error_feedback = {}
+
+        # Add data sharding and parallel training coordination
+        self.data_shards = []
+        self.parallel_clients = []
+        self.compression = AdaptiveCompression()
+
         logger.info("FederatedLearning initialized with %d clients minimum", self.config.min_clients)
 
     def _validate_state(self):
@@ -74,23 +90,41 @@ class FederatedLearning:
     def register_client(self, client: FederatedClient):
         self.clients.append(client)
         
-    def client_update(self, client_data: DataLoader) -> nn.Module:
-        """Update client model using local data."""
+    def client_update(self, client_data: DataLoader, is_mobile: bool = False) -> Dict[str, torch.Tensor]:
+        """Update client model with mobile optimization support"""
         if not self.global_model:
             raise ValueError("Global model not initialized")
-            
+
+        # Initialize mobile optimizer if needed        
+        if is_mobile and not hasattr(self, 'mobile_optimizer'):
+            self.mobile_optimizer = MobileOptimizer(compression_rate=0.1)
+
         local_model = copy.deepcopy(self.global_model)
         optimizer = optim.SGD(local_model.parameters(), lr=self.lr)
+
+        initial_state = {k: v.clone() for k, v in self.global_model.state_dict().items()}
 
         for _ in range(self.local_epochs):
             for x, y in client_data:
                 optimizer.zero_grad()
-                output, _ = local_model(x)
+                output = local_model(x)
                 loss = self.criterion(output, y)
                 loss.backward()
+                # Clip gradients for privacy
+                nn.utils.clip_grad_norm_(local_model.parameters(), self.clip_norm)
                 optimizer.step()
 
-        return local_model
+        # Compute and compress updates
+        updates = {}
+        for key, final_param in local_model.state_dict().items():
+            updates[key] = final_param - initial_state[key]
+
+        if is_mobile:
+            # Use mobile-optimized compression
+            return self.mobile_optimizer.compress_for_mobile(updates)
+        else:
+            # Use standard compression
+            return self._compress_update(updates)
 
     def train(self) -> nn.Module:
         """Execute federated training across all clients."""
@@ -166,9 +200,66 @@ class FederatedLearning:
             self.error_accumulator[key] = errors[key]
         return compressed
 
-    def _aggregate(self, local_models: List[nn.Module]) -> nn.Module:
-        """Hierarchical aggregation of model updates"""
+    async def update_global_intelligence(self, local_models: List[nn.Module]) -> float:
+        """Track and update global intelligence score"""
         try:
+            # Calculate cognitive improvements
+            new_score = sum(self._evaluate_cognitive_abilities(model) 
+                          for model in local_models) / len(local_models)
+            
+            # Track evolution
+            self.evolution_history.append({
+                'timestamp': time.time(),
+                'score': new_score,
+                'cognitive_metrics': self._measure_cognitive_metrics()
+            })
+            
+            intelligence_delta = new_score - self.global_intelligence_score
+            self.global_intelligence_score = new_score
+            
+            logger.info(f"Global intelligence updated: {new_score:.4f} "
+                       f"(Δ: {intelligence_delta:+.4f})")
+            
+            return new_score
+            
+        except Exception as e:
+            logger.error(f"Failed to update global intelligence: {str(e)}")
+            return self.global_intelligence_score
+
+    def _evaluate_cognitive_abilities(self, model: nn.Module) -> float:
+        """Evaluate model's cognitive capabilities"""
+        metrics = {}
+        try:
+            # Measure key cognitive abilities
+            metrics['memory'] = self._test_memory_capacity(model)
+            metrics['learning'] = self._test_learning_speed(model)
+            metrics['reasoning'] = self._test_reasoning_ability(model)
+            metrics['adaptation'] = self._test_adaptation_speed(model)
+            
+            # Weighted scoring of cognitive metrics
+            weights = {
+                'memory': 0.25,
+                'learning': 0.25,
+                'reasoning': 0.25,
+                'adaptation': 0.25
+            }
+            
+            score = sum(metric * weights[key] 
+                       for key, metric in metrics.items())
+                       
+            self.cognitive_metrics = metrics
+            return score
+            
+        except Exception as e:
+            logger.error(f"Cognitive evaluation failed: {str(e)}")
+            return 0.0
+
+    def _aggregate(self, local_models: List[nn.Module]) -> nn.Module:
+        """Hierarchical aggregation through cluster leaders"""
+        try:
+            # Update global intelligence first
+            await self.update_global_intelligence(local_models)
+            
             # Update Byzantine threshold based on history
             self._update_byzantine_threshold()
             
@@ -225,6 +316,39 @@ class FederatedLearning:
             final_model.load_state_dict(
                 self.compression.decompress_model_updates(final_update)
             )
+            
+            # Add meta-learning state
+            self.meta_learning_state = {
+                'global_score': self.global_intelligence_score,
+                'evolution': self.evolution_history[-10:],  # Keep last 10 records
+                'cognitive_state': self.cognitive_metrics
+            }
+            
+            # Get cluster leaders and their models
+            leader_models = []
+            leader_weights = []
+            
+            for cluster in self.network.get_clusters():
+                if not cluster.leader_node:
+                    continue
+                    
+                leader_model = local_models[cluster.leader_node]
+                leader_score = cluster.node_reputations[cluster.leader_node]
+                
+                leader_models.append(leader_model)
+                leader_weights.append(leader_score)
+            
+            # Normalize weights
+            leader_weights = torch.softmax(torch.tensor(leader_weights), dim=0)
+            
+            # Aggregate leader models
+            final_model = copy.deepcopy(local_models[0])
+            aggregated_state = self._aggregate_states(
+                [model.state_dict() for model in leader_models],
+                leader_weights
+            )
+            final_model.load_state_dict(aggregated_state)
+            
             return final_model
         except Exception as e:
             logger.error(f"Model aggregation failed: {str(e)}")
@@ -272,15 +396,47 @@ class FederatedLearning:
             return self.clients
         return torch.randperm(len(self.clients))[:self.config.clients_per_round]
 
-    def aggregate_models(self, local_models: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
-        """Single unified method for model aggregation"""
-        if not local_models:
-            raise ValueError("No local models to aggregate")
-            
-        aggregated_dict = {}
-        for key in local_models[0].keys():
-            aggregated_dict[key] = torch.mean(torch.stack([model[key] for model in local_models]), dim=0)
-        return aggregated_dict
+    def aggregate_models(self, model_updates: List[Dict[str, torch.Tensor]], 
+                        mobile_clients: Optional[List[int]] = None) -> Dict[str, torch.Tensor]:
+        """Aggregate updates with mobile client handling"""
+        if not model_updates:
+            raise ValueError("No updates to aggregate")
+
+        mobile_clients = mobile_clients or []
+        decompressed_updates = []
+
+        # Decompress updates based on client type
+        for i, update in enumerate(model_updates):
+            if i in mobile_clients:
+                # Decompress mobile update
+                decompressed = self.mobile_optimizer.decompress_mobile_update(update)
+            else:
+                # Standard decompression
+                decompressed = self._decompress_update(update)
+            decompressed_updates.append(decompressed)
+
+        # Decompress updates and apply error correction
+        decompressed_updates = []
+        for update in model_updates:
+            corrected_update = {}
+            for key, compressed_value in update.items():
+                # Get accumulated error for this key
+                error = self.error_feedback.get(key, torch.zeros_like(compressed_value))
+                # Decompress and add error correction
+                corrected_update[key] = decompress_gradients(compressed_value) + error
+                # Update error feedback
+                self.error_feedback[key] = corrected_update[key] - compressed_value
+
+            decompressed_updates.append(corrected_update)
+
+        # Average the updates
+        aggregated = {}
+        for key in decompressed_updates[0].keys():
+            aggregated[key] = torch.mean(torch.stack([
+                update[key] for update in decompressed_updates
+            ]), dim=0)
+
+        return aggregated
 
     def _adjust_compression_rate(self, round_metrics: Dict):
         """Dynamically adjust compression rate based on network conditions"""
@@ -318,3 +474,62 @@ class FederatedLearning:
             
         except Exception as e:
             logger.error(f"Error tracking progress: {str(e)}")
+
+    def shard_data(self, dataset):
+        """Partition dataset across nodes"""
+        num_shards = len(self.parallel_clients)
+        shard_size = len(dataset) // num_shards
+        indices = torch.randperm(len(dataset))
+        
+        self.data_shards = []
+        for i in range(num_shards):
+            start_idx = i * shard_size
+            end_idx = start_idx + shard_size if i < num_shards-1 else len(dataset)
+            shard_indices = indices[start_idx:end_idx]
+            shard = torch.utils.data.Subset(dataset, shard_indices)
+            self.data_shards.append(shard)
+
+    async def train_parallel(self) -> nn.Module:
+        """Execute federated training in parallel across nodes"""
+        try:
+            if not self.parallel_clients:
+                raise ValueError("No parallel clients registered")
+
+            # Assign data shards to clients
+            self.shard_data(self.dataset)
+            for i, client in enumerate(self.parallel_clients):
+                client.data_shard = self.data_shards[i]
+                client.shard_id = i
+
+            # Train clients in parallel
+            tasks = [client.train() for client in self.parallel_clients]
+            results = await asyncio.gather(*tasks)
+
+            # Aggregate updates
+            aggregated_updates = self.aggregate_parallel_updates(results)
+            
+            # Apply aggregated updates to global model
+            for key, update in aggregated_updates.items():
+                self.global_model.state_dict()[key] += update
+
+            return self.global_model
+
+        except Exception as e:
+            logger.error(f"Parallel training failed: {str(e)}")
+            raise
+
+    def aggregate_parallel_updates(self, client_results: List[Dict]) -> Dict:
+        """Aggregate updates from parallel clients"""
+        aggregated = {}
+        num_clients = len(client_results)
+
+        for key in self.global_model.state_dict().keys():
+            updates = []
+            for result in client_results:
+                decompressed = self.compression.decompress_updates(result['updates'])
+                updates.append(decompressed[key])
+            
+            # Average the updates
+            aggregated[key] = sum(updates) / num_clients
+
+        return aggregated

@@ -4,6 +4,9 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const logger = require('./src/utils/logger');
+const { apiLimiter } = require('./src/middleware/rateLimiter');
+const { verifyToken } = require('./src/middleware/auth');
+const { metricsMiddleware } = require('./src/middleware/metrics');
 
 // Initialize express
 const app = express();
@@ -16,13 +19,10 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
+app.use(metricsMiddleware);
+
 // Global rate limiting
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per window
-    message: { error: 'Too many requests, please try again later' }
-});
-app.use(limiter);
+app.use(apiLimiter);
 
 // Request parsing
 app.use(express.json({ limit: '1mb' }));
@@ -35,6 +35,15 @@ app.use(morgan('combined', { stream: logger.stream }));
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: Date.now() });
 });
+
+// Metrics endpoint
+app.get('/metrics', verifyToken, (req, res) => {
+    const metrics = require('./src/middleware/metrics').getMetrics();
+    res.json(metrics);
+});
+
+// Protected routes
+app.use('/api', verifyToken);
 
 // API Routes
 app.use('/api/auth', require('./src/api/auth'));

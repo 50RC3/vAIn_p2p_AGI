@@ -133,3 +133,44 @@ class TestNodeCommunication:
             assert session2.close.called
             assert len(node_comm._worker_tasks) == 0
             assert node_comm._session_pool == {}
+
+    @pytest.mark.asyncio 
+    async def test_message_compression(self, node_comm):
+        # Create large test message
+        large_message = {
+            "type": "test",
+            "content": "x" * 2000  # 2KB of data
+        }
+        
+        session = AsyncMock()
+        response = AsyncMock()
+        response.status = 200
+        session.post.return_value.__aenter__.return_value = response
+        
+        with patch('aiohttp.ClientSession', return_value=session):
+            result = await node_comm.send_message("target_node", large_message)
+            assert result == True
+            
+            # Verify compression happened
+            compressed_size = len(str(session.post.call_args[1]['json']))
+            original_size = len(str(large_message))
+            assert compressed_size < original_size
+            assert node_comm._compression_stats['compression_ratio'] < 1.0
+
+    @pytest.mark.asyncio
+    async def test_compression_threshold(self, node_comm):
+        # Small message under compression threshold
+        small_message = {"type": "test", "content": "small"}
+        
+        session = AsyncMock()
+        response = AsyncMock()
+        response.status = 200
+        session.post.return_value.__aenter__.return_value = response
+        
+        with patch('aiohttp.ClientSession', return_value=session):
+            result = await node_comm.send_message("target_node", small_message)
+            assert result == True
+            
+            # Verify no compression for small messages
+            sent_data = session.post.call_args[1]['json']
+            assert sent_data == small_message

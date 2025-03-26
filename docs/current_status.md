@@ -53,7 +53,7 @@ Implemented features:
 Pending implementation:
 - Hardware attestation 
 - Advanced fraud prevention
-- Zero-knowledge proofs
+- Zero-knowledge proofs (In development)
 - Enhanced governance systems
 - Complex economic model
 

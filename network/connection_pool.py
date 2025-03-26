@@ -1,5 +1,5 @@
 import asyncio
-from typing import Dict, Optional, Tuple, DefaultDict
+from typing import Dict, Optional, Tuple, DefaultDict, Set, List
 from collections import defaultdict
 import time
 import logging
@@ -9,6 +9,8 @@ import errno
 import socket
 from core.interactive_utils import InteractiveSession, InteractiveConfig, InteractionLevel
 from core.constants import INTERACTION_TIMEOUTS
+from .connection_optimizations import TransportOptimizer, optimize_socket_buffers
+from .circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +44,8 @@ class Connection:
 
 class ConnectionPool:
     def __init__(self, max_connections: int = 100, ttl: int = 300, 
-                 interactive: bool = True, default_timeouts: Optional[Dict[str, float]] = None):
+                 interactive: bool = True, default_timeouts: Optional[Dict[str, float]] = None,
+                 max_per_peer: int = 5):
         self.connections: Dict[str, Connection] = {}
         self.max_connections = max_connections
         self.ttl = ttl
@@ -51,12 +54,20 @@ class ConnectionPool:
         self._cleanup_event = asyncio.Event()
         self._interrupt_requested = False
         self._monitor_task = None
+        self.circuit_breaker = CircuitBreaker(
+            failure_threshold=5,
+            reset_timeout=30,
+            interactive=interactive,
+            service_name="connection_pool"
+        )
         self.retry_config = {
             'max_retries': 3,
-            'base_delay': 1.0,
-            'max_delay': 30.0,
-            'backoff_factor': 2.0
+            'base_delay': 1,
+            'max_delay': 10,
+            'backoff_factor': 2
         }
+        self.health_check_interval = 60
+        self._last_health_check = 0
         self.cleanup_thresholds = {
             'memory_percent': 85.0,  # Trigger aggressive cleanup at 85% memory
             'unhealthy_ratio': 0.3,  # Cleanup when >30% connections unhealthy
@@ -69,6 +80,11 @@ class ConnectionPool:
         self.monitor_interval = 60  # Initial monitor interval
         self._timeout_history = []
         self.default_timeouts = {**INTERACTION_TIMEOUTS, **(default_timeouts or {})}
+        self.max_per_peer = max_per_peer
+        self.peer_connections: DefaultDict[str, Set[Connection]] = defaultdict(set)
+        self.connection_queue: asyncio.Queue[Tuple[str, asyncio.Future]] = asyncio.Queue()
+        self._queue_processor = None
+        self.transport_optimizer = TransportOptimizer()
 
     async def __aenter__(self):
         if self.interactive:
@@ -82,6 +98,7 @@ class ConnectionPool:
             )
             await self.session.__aenter__()
             self._monitor_task = asyncio.create_task(self._monitor_connections())
+            self._queue_processor = asyncio.create_task(self._process_connection_queue())
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
@@ -95,16 +112,26 @@ class ConnectionPool:
 
     async def get_connection(self, peer_id: str, custom_timeouts: Optional[Dict[str, float]] = None) -> Optional[Connection]:
         try:
-            if peer_id in self.connections:
-                conn = self.connections[peer_id]
-                if not await self._validate_connection(conn):
-                    await self._close_connection(peer_id)
-                else:
-                    conn.update_usage()
-                    return conn
-            return await self._create_connection(peer_id, custom_timeouts)
+            if not await self.circuit_breaker.allow_request_interactive():
+                logger.warning(f"Circuit breaker preventing connection to {peer_id}")
+                return None
+                
+            conn = await super().get_connection(peer_id, custom_timeouts)
+            if not conn and self.interactive:
+                # Try failover nodes
+                for failover_id in self._get_failover_peers(peer_id):
+                    logger.info(f"Attempting failover to {failover_id}")
+                    if conn := await super().get_connection(failover_id, custom_timeouts):
+                        break
+                        
+            if not conn:
+                await self.circuit_breaker.record_failure_interactive()
+                
+            return conn
+
         except Exception as e:
-            logger.error(f"Error getting connection to {peer_id}: {str(e)}")
+            logger.error(f"Connection error: {str(e)}")
+            await self.circuit_breaker.record_failure_interactive() 
             return None
 
     async def _create_connection(self, peer_id: str, custom_timeouts: Optional[Dict[str, float]] = None) -> Optional[Connection]:
@@ -130,6 +157,13 @@ class ConnectionPool:
                     asyncio.open_connection(peer_id, 8000),
                     timeout=timeout
                 )
+                
+                # Optimize socket settings
+                sock = writer.transport.get_extra_info('socket')
+                if sock:
+                    optimize_socket_buffers(sock)
+                    self.transport_optimizer.optimize_tcp_connection(sock)
+                
                 conn = Connection(peer_id, custom_timeouts=timeouts)
                 conn.reader = reader
                 conn.writer = writer
@@ -276,15 +310,65 @@ class ConnectionPool:
                 logger.error(f"Error in connection monitor: {str(e)}")
                 await asyncio.sleep(60)  # Fallback interval on error
 
+    async def _process_connection_queue(self):
+        while not self._cleanup_event.is_set():
+            try:
+                peer_id, future = await self.connection_queue.get()
+                if len(self.peer_connections[peer_id]) < self.max_per_peer:
+                    conn = await self._create_connection(peer_id)
+                    if conn:
+                        self.peer_connections[peer_id].add(conn)
+                        if not future.done():
+                            future.set_result(conn)
+                self.connection_queue.task_done()
+            except Exception as e:
+                logger.error(f"Error processing connection queue: {e}")
+            await asyncio.sleep(0.1)
+
     async def _close_connection(self, peer_id: str):
         if peer_id in self.connections:
             try:
                 conn = self.connections[peer_id]
+                self.peer_connections[peer_id].discard(conn)
                 if conn.writer:
                     conn.writer.close()
                     await conn.writer.wait_closed()
                 del self.connections[peer_id]
                 self.grace_periods.pop(peer_id, None)  # Clean up grace period tracking
                 logger.info(f"Closed connection to {peer_id}")
+                if not self.peer_connections[peer_id]:
+                    del self.peer_connections[peer_id]
             except Exception as e:
                 logger.error(f"Error closing connection to {peer_id}: {str(e)}")
+
+    async def _check_pool_health(self) -> bool:
+        """Periodic health check of connection pool"""
+        try:
+            current_time = time.time()
+            if current_time - self._last_health_check < self.health_check_interval:
+                return True
+
+            self._last_health_check = current_time
+            
+            # Check connection states
+            unhealthy = 0
+            for conn in self.connections.values():
+                if not await self._validate_connection(conn):
+                    unhealthy += 1
+
+            unhealthy_ratio = unhealthy / max(1, len(self.connections))
+            if unhealthy_ratio > 0.5:  # Over 50% unhealthy
+                logger.warning(f"Pool health check failed: {unhealthy_ratio:.1%} unhealthy")
+                await self._adaptive_cleanup()
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Health check error: {str(e)}")
+            return False
+
+    def _get_failover_peers(self, failed_peer: str) -> List[str]:
+        """Get list of failover peers for a failed peer"""
+        # Simple round-robin failover
+        return [p for p in self.connections.keys() if p != failed_peer]

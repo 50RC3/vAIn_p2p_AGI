@@ -21,6 +21,8 @@ class NodeMonitor:
         self.interactive = interactive
         self.session: Optional[InteractiveSession] = None
         self._interrupt_requested = False
+        self.alert_system = AlertSystem(interactive=interactive)
+        self.performance_tracker = PerformanceTracker(self.alert_system)
 
     async def get_metrics_interactive(self) -> Optional[NodeMetrics]:
         """Get node metrics with interactive monitoring and safety checks"""
@@ -36,6 +38,9 @@ class NodeMonitor:
                 )
 
             async with self.session:
+                # Track performance before getting metrics
+                await self.performance_tracker.track_performance()
+                
                 # Resource validation
                 if psutil.cpu_percent() > 90:
                     if not await self.session.confirm_with_timeout(
@@ -82,3 +87,5 @@ class NodeMonitor:
         """Cleanup resources"""
         if hasattr(self, 'session') and self.session:
             self.session.cleanup()
+        if hasattr(self, 'alert_system'):
+            self.alert_system.cleanup()

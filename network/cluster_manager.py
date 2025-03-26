@@ -2,7 +2,7 @@ import logging
 import asyncio
 from typing import Dict, Set, List, Optional
 import numpy as np
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from collections import defaultdict
 from sklearn.cluster import KMeans
 
@@ -16,6 +16,11 @@ class ClusterMetrics:
     connection_count: int = 0
     message_rate: float = 0.0
     error_rate: float = 0.0
+    load_balance_score: float = 0.0  # Added field
+    node_distribution: Dict[str, float] = field(default_factory=dict)  # Added field
+    rebalance_frequency: float = 0.0  # Added field
+    leader_node: Optional[str] = None
+    node_reputations: Dict[str, float] = field(default_factory=dict)
 
 class NetworkCluster:
     def __init__(self, cluster_id: str, max_size: int = 100):
@@ -26,13 +31,29 @@ class NetworkCluster:
         self.sub_clusters: List[NetworkCluster] = []
         self.latency_matrix: Dict[str, Dict[str, float]] = {}
         self.coordinator_node: Optional[str] = None
-        
+        self.leader_node = None
+        self.node_reputations: Dict[str, float] = {}
+
     def should_split(self) -> bool:
         """Check if cluster should be split based on size and metrics"""
         return (len(self.nodes) > self.max_size or 
                 self.metrics.latency > 150 or  # 150ms latency threshold
                 self.metrics.load > 0.8)       # 80% load threshold
-                
+
+    def update_leader(self) -> Optional[str]:
+        """Select highest reputation node as leader"""
+        if not self.nodes:
+            return None
+        self.leader_node = max(self.nodes, key=lambda x: self.node_reputations.get(x, 0))
+        return self.leader_node
+
+    def add_node_reputation(self, node_id: str, reputation: float):
+        """Update node reputation"""
+        self.node_reputations[node_id] = reputation
+        # Update leader if new node has higher reputation
+        if not self.leader_node or reputation > self.node_reputations.get(self.leader_node, 0):
+            self.leader_node = node_id
+
 class ClusterManager:
     def __init__(self, config: Dict):
         self.clusters: Dict[str, NetworkCluster] = {}
@@ -42,9 +63,12 @@ class ClusterManager:
         self.rebalance_threshold = config.get('rebalance_threshold', 0.2)
         self.latency_threshold = config.get('latency_threshold', 150)  # ms
         self.metrics_history: Dict[str, List[ClusterMetrics]] = defaultdict(list)
-        
-    async def add_node(self, node_id: str, latencies: Dict[str, float]) -> str:
-        """Add node to most suitable cluster"""
+        self.node_reputations: Dict[str, float] = {}
+        self.leader_update_interval = config.get('leader_update_interval', 300)  # 5 min
+
+    async def add_node(self, node_id: str, latencies: Dict[str, float], reputation: float = 0.0) -> str:
+        """Add node to most suitable cluster with reputation"""
+        self.node_reputations[node_id] = reputation
         best_cluster = await self._find_best_cluster(node_id, latencies)
         
         if not best_cluster:
@@ -54,6 +78,7 @@ class ClusterManager:
             best_cluster = self.clusters[cluster_id]
             
         best_cluster.nodes.add(node_id)
+        best_cluster.add_node_reputation(node_id, reputation)
         self.node_to_cluster[node_id] = best_cluster.cluster_id
         
         await self._update_cluster_metrics(best_cluster)
@@ -89,7 +114,7 @@ class ClusterManager:
         return best_cluster
 
     async def _split_cluster(self, cluster: NetworkCluster):
-        """Split cluster based on latency using K-means clustering"""
+        """Split cluster while preserving leader hierarchy"""
         if len(cluster.nodes) < self.min_cluster_size * 2:
             return
             
@@ -116,6 +141,12 @@ class ClusterManager:
                            if clusters[j] == i]
             new_cluster.nodes.update(cluster_nodes)
             
+            # Copy reputations and select leader
+            for node in cluster_nodes:
+                rep = cluster.node_reputations.get(node, 0.0)
+                new_cluster.add_node_reputation(node, rep)
+            new_cluster.update_leader()
+            
             # Update mappings
             self.clusters[new_cluster_id] = new_cluster
             for node in cluster_nodes:
@@ -128,6 +159,7 @@ class ClusterManager:
         """Update cluster metrics based on node performance"""
         metrics = ClusterMetrics()
         
+        node_loads = []
         for node in cluster.nodes:
             node_metrics = await self._get_node_metrics(node)
             metrics.load += node_metrics.load
@@ -136,12 +168,25 @@ class ClusterManager:
             metrics.message_rate += node_metrics.message_rate
             metrics.error_rate += node_metrics.error_rate
             
-        # Average the metrics
+            # Track individual node loads for distribution analysis
+            if node_metrics.load_metrics:
+                node_loads.append(node_metrics.load_metrics.current_load)
+                metrics.node_distribution[node.id] = node_metrics.load_metrics.current_load
+        
+        # Calculate load balancing metrics
         node_count = len(cluster.nodes)
         if node_count > 0:
             metrics.load /= node_count
             metrics.message_rate /= node_count
             metrics.error_rate /= node_count
             
+            # Calculate load balance score (0-1, higher is better)
+            if node_loads:
+                variance = np.var(node_loads)
+                metrics.load_balance_score = 1.0 / (1.0 + variance)
+            
+            # Calculate rebalance frequency (rebalances per hour)
+            metrics.rebalance_frequency = self._calculate_rebalance_frequency(cluster)
+        
         cluster.metrics = metrics
         self.metrics_history[cluster.cluster_id].append(metrics)

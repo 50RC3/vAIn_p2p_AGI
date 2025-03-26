@@ -44,20 +44,34 @@ def setup_signal_handlers(network: P2PNetwork, session: InteractiveSession):
 async def verify_system_resources():
     """Verify sufficient system resources before startup"""
     try:
+        cpu_percent = psutil.cpu_percent()
         memory = psutil.virtual_memory()
-        cpu_percent = psutil.cpu_percent(interval=1)
         disk = psutil.disk_usage('/')
         
-        if memory.percent > 90:
-            raise RuntimeError("Insufficient memory available")
-        if cpu_percent > 90:
-            raise RuntimeError("CPU usage too high")
-        if disk.percent > 95:
-            raise RuntimeError("Insufficient disk space")
+        # Define minimum requirements
+        MIN_FREE_MEMORY = 2 * 1024 * 1024 * 1024  # 2GB
+        MIN_FREE_DISK = 5 * 1024 * 1024 * 1024    # 5GB
+        
+        warnings = []
+        if cpu_percent > 80:
+            warnings.append(f"High CPU usage: {cpu_percent}%")
+        if memory.available < MIN_FREE_MEMORY:
+            warnings.append(f"Low memory: {memory.available / 1024**3:.1f}GB available")
+        if disk.free < MIN_FREE_DISK:
+            warnings.append(f"Low disk space: {disk.free / 1024**3:.1f}GB available")
             
-        return True
+        if warnings:
+            logger.warning("Resource warnings:\n" + "\n".join(warnings))
+            
+        # Optimize Python memory allocator
+        if memory.available < MIN_FREE_MEMORY * 2:
+            import gc
+            gc.collect()
+            
+        return len(warnings) == 0
+            
     except Exception as e:
-        logging.error(f"Resource verification failed: {e}")
+        logger.error(f"Resource verification failed: {str(e)}")
         return False
 
 async def run_node(config: Config, logger: logging.Logger):

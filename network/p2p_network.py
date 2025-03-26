@@ -120,6 +120,16 @@ class P2PNetwork:
         self._cleanup_lock = asyncio.Lock()
         self._shutdown_timeout = network_config.get('shutdown_timeout', 30)  # 30 second timeout
         
+        # Add load balancing and monitoring
+        self.load_balancer = LoadBalancer()
+        self.network_monitor = NetworkMonitor()
+        
+        # Add health check interval
+        self.health_check_interval = network_config.get('health_check_interval', 60)
+        self._last_health_check = 0
+
+        self.debug_enabled = network_config.get('debug', False)
+        
     def start(self):
         """Start the P2P network node."""
         self.running = True
@@ -227,36 +237,60 @@ class P2PNetwork:
         return await self.dht.lookup(node_id)
 
     async def _discover_peers(self) -> Set[str]:
-        """Discover and authenticate new peers with cluster-based routing"""
-        # Combine multiple discovery methods
-        dht_peers = await self.dht.discover()
-        broadcast_peers = set(await self.udp_broadcast.get_peers())
-        pex_peers = set(self.pex.get_peers())
+        """Enhanced peer discovery with coordinated methods"""
+        discovered = set()
         
-        all_peers = dht_peers.union(broadcast_peers, pex_peers)
+        # Run discovery methods concurrently
+        discovery_tasks = [
+            self.dht.discover(),
+            self._discover_broadcast_peers(),
+            self._discover_pex_peers()
+        ]
+        
+        results = await asyncio.gather(*discovery_tasks, return_exceptions=True)
+        
+        for result in results:
+            if isinstance(result, Exception):
+                self.logger.warning(f"Discovery method failed: {result}")
+                continue
+            discovered.update(result)
+            
+        # Filter and authenticate peers
         authenticated = set()
-        
-        for peer in all_peers:
+        for peer in discovered:
             if peer not in self.peers:
                 token = self.auth.generate_token(peer)
-                if await self._authenticate_peer(peer, token):
-                    authenticated.add(peer)
-                    self.pex.add_peer(peer)
+                try:
+                    if await self._authenticate_peer_with_timeout(peer, token):
+                        authenticated.add(peer)
+                        self.pex.add_peer(peer)
+                        await self._measure_and_store_latency(peer)
+                except Exception as e:
+                    self.logger.warning(f"Failed to authenticate peer {peer}: {e}")
                     
-        # Measure latencies to new peers
-        for peer in all_peers:
-            if peer not in self.peer_latencies:
-                latency = await self._measure_latency(peer)
-                self.peer_latencies[peer] = latency
-                
-        # Join/update cluster assignment
-        self.cluster_id = await self.cluster_manager.add_node(
-            self.node_id,
-            self.peer_latencies
-        )
-        
+        # Update cluster assignments
+        if authenticated:
+            await self._update_cluster_assignments(authenticated)
+            
         return authenticated
+
+    async def _authenticate_peer_with_timeout(self, peer_id: str, token: str) -> bool:
+        """Authenticate peer with timeout"""
+        try:
+            async with asyncio.timeout(INTERACTION_TIMEOUTS["auth"]):
+                return await self._authenticate_peer(peer_id, token)
+        except asyncio.TimeoutError:
+            self.logger.warning(f"Authentication timeout for peer {peer_id}")
+            return False
+
+    async def _measure_and_store_latency(self, peer_id: str):
+        """Measure and store peer latency"""
+        latency = await self._measure_latency(peer_id)
+        self.peer_latencies[peer_id] = latency
         
+        # Update metrics
+        self.network_monitor.record_latency(peer_id, latency)
+
     async def _authenticate_peer(self, peer_id: str, token: str) -> bool:
         """Authenticate a new peer with E2EE session establishment"""
         try:
@@ -590,52 +624,68 @@ class P2PNetwork:
                 await self.session.__aexit__(None, None, None)
 
     async def _run_network_interactive(self):
-        """Run the main network loop with interactive monitoring"""
+        """Run network with monitoring and load balancing"""
         try:
-            # Start P2P services with progress tracking
-            if self.interactive:
-                print("\nInitializing P2P Services")
-                print("=" * 50)
-
-            await self.udp_broadcast.start()
-            await self.dht.start()
-
             while self.running and not self._interrupt_requested:
-                try:
-                    if self.interactive:
-                        self._progress_bar = tqdm(total=100, desc="Network Operations")
+                # Periodic health check
+                current_time = time.time()
+                if current_time - self._last_health_check >= self.health_check_interval:
+                    health = await self.network_monitor.check_network_health()
+                    if health and health.overall_health < 0.5:
+                        logger.warning(f"Low network health: {health.overall_health:.2f}")
+                        await self._optimize_network()
+                    self._last_health_check = current_time
 
-                    # Enhanced peer discovery with progress updates
-                    new_peers = await self._discover_peers_interactive()
-                    self.peers.update(new_peers)
+                # Update node capacity
+                metrics = get_resource_metrics()
+                await self.load_balancer.register_node(
+                    self.node_id,
+                    NodeCapacity(
+                        cpu_available=100 - metrics.cpu_usage,
+                        memory_available=100 - metrics.memory_usage,
+                        bandwidth_available=100 - metrics.network_load,
+                        current_tasks=len(self._active_tasks)
+                    )
+                )
 
-                    # Process messages with monitoring
-                    await self._handle_messages_interactive()
+                # Regular network operations
+                await self._discover_peers_interactive()
+                await self._handle_messages_interactive()
 
-                    if self._progress_bar:
-                        self._progress_bar.update(100)
-                        self._progress_bar.close()
+                # Collect debug metrics
+                if self.debug_enabled:
+                    metrics = debug_manager.get_metrics()
+                    if metrics.error_count > 0:
+                        logger.warning(f"Debug metrics: {metrics}")
 
-                    await asyncio.sleep(1)
-
-                except asyncio.CancelledError:
-                    self.logger.info("Network loop interrupted")
-                    break
-                except Exception as e:
-                    self.logger.error(f"Network loop error: {str(e)}")
-                    if self.interactive:
-                        retry = await self.session.confirm_with_timeout(
-                            "\nError in network loop. Retry?",
-                            timeout=INTERACTION_TIMEOUTS["emergency"]
-                        )
-                        if not retry:
-                            break
+                await asyncio.sleep(1)
 
         except Exception as e:
-            self.logger.error(f"Fatal network error: {str(e)}")
+            debug_manager.track_error(e, {
+                'node_id': self.node_id,
+                'peer_count': len(self.peers),
+                'active_tasks': len(self._active_tasks)
+            })
+            logger.error(f"Network error: {str(e)}")
             raise
         finally:
             await self._cleanup_interactive()
+
+    async def _optimize_network(self):
+        """Optimize network based on health metrics"""
+        try:
+            # Rebalance connections
+            await self.cluster_manager._rebalance_clusters()
+            
+            # Clean up inactive peers
+            await self.reputation_manager.cleanup()
+            
+            # Optimize resource usage
+            if hasattr(torch.cuda, 'empty_cache'):
+                torch.cuda.empty_cache()
+
+        except Exception as e:
+            logger.error(f"Network optimization failed: {str(e)}")
 
     async def _discover_peers_interactive(self) -> Set[str]:
         """Interactive peer discovery with progress tracking"""

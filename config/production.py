@@ -74,6 +74,16 @@ CONSENSUS_CONFIG = {
     }
 }
 
+# General production settings
+PRODUCTION_CONFIG = {
+    'max_nodes': 1000,
+    'batch_timeout': 30,
+    'retry_limit': 3,
+    'memory_threshold': 0.9,
+    'backup_interval': 3600,
+    'metrics_retention_days': 30
+}
+
 def validate_production_config() -> bool:
     """Validate all production configuration settings"""
     try:
@@ -86,6 +96,20 @@ def validate_production_config() -> bool:
                 raise ValueError(f"Invalid reputation for {tier}")
             if int(config["min_stake"]) <= 0:
                 raise ValueError(f"Invalid stake for {tier}")
+        
+        # Validate PRODUCTION_CONFIG
+        if not 0 < PRODUCTION_CONFIG['max_nodes'] <= 10000:
+            raise ValueError("max_nodes must be between 1 and 10000")
+        if not 0 < PRODUCTION_CONFIG['batch_timeout'] <= 300:
+            raise ValueError("batch_timeout must be between 1 and 300 seconds")
+        if not 0 < PRODUCTION_CONFIG['retry_limit'] <= 10:
+            raise ValueError("retry_limit must be between 1 and 10")
+        if not 0 < PRODUCTION_CONFIG['memory_threshold'] <= 1:
+            raise ValueError("memory_threshold must be between 0 and 1")
+        if not 0 < PRODUCTION_CONFIG['backup_interval'] <= 86400:
+            raise ValueError("backup_interval must be between 1 and 86400 seconds")
+        if not 0 < PRODUCTION_CONFIG['metrics_retention_days'] <= 365:
+            raise ValueError("metrics_retention_days must be between 1 and 365")
                 
         return True
     except Exception as e:

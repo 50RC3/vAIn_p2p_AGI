@@ -8,16 +8,14 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-REQUIRED_PYTHON = ">=3.8.0"
+REQUIRED_PYTHON = (3, 8, 0)
 
 def check_python_version():
     """Verify that the correct version of Python is being used."""
-    import pkg_resources
-    try:
-        pkg_resources.require(f"python{REQUIRED_PYTHON}")
-    except pkg_resources.VersionConflict:
-        logger.error(f"This project requires Python {REQUIRED_PYTHON}")
+    if sys.version_info < REQUIRED_PYTHON:
+        logger.error(f"This project requires Python {'.'.join(map(str, REQUIRED_PYTHON))} or higher")
         sys.exit(1)
+    logger.info(f"Python version check passed: {sys.version.split()[0]}")
 
 def create_venv():
     """Create a virtual environment."""
@@ -37,9 +35,32 @@ def install_dependencies():
     """Install project dependencies."""
     pip_cmd = "venv/Scripts/pip" if platform.system() == "Windows" else "venv/bin/pip"
     
-    logger.info("Installing dependencies...")
-    subprocess.run([pip_cmd, "install", "--upgrade", "pip"], check=True)
-    subprocess.run([pip_cmd, "install", "-r", "requirements.txt"], check=True)
+    logger.info("Installing build dependencies...")
+    build_deps = [
+        "setuptools>=65.0.0",
+        "wheel>=0.37.0",
+        "cython>=0.29.0",
+        "ninja>=1.10.0"
+    ]
+    
+    try:
+        # Upgrade pip first
+        subprocess.run([pip_cmd, "install", "--upgrade", "pip"], check=True)
+        
+        # Install build dependencies
+        for dep in build_deps:
+            subprocess.run([pip_cmd, "install", dep], check=True)
+        
+        # Read and install requirements
+        if os.path.exists("requirements.txt"):
+            logger.info("Installing project dependencies from requirements.txt...")
+            subprocess.run([pip_cmd, "install", "-r", "requirements.txt"], check=True)
+        else:
+            logger.warning("requirements.txt not found. Skipping project dependencies.")
+            
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to install dependencies: {e}")
+        raise
 
 def print_activation_instructions():
     """Print instructions for activating the virtual environment."""
@@ -71,7 +92,7 @@ def main():
         logger.info("\nSetup cancelled by user")
         sys.exit(1)
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
+        logger.error(f"Unexpected error: {str(e)}")
         sys.exit(1)
 
 if __name__ == "__main__":

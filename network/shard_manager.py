@@ -50,6 +50,15 @@ class ShardManager:
         self.shard_metrics = defaultdict(dict)  # shard_id -> metrics
         self.last_rebalance = time.time()
         self.rebalancing = False
+
+        self.circuit_breaker = CircuitBreaker(
+            failure_threshold=3,
+            reset_timeout=60,
+            interactive=True, 
+            service_name="shard_manager"
+        )
+        self.health_manager = HealthCheckManager()
+        self._setup_health_checks()
         
     async def get_shard_id(self, peer_id: str) -> int:
         """Get shard ID for a peer using consistent hashing"""
@@ -76,12 +85,45 @@ class ShardManager:
         """Calculate shard health metrics"""
         metrics = {}
         for shard_id, shard in self.shards.items():
-            active_peers = sum(1 for p in shard.values() 
-                             if not self._is_peer_expired(p))
-            load = active_peers / SHARD_CONFIG["max_peers_per_shard"]
+            load = len(shard) / SHARD_CONFIG["max_peers_per_shard"]
             replica_health = len(self.shard_replicas.get(shard_id, [])) / SHARD_METRICS['MIN_REPLICAS']
-            metrics[shard_id] = min(load, replica_health)
+            metrics[shard_id] = (load * 0.7) + (replica_health * 0.3)
         return metrics
+
+    async def rebalance_load(self):
+        """Rebalance load across shards"""
+        if self.rebalancing:
+            return
+            
+        try:
+            self.rebalancing = True
+            metrics = await self._check_shard_health()
+            high_load = [sid for sid, load in metrics.items() 
+                        if load > SHARD_METRICS['LOAD_THRESHOLD']]
+                        
+            if high_load:
+                await self._migrate_peers(high_load)
+                
+        finally:
+            self.rebalancing = False
+
+    async def _migrate_peers(self, overloaded_shards: List[str]):
+        """Migrate peers from overloaded shards"""
+        for shard_id in overloaded_shards:
+            shard = self.shards[shard_id]
+            target_size = int(SHARD_CONFIG["max_peers_per_shard"] * 0.7)
+            peers_to_move = len(shard) - target_size
+            
+            if peers_to_move <= 0:
+                continue
+                
+            # Select peers to migrate
+            peers = list(shard.items())[:peers_to_move]
+            for peer_id, peer_info in peers:
+                new_shard_id = await self._find_best_shard(peer_id)
+                if new_shard_id:
+                    self.shards[new_shard_id][peer_id] = peer_info
+                    del shard[peer_id]
 
     async def _should_reshard(self) -> Tuple[bool, str]:
         """Determine if resharding is needed based on metrics"""
@@ -176,21 +218,27 @@ class ShardManager:
             await self._replicate_shard(shard_id)
             
     async def _replicate_shard(self, shard_id: int):
-        """Replicate shard data to backup nodes"""
-        if shard_id in self.shard_replicas:
-            failed_replicas = []
-            for replica_node in self.shard_replicas[shard_id]:
-                try:
-                    success = await self._send_shard_data(shard_id, replica_node)
-                    if not success:
-                        failed_replicas.append(replica_node)
-                except Exception as e:
-                    logger.error(f"Failed to replicate shard {shard_id} to {replica_node}: {e}")
-                    failed_replicas.append(replica_node)
-            
-            # Remove failed replicas
-            for node in failed_replicas:
-                await self.remove_replica_node(shard_id, node)
+        """Replicate shard data with circuit breaker and retries"""
+        if not await self.circuit_breaker.allow_request_interactive():
+            logger.warning(f"Circuit breaker preventing shard {shard_id} replication")
+            return False
+
+        for attempt in range(self.replication_retries):
+            try:
+                success = await self._send_shard_data(shard_id, replica_node)
+                if success:
+                    return True
+                    
+                await asyncio.sleep(min(
+                    self.replication_timeout * (2 ** attempt),
+                    30  # Max 30 second delay
+                ))
+                
+            except Exception as e:
+                logger.error(f"Replication attempt {attempt + 1} failed: {str(e)}")
+                await self.circuit_breaker.record_failure_interactive()
+                
+        return False
 
     async def _send_shard_data(self, shard_id: int, replica_node: str):
         """Send shard data to a replica node with retry logic"""
@@ -328,5 +376,8 @@ class ShardManager:
                     self._update_peer_state(peer_id, PEER_STATES['ACTIVE'])
 
     async def cleanup(self):
-        """Cleanup resources on shutdown"""
+        """Cleanup resources"""
+        await self.health_manager.stop()
+        if self.circuit_breaker:
+            await self.circuit_breaker.__aexit__(None, None, None)
         self.node_comm.request_shutdown()

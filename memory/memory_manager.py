@@ -2,13 +2,14 @@ import torch
 import gc
 import logging
 import asyncio
-from typing import Dict, List, Optional, NoReturn
+from typing import Dict, List, Optional, NoReturn, Any
 from dataclasses import dataclass
 from pathlib import Path
 from ..core.interactive_utils import InteractiveSession, InteractionLevel, InteractiveConfig
 from ..core.constants import INTERACTION_TIMEOUTS
 from ..ai_core.model_storage import ModelStorage
 import time
+from network.caching import CacheManager, CacheLevel, CachePolicy
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,29 @@ class MemoryManager:
         self._error_cooldown = 60  # 60 seconds between recovery attempts
         self.model_storage = ModelStorage()
         self.storage_status = {}
+        self.memory_systems = {}
+        self.active_system = None
+        self.cache_manager = CacheManager({
+            CacheLevel.MEMORY: CachePolicy(
+                max_size=max_cache_size,
+                ttl=3600,
+                level=CacheLevel.MEMORY
+            )
+        })
+    
+    async def register_memory_system(self, name: str, system: Any) -> bool:
+        """Register a memory system for management"""
+        try:
+            if hasattr(system, 'memory_size'):
+                self.memory_systems[name] = system
+                if not self.active_system:
+                    self.active_system = name
+                return True
+            logger.error(f"Invalid memory system: {name}")
+            return False
+        except Exception as e:  
+            logger.error(f"Failed to register memory system: {str(e)}")
+            return False
         
     async def cache_tensor_interactive(self, key: str, tensor: torch.Tensor) -> bool:
         """Interactive tensor caching with validation and progress tracking"""
@@ -42,7 +66,6 @@ class MemoryManager:
             return False
 
         try:
-            # Store metadata for the tensor
             metadata = {
                 "shape": tensor.shape,
                 "dtype": str(tensor.dtype),
@@ -50,43 +73,28 @@ class MemoryManager:
                 "timestamp": time.time()
             }
             
-            # Store in both memory and IPFS
-            self.tensor_cache[key] = tensor.detach().clone()
-            model_hash, meta_hash = await self.model_storage.store_model_async(
-                tensor, metadata, interactive=self.interactive
+            success = self.cache_manager.put(
+                key,
+                tensor.detach().clone(),
+                metadata=metadata,
+                level=CacheLevel.MEMORY
             )
             
-            self.storage_status[key] = {
-                "memory": True,
-                "ipfs": model_hash,
-                "metadata": meta_hash
-            }
-            
-            if self.interactive:
-                self.session = InteractiveSession(
-                    level=InteractionLevel.NORMAL,
-                    config=InteractiveConfig(
-                        timeout=INTERACTION_TIMEOUTS["save"],
-                        persistent_state=True,
-                        safe_mode=True,
-                        recovery_enabled=True,
-                        max_cleanup_wait=30
-                    )
+            if success:
+                model_hash, meta_hash = await self.model_storage.store_model_async(
+                    tensor, metadata, interactive=self.interactive
                 )
-
-                async with self.session:
-                    if not await self._check_system_resources():
-                        return False
-
-                    try:
-                        return await self._perform_caching(key, tensor)
-                    except Exception as e:
-                        return await self._handle_caching_error(e, key, tensor)
-            else:
-                return self._safe_cache_tensor(key, tensor)
+                
+                self.storage_status[key] = {
+                    "memory": True,
+                    "ipfs": model_hash,
+                    "metadata": meta_hash
+                }
+                
+            return success
 
         except Exception as e:
-            return await self._handle_fatal_error(e)
+            return await self._handle_caching_error(e, key, tensor)
 
     async def _check_system_resources(self) -> bool:
         """Validate system resources before caching"""
@@ -252,3 +260,33 @@ class MemoryManager:
                     
         except Exception as e:
             logger.error(f"Cleanup error: {e}")
+
+    async def coordinate_memory_systems(self, model_id: str) -> bool:
+        """Coordinate memory systems for multi-model operation"""
+        try:
+            if model_id in self.memory_systems:
+                self.active_system = model_id
+                
+                # Validate memory state
+                memory_status = self.get_memory_status()
+                if memory_status.used / memory_status.total > 0.8:
+                    await self._cleanup_storage()
+                    
+                return True
+        except Exception as e:
+            logger.error(f"Memory coordination failed: {e}")
+        return False
+
+    async def share_tensor(self, source_id: str, target_id: str, 
+                         tensor_key: str) -> bool:
+        """Share tensors between memory systems"""
+        try:
+            if source_id in self.memory_systems and tensor_key in self.tensor_cache:
+                # Create view instead of copy when possible
+                tensor = self.tensor_cache[tensor_key]
+                target_key = f"{target_id}_{tensor_key}"
+                self.tensor_cache[target_key] = tensor.detach()
+                return True
+        except Exception as e:
+            logger.error(f"Tensor sharing failed: {e}")
+        return False

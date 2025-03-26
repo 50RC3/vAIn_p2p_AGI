@@ -7,6 +7,7 @@ from tqdm import tqdm
 from core.constants import InteractionLevel, INTERACTION_TIMEOUTS 
 from core.interactive_utils import InteractiveSession, InteractiveConfig
 import backoff  # Add this import
+from security.zk_validation import ZKProofValidator
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +48,13 @@ class ConsensusManager:
         self.retry_delay = retry_delay
         self.partial_consensus_threshold = partial_consensus_threshold
         self.failed_nodes = set()
+        self.zk_validator = ZKProofValidator()
         self.validation_rules = {
             'peer_ban': {
                 'required_fields': ['peer_id', 'reason'],
                 'min_reputation': 0.7,  # Higher threshold for bans
-                'min_evidence': 3
+                'min_evidence': 3,
+                'require_zk_proof': True
             },
             'reputation_update': {
                 'required_fields': ['peer_id', 'delta'],
@@ -79,6 +82,12 @@ class ConsensusManager:
         has_min_reputation = self.reputation_manager.get_reputation(node_id) >= self.min_reputation
         has_min_pow = self.node_pow_scores.get(node_id, 0) > 0
         has_min_contribution = self.node_contributions.get(node_id, 0) > 0
+        
+        # Add ZK proof validation
+        if self.validation_rules.get(node_id, {}).get('require_zk_proof'):
+            proof = self._get_node_proof(node_id)
+            if not self.zk_validator.verify_node_identity(proof):
+                return False
         
         return all([has_min_stake, has_min_reputation, has_min_pow, has_min_contribution])
                 
