@@ -1,11 +1,18 @@
 from enum import Enum
 from typing import Dict, Any, Tuple
+import platform
+import os
+from pathlib import Path
 
 class ModelStatus(Enum):
     PENDING = "pending"
     TRAINING = "training"
     VALIDATED = "validated"
     REJECTED = "rejected"
+    INITIALIZING = "initializing"
+    READY = "ready"
+    ERROR = "error"
+    UPDATING = "updating"
 
 class TrainingMode(Enum):
     FEDERATED = "federated"
@@ -18,6 +25,13 @@ class InteractionLevel(Enum):
     MINIMAL = "minimal" # Only critical prompts
     NORMAL = "normal"   # Standard interactive mode
     VERBOSE = "verbose" # Detailed interactive mode
+
+class TaskPriority(Enum):
+    """Priority levels for tasks"""
+    LOW = 0
+    NORMAL = 1
+    HIGH = 2
+    CRITICAL = 3
 
 # System constants
 MINIMUM_STAKE = 1000  # Minimum stake required for training participation
@@ -156,3 +170,97 @@ def validate_bounds(value: Any, param: str) -> bool:
         
     min_val, max_val = CONFIG_BOUNDS[param]
     return isinstance(value, type(min_val)) and min_val <= value <= max_val
+
+# Platform-specific settings
+IS_WINDOWS = platform.system() == "Windows"
+IS_LINUX = platform.system() == "Linux"
+IS_MACOS = platform.system() == "Darwin"
+
+# Interaction timeout constants (in seconds)
+INTERACTION_TIMEOUTS = {
+    "input": 60,         # Basic user input timeout
+    "confirmation": 30,  # Confirmation dialog timeout
+    "critical": 120,     # Critical decision timeout
+    "file_operation": 60,  # File read/write operation timeout
+    "network": 45,       # Network operation timeout
+    "computation": 300,  # Long computation timeout
+    "connection": 30,    # Connection establishment timeout
+    "initialization": 90,  # System initialization timeout
+    "shutdown": 30,      # Graceful shutdown timeout
+    "backup": 120,       # Data backup timeout
+    "restore": 180,      # Data restoration timeout
+}
+
+# Resource threshold constants
+RESOURCE_THRESHOLDS = {
+    "memory_critical": 95,    # Memory usage percentage considered critical
+    "memory_warning": 85,     # Memory usage percentage that triggers warnings
+    "cpu_critical": 95,       # CPU usage percentage considered critical
+    "cpu_warning": 80,        # CPU usage percentage that triggers warnings
+    "disk_critical": 95,      # Disk usage percentage considered critical
+    "disk_warning": 85,       # Disk usage percentage that triggers warnings
+    "network_warning": 80,    # Network utilization that triggers warnings
+    "battery_critical": 10,   # Battery percentage considered critical (mobile devices)
+    "battery_warning": 20,    # Battery percentage that triggers warnings
+}
+
+# Backoff strategy constants
+BACKOFF = {
+    "base_delay": 1.0,        # Base delay for retries (seconds)
+    "max_delay": 60.0,        # Maximum delay between retries (seconds)
+    "factor": 2.0,            # Multiplicative factor for backoff
+    "jitter": 0.1,            # Randomness factor to avoid thundering herd
+    "max_retries": 5,         # Maximum number of retry attempts
+}
+
+# Path constants
+BASE_DIR = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+TEMP_DIR = BASE_DIR / "temp"
+DATA_DIR = BASE_DIR / "data"
+CONFIG_DIR = BASE_DIR / "config"
+LOGS_DIR = BASE_DIR / "logs"
+MODELS_DIR = BASE_DIR / "models"
+CACHE_DIR = BASE_DIR / "cache"
+SESSION_SAVE_PATH = BASE_DIR / "sessions"
+
+# Ensure critical directories exist
+for directory in [TEMP_DIR, DATA_DIR, CONFIG_DIR, LOGS_DIR, MODELS_DIR, CACHE_DIR, SESSION_SAVE_PATH]:
+    directory.mkdir(exist_ok=True, parents=True)
+
+# Feature flags
+FEATURES = {
+    "use_compression": True,
+    "enable_recovery": True,
+    "debug_logging": False,
+    "use_encryption": True,
+    "enable_monitoring": True,
+}
+
+# Default operation modes
+DEFAULT_MODE = "standard"  # Options: minimal, standard, verbose, debug
+DEFAULT_VERBOSITY = 1      # 0=quiet, 1=normal, 2=verbose, 3=debug
+
+# Default file encoding
+DEFAULT_ENCODING = "utf-8"
+
+# Memory management
+MEMORY_CHUNK_SIZE = 1024 * 1024  # 1MB
+MAX_CACHE_SIZE = 1024 * 1024 * 1024 * 2  # 2GB
+MEMORY_CLEANUP_THRESHOLD = 0.85  # Cleanup when 85% of max cache is used
+
+# Network settings
+DEFAULT_PORT = 8000
+DEFAULT_HOST = "127.0.0.1"
+REQUEST_TIMEOUT = 30
+MAX_RETRIES = 3
+RETRY_DELAY = 2
+
+# Model parameters
+DEFAULT_BATCH_SIZE = 32
+DEFAULT_LEARNING_RATE = 0.001
+DEFAULT_EPOCHS = 10
+
+# Federated learning parameters
+AGGREGATION_MIN_CLIENTS = 3
+AGGREGATION_TIMEOUT = 120
+CLIENT_SELECTION_THRESHOLD = 0.7

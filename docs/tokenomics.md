@@ -1,30 +1,36 @@
 # vAIn Tokenomics
 
-## Token Distribution
-
+## Token Specifications
 - Initial Supply: 100,000,000 VAIN
-- Distribution:
-  - 40% Training Rewards Pool
-  - 20% Development Fund
-  - 20% Community Treasury
-  - 15% Team & Advisors (vested)
-  - 5% Initial Liquidity
+- Maximum Supply: 200,000,000 VAIN
+- Decimals: 18
 
-## Reward Mechanisms
+## Token Distribution
+- Initial Supply Allocation:
+  - 40% Training Rewards Pool (40M VAIN)
+  - 20% Development Fund (20M VAIN)
+  - 20% Community Treasury (20M VAIN)
+  - 15% Team & Advisors (15M VAIN, vested)
+  - 5% Initial Liquidity (5M VAIN)
 
-### Training Participation
-- Base reward per round: 100 VAIN
-- Reputation multiplier: 1.0 - 2.0x
-- Quality bonus: Up to 50% extra
-- Slashing for malicious behavior: -100%
+## Vesting Details
+- Minimum Vesting Duration: 180 days
+- Maximum Vesting Amount: 1,000,000 VAIN per schedule
+- Batch Vesting Limit: 100 beneficiaries per batch
 
-### Staking
-- Minimum stake: 1,000 VAIN
-- Lock periods: 30/90/180 days
-- APR ranges: 5-15%
-- Bonus rewards for longer locks
+## Reward System
+### Training Rewards
+- Minimum Reward Distribution: 1,000 VAIN
+- Daily Reward Limit: 1,000,000 VAIN
+- Dynamic Emission Rate (max 10%)
 
-### Governance
-- Proposal threshold: 100,000 VAIN
-- Voting power: 1 VAIN = 1 vote
-- Quorum: 4% of total supply
+### Operation Limits
+- Maximum Operations: 10 per day per address
+- Operation Cooldown: 1 hour between operations
+- Minimum Transfer: 100 VAIN
+
+### Safety Measures
+- Pausable functionality for emergencies
+- Rate limiting on operations
+- Pool manager authorization system
+- Multi-pool balance tracking

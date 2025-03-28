@@ -4,23 +4,44 @@
   "private": true,
   "dependencies": {
     "@openzeppelin/contracts": "^4.8.0",
-    "boxen": "^7.0.1",
-    "chalk": "^4.1.2",
-    "cli-progress": "^3.11.2",
-    "commander": "^9.4.1",
     "ethers": "^5.7.0",
-    "figlet": "^1.5.2",
-    "hardhat": "^0.0.7",
-    "inquirer": "^8.2.5",
-    "ora": "^6.1.2",
+    "hardhat": "^2.12.0",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.1.5",
+    "morgan": "^1.10.0",
+    "jsonwebtoken": "^9.0.2",
+    "express-validator": "^7.0.1",
+    "ipfs-http-client": "^60.0.1",
+    "cross-env": "^7.0.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "web3": "^4.16.0"
+    "web3": "^1.8.0"
+  },
+  "scripts": {
+    "start": "cd backend && npm start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "lint": "eslint . --ext .js,.ts",
+    "format": "prettier --write \"**/*.{js,ts,json}\"",
+    "solhint": "solhint contracts/**/*.sol",
+    "cleanup": "python scripts/cleanup.py",
+    "dev": "cd backend && npm run dev",
+    "start:interactive": "node scripts/interactive.js",
+    "start:minimal": "cross-env INTERACTION_LEVEL=MINIMAL node scripts/interactive.js",
+    "start:verbose": "cross-env INTERACTION_LEVEL=VERBOSE node scripts/interactive.js",
+    "start:production": "cross-env NODE_ENV=production INTERACTION_LEVEL=MINIMAL node scripts/interactive.js",
+    "monitor": "node scripts/monitor.js",
+    "interactive:setup": "node scripts/setup.js --interactive",
+    "interactive:test": "jest --detectOpenHandles --forceExit tests/interactive/**/*.test.js",
+    "setup": "node install.js && python scripts/setup_venv.py",
+    "setup:python": "python scripts/setup_venv.py"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",
     "jest": "^29.3.1",
-    "nodemon": "^3.1.9"
+    "nodemon": "^3.0.1"
   },
   "engines": {
     "node": ">=16.0.0"

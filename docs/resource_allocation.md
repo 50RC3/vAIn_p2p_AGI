@@ -28,6 +28,12 @@ Rewards are calculated using:
 2. Resource contribution multiplier
 3. Time commitment bonuses
 4. Node reliability metrics
+5. Daily emission rate (capped at 10%)
+
+### Daily Limits
+- Maximum rewards per day: 1,000,000 VAIN
+- Automatic reset of daily counters
+- Rate limiting between reward distributions
 
 ## Anti-Gaming Measures
 

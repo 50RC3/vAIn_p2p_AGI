@@ -4,8 +4,12 @@ const path = require('path');
 console.log('Installing vAIn dependencies...');
 
 try {
+    // Install Python dependencies
+    console.log('\nInstalling Python dependencies...');
+    execSync('python -m pip install -r requirements.txt', { stdio: 'inherit' });
+
     // Install root project dependencies
-    console.log('\nInstalling root dependencies...');
+    console.log('\nInstalling Node.js root dependencies...');
     execSync('npm install', { stdio: 'inherit' });
 
     // Install backend dependencies

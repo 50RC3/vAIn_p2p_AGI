@@ -1,494 +1,652 @@
-from __future__ import annotations
-import signal
 import asyncio
-import platform
-import logging
-import json
 import os
-from pathlib import Path
-from typing import Optional, Any, Callable, List, Dict
-from functools import wraps
-from dataclasses import dataclass, field
-from core.constants import INTERACTION_TIMEOUTS, InteractionLevel
-from tqdm import tqdm
-import psutil
-import aiofiles
+import sys
+import json
+import signal
+import logging
+import time
+from typing import Dict, Optional, Callable, Set, List, Any, Awaitable, Union, TypeVar, cast
+from datetime import datetime
+from contextlib import contextmanager
+from enum import Enum
+from dataclasses import dataclass
+from types import FrameType
+
+try:
+    import aiofiles
+except ImportError:
+    aiofiles = None  # type: ignore
+
+from core.constants import (
+    SESSION_SAVE_PATH,
+    INTERACTION_TIMEOUTS,
+)
+
+# Default interaction timeout in seconds
+INTERACTION_TIMEOUT = INTERACTION_TIMEOUTS.get('default', 30)
+
+T = TypeVar('T')
 
 logger = logging.getLogger(__name__)
 
-@dataclass 
-class InteractiveConfig:
-    timeout: int = INTERACTION_TIMEOUTS["default"]
-    max_retries: int = 3
-    auto_save: bool = True
-    progress_tracking: bool = True
-    error_recovery: bool = True
-    progress_file: str = "interactive_progress.json"
-    backup_enabled: bool = True
-    backup_interval: int = 300  # 5 minutes
-    safe_mode: bool = True  # Enforces additional safety checks
-    max_input_length: int = 1024
-    cleanup_on_exit: bool = True
-    persistent_state: bool = True
-    recovery_enabled: bool = True
-    error_retry_delay: float = 1.0
-    max_cleanup_wait: int = 10
-    input_encoding: str = 'utf-8'
-    sanitize_patterns: List[str] = field(default_factory=lambda: [';', '--', '/*', '*/', '#!'])
-    emergency_timeout: int = 30
-    recovery_attempts: int = 3
-    heartbeat_interval: int = 60
-    memory_threshold: float = 0.9  # 90% memory usage threshold
-    resource_monitoring: bool = True
-    status_interval: int = 10
-    session_persistence: bool = True
-    feedback_verbosity: int = 2
-    resource_thresholds: Dict[str, float] = field(default_factory=lambda: {
-        'cpu': 0.8,
-        'memory': 0.8,
-        'disk': 0.8
-    })
-    progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None
-
 class InteractionTimeout(Exception):
-    """Raised when an interactive operation times out"""
-    pass
+    """Exception raised when an interaction times out."""
 
-def with_timeout(timeout_sec: int):
-    """Decorator to add timeout to interactive functions"""
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            try:
-                return await asyncio.wait_for(func(*args, **kwargs), timeout_sec)
-            except asyncio.TimeoutError:
-                raise InteractionTimeout(f"Operation timed out after {timeout_sec}s")
-        return wrapper
-    return decorator
+class InteractionError(Exception):
+    """Exception raised when an interaction encounters an error."""
 
-    def __init__(self, 
-                level: InteractionLevel = InteractionLevel.NORMAL,
-                config: Optional[InteractiveConfig] = None):
-        self._last_input = None
-        self._backup_task = None
-        self._restore_session = self._restore_progress
+class InteractionLevel(Enum):
+    """Defines the level of interactivity for model operations"""
+    NONE = 0     # No interaction
+    LOW = 1      # Minimal interaction (errors only)
+    NORMAL = 2   # Standard interaction
+    HIGH = 3     # Verbose interaction
+
+@dataclass
+class InteractiveConfig:
+    """Configuration for interactive sessions"""
+    timeout: float = 30.0
+    persistent_state: bool = True
+    safe_mode: bool = True
+    progress_tracking: bool = True
+    memory_threshold: float = 0.9
+    max_retries: int = 3
+    cleanup_timeout: int = 30
+
+class Session:
+    """Manages interactive sessions for model operations"""
+    
+    def __init__(self, level: InteractionLevel = InteractionLevel.NORMAL,
+                 config: Optional[InteractiveConfig] = None):
         self.level = level
         self.config = config or InteractiveConfig()
-        self._platform = platform.system()
-        self._prev_handlers = {}
-        self._interrupt_flag = False
-        self._progress = {}
-        self._cleanup_hooks = []
-        self._progress_path = Path("./progress").joinpath(config.progress_file if config else "interactive_progress.json")
-        self._progress_path.parent.mkdir(parents=True, exist_ok=True)
-        self._shutdown_tasks = []
-        self._active_tasks = set()
-        self._recovery_mode = False
-        self._memory_monitor = None
-        self._heartbeat_task = None
-        self._status_task = None
-        self._resource_stats = {}
-        self._operation_history = []
-        self._active_operations = set()
+        self._state: Dict[str, Any] = {}
+        self._active = False
         
-    async def __aenter__(self):
-        """Enhanced context manager entry with NORMAL mode features"""
-        try:
-            self._setup_handlers()
-            
-            if self.level == InteractionLevel.NORMAL:
-                # Start monitoring tasks
-                if self.config.resource_monitoring:
-                    self._start_resource_monitoring()
-                    
-                if self.config.status_interval > 0:
-                    self._status_task = asyncio.create_task(self._periodic_status())
-                    
-                # Restore session if enabled
-                if self.config.session_persistence:
-                    await self._restore_session()
-                    
-            return self
-            
-        except Exception as e:
-            logger.error(f"Session initialization failed: {e}")
-            await self.__aexit__(type(e), e, e.__traceback__)
-            raise
+    async def __aenter__(self) -> 'Session':
+        """Async context manager entry"""
+        self._active = True
+        logger.info("Starting interactive session with level: %s", self.level)
+        return self
         
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Improved context manager exit with resource cleanup"""
-        try:
-            # Cancel backup task if running
-            if self._backup_task and not self._backup_task.done():
-                self._backup_task.cancel()
-                try:
-                    await asyncio.wait_for(self._backup_task, timeout=self.config.max_cleanup_wait)
-                except asyncio.TimeoutError:
-                    logger.warning("Backup task cleanup timed out")
-                except asyncio.CancelledError:
-                    pass
-
-            # Cancel monitoring tasks
-            if self._memory_monitor:
-                self._memory_monitor.cancel()
-
-            # Save progress if needed
-            if exc_type and self.config.persistent_state:
-                await self._save_progress()
-
-            # Run cleanup hooks with timeout
-            for hook in self._cleanup_hooks:
-                try:
-                    if asyncio.iscoroutinefunction(hook):
-                        await asyncio.wait_for(hook(), timeout=self.config.max_cleanup_wait)
-                    else:
-                        hook()
-                except Exception as e:
-                    logger.error(f"Cleanup hook failed: {e}")
-
-            # Cancel all remaining tasks
-            remaining = [t for t in self._active_tasks if not t.done()]
-            if remaining:
-                for task in remaining:
-                    task.cancel()
-                await asyncio.gather(*remaining, return_exceptions=True)
-        finally:
-            self._restore_handlers()
-            if self.config.cleanup_on_exit:
-                await self._cleanup()
-
-    def _setup_handlers(self):
-        def interrupt_handler(signum, frame):
-            self._interrupt_flag = True
-            logger.info("Received interrupt, initiating graceful shutdown")
+    async def __aexit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[Any]) -> None:
+        """Async context manager exit"""
+        self._active = False
+        if self.config.persistent_state:
+            await self._save_state()
+        logger.info("Interactive session ended")
+        
+    async def get_confirmation(self, message: str, timeout: Optional[float] = None) -> bool:
+        """Get user confirmation for an action"""
+        if not self._active:
+            return True
             
-        if self._platform != 'Windows':
-            self._prev_handlers[signal.SIGINT] = signal.getsignal(signal.SIGINT)
-            signal.signal(signal.SIGINT, interrupt_handler)
-
-    async def get_confirmation(self, prompt: str, timeout: int = INTERACTION_TIMEOUTS["confirmation"]) -> bool:
-        """Get user confirmation with timeout"""
         if self.level == InteractionLevel.NONE:
             return True
             
         try:
-            response = await self._get_input(f"{prompt} (y/n): ", timeout)
-            return response.lower().strip() == "y"
-        except InteractionTimeout:
-            return False
+            # Implementation depends on your UI system
+            # This is a simple console-based version
+            print(f"\n{message} (y/n)")
+            response = await asyncio.wait_for(
+                self._get_input(),
+                timeout or self.config.timeout
+            )
+            return response.lower().startswith('y')
+        except asyncio.TimeoutError:
+            logger.warning("Confirmation timed out, proceeding with default action")
+            return True
+            
+    async def _save_progress(self, state: Optional[Dict[str, Any]] = None) -> None:
+        """Save session progress"""
+        if state:
+            self._state.update(state)
+        if self.config.persistent_state:
+            await self._save_state()
+            
+    async def _save_state(self) -> None:
+        """Save session state to persistent storage"""
+        try:
+            state_file = os.path.join(SESSION_SAVE_PATH, f"{id(self)}_state.json")
+            if aiofiles:
+                async with aiofiles.open(state_file, 'w', encoding='utf-8') as f:
+                    await f.write(json.dumps(self._state))
+            else:
+                with open(state_file, 'w', encoding='utf-8') as f:
+                    json.dump(self._state, f)
+            logger.debug("Session state saved to %s", state_file)
+        except (IOError, OSError, PermissionError) as e:
+            logger.warning("Failed to save session state due to file error: %s", e)
+        except (TypeError, ValueError) as e:
+            logger.warning("Failed to save session state due to serialization error: %s", e)
+        
+    @staticmethod
+    async def _get_input() -> str:
+        """Get asynchronous console input"""
+        return await asyncio.get_event_loop().run_in_executor(None, input)
 
-    @with_timeout(INTERACTION_TIMEOUTS["input"])
-    async def get_input(self, prompt: str, validator: Optional[Callable] = None) -> str:
-        """Get validated user input with timeout"""
-        while True:
-            try:
-                value = await self._get_input(prompt)
-                if validator is None or validator(value):
-                    return value
-                print("Invalid input, please try again")
-            except InteractionTimeout:
-                raise
+class InteractiveSession:
+    """A session for interactive use with proper cleanup and resource monitoring."""
+
+    def __init__(self, session_id: str, session_path: Optional[str] = None, config: Optional[InteractiveConfig] = None) -> None:
+        self.session_id = session_id
+        self.session_path = session_path or os.path.join(SESSION_SAVE_PATH, session_id)
+        self.config = config or InteractiveConfig()
+        
+        # Create session directory if it doesn't exist
+        os.makedirs(self.session_path, exist_ok=True)
+        
+        # Initialize session state
+        self._run_mode = "interactive"
+        
+        # Save original handlers
+        self._restore_session_func: Optional[Callable[[], None]] = None
+        
+        # Initialize data structures
+        self._prev_handlers: Dict[int, Union[Callable[[int, Optional[FrameType]], Any], int, None]] = {}
+        self._progress: Dict[str, Dict[str, Any]] = {}
+        self._cleanup_hooks: List[Callable[[], None]] = []
+        
+        # Task tracking
+        self._monitoring_task: Optional[asyncio.Task[Any]] = None
+        self._shutdown_tasks: List[asyncio.Task[Any]] = []
+        self._active_tasks: Set[asyncio.Task[Any]] = set()
+        
+        # Resource monitoring
+        self._monitor_interval = 10  # seconds
+        self._resource_stats: Dict[str, Any] = {}
+        self._operation_history: List[Dict[str, Any]] = []
+        self._active_operations: Set[str] = set()
     
-    def _setup_timeout(self, timeout: int):
-        """Setup cross-platform timeout handlers"""
-        if hasattr(signal, 'SIGALRM'):
-            self._prev_handlers[signal.SIGALRM] = signal.getsignal(signal.SIGALRM)
-            signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(timeout)
-        if self._platform != 'Windows':  # Unix-like systems
-            self._prev_handlers[signal.SIGALRM] = signal.getsignal(signal.SIGALRM)
-            signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(timeout)
-        else:  # Windows fallback using asyncio
-            if hasattr(signal, 'alarm'):
-                signal.alarm(0)
+    async def __aenter__(self) -> "InteractiveSession":
+        await self.initialize()
+        return self
 
-    def _restore_handlers(self):
-        """Restore original signal handlers"""
-        if platform.system() != 'Windows':
-            signal.alarm(0)
-        for sig, handler in self._prev_handlers.items():
-            signal.signal(sig, handler)
-        self._prev_handlers.clear()
+    async def __aexit__(self, exc_type: Optional[type], 
+                        exc_val: Optional[Exception],
+                        exc_tb: Optional[Any]) -> None:
+        await self.shutdown()
 
-    async def _get_input(self, prompt: str, timeout: int = INTERACTION_TIMEOUTS["input"]) -> str:
-        """Cross-platform input with timeout and safety checks"""
-        if self.level == InteractionLevel.NONE:
-            raise InteractionTimeout("Interactive mode disabled")
-            
+    async def initialize(self) -> None:
+        """Initialize the interactive session."""
+        self._setup_handlers()
+        
+        # Set up monitoring if progress tracking is enabled
+        if hasattr(self, 'config') and getattr(self, 'config', None) and getattr(self.config, 'progress_tracking', False):
+            self._start_resource_monitoring()
+        
+        # Attempt to restore previous session if available
+        if self._restore_session_func is not None:
+            try:
+                self._restore_session_func()
+                logger.info(f"Restored session {self.session_id}")
+            except Exception as e:
+                logger.warning("Failed to restore session: %s", e)
+    
+    def _setup_handlers(self) -> None:
+        """Set up signal handlers for graceful termination."""
         try:
-            self._setup_timeout(timeout)
-            loop = asyncio.get_event_loop()
+            # Save original handlers
+            if hasattr(signal, 'SIGINT'):
+                self._prev_handlers[signal.SIGINT] = signal.getsignal(signal.SIGINT)
+                signal.signal(signal.SIGINT, self._handle_interrupt)
             
-            # Input validation and sanitization
-            result = await loop.run_in_executor(None, input, prompt)
-            result = result.strip()
-            
-            if self.config.safe_mode:
-                # Basic safety checks
-                if len(result) > 1024:  # Prevent extremely long inputs
-                    raise ValueError("Input too long")
-                if any(char in result for char in '\x00\x0A\x0D'):  # Block control characters
-                    raise ValueError("Invalid characters in input")
-                    
-            self._last_input = result
-            self._restore_handlers()
-            return result
-            
+            if hasattr(signal, 'SIGTERM'):
+                self._prev_handlers[signal.SIGTERM] = signal.getsignal(signal.SIGTERM)
+                signal.signal(signal.SIGTERM, self._handle_termination)
+                
+            logger.debug("Signal handlers set up")
         except Exception as e:
-            self._restore_handlers()
-            if isinstance(e, InteractionTimeout):
-                raise
-            raise InteractionTimeout(f"Input error: {str(e)}")
-
-    async def _get_input_with_timeout(self, prompt: str, timeout: Optional[int] = None) -> str:
-        """Get input with timeout and proper error handling"""
-        timeout = timeout or self.config.timeout
+            logger.warning(f"Failed to set up signal handlers: {e}")
+    
+    def _restore_handlers(self) -> None:
+        """Restore original signal handlers."""
         try:
-            result = await asyncio.wait_for(
-                asyncio.get_event_loop().run_in_executor(None, input, prompt),
+            # Restore original handlers
+            for sig, handler in self._prev_handlers.items():
+                signal.signal(sig, handler)
+            logger.debug("Original signal handlers restored")
+        except Exception as e:
+            logger.warning(f"Failed to restore signal handlers: {e}")
+    
+    def _cleanup(self) -> None:
+        """Clean up resources and run cleanup hooks."""
+        try:
+            # Run cleanup hooks
+            for hook in self._cleanup_hooks:
+                try:
+                    hook()
+                except Exception as e:
+                    logger.warning(f"Cleanup hook failed: {e}")
+            
+            # Save session progress
+            self._save_progress()
+            
+            # Restore original signal handlers
+            self._restore_handlers()
+        except Exception as e:
+            logger.warning(f"Cleanup failed: {e}")
+    
+    async def shutdown(self) -> None:
+        """Shutdown the interactive session."""
+        try:
+            # Cancel monitoring task
+            if self._monitoring_task and not self._monitoring_task.done():
+                self._monitoring_task.cancel()
+                try:
+                    await self._monitoring_task
+                except asyncio.CancelledError:
+                    pass
+            
+            # Run cleanup operations
+            self._cleanup()
+            
+            # Cancel any remaining tasks
+            for task in self._active_tasks:
+                if not task.done():
+                    task.cancel()
+            
+            # Wait for all shutdown tasks to complete
+            if self._shutdown_tasks:
+                await asyncio.gather(*self._shutdown_tasks, return_exceptions=True)
+                
+            logger.info("Session shutdown complete")
+        except Exception as e:
+            logger.warning(f"Error during shutdown: {e}")
+    
+    async def input(self, prompt: str, timeout: Optional[int] = None) -> str:
+        """Get input from the user with optional timeout."""
+        timeout = timeout or INTERACTION_TIMEOUT
+        
+        if not sys.stdin.isatty():
+            # Non-interactive mode
+            return input(prompt)
+        
+        try:
+            loop = asyncio.get_event_loop()
+            user_input = await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: input(prompt)), 
                 timeout
             )
-            return self._sanitize_input(result)
+            return user_input
         except asyncio.TimeoutError:
-            logger.warning(f"Input timeout after {timeout}s")
-            raise InteractionTimeout(f"Input timeout after {timeout}s")
-        except Exception as e:
-            logger.error(f"Input error: {str(e)}")
-            raise
-
-    def _sanitize_input(self, value: str) -> str:
-        """Sanitize user input for safety"""
-        # Remove control characters and extra whitespace
-        value = ''.join(char for char in value if ord(char) >= 32)
-        value = ' '.join(value.split())
+            # Handle timeout
+            raise InteractionTimeout(f"Input timed out after {timeout} seconds")
+        except (KeyboardInterrupt, EOFError, ValueError, IOError) as e:
+            logger.warning(f"Input error: {e}")
+            raise InteractionTimeout(f"Input error: {str(e)}")
+    
+    def _get_input_windows(self) -> str:
+        """Windows-specific input handling."""
+        import msvcrt
         
-        # Enforce length limit
-        return value[:self.config.max_input_length]
-
-    def _validate_input(self, value: str) -> bool:
-        """Validate input meets security requirements"""
-        if not value:
-            return False
-        if len(value) > self.config.max_input_length:
-            return False
-        # Check for suspicious patterns
-        suspicious_patterns = [';', '--', '/*', '*/', '#!/']
-        return not any(pattern in value for pattern in suspicious_patterns)
-
-    async def confirm_with_timeout(self, prompt: str, 
-                                 timeout: int = 30,
-                                 default: bool = False) -> bool:
-        """Get confirmation with timeout and default fallback"""
-        try:
-            return await self.get_confirmation(prompt, timeout)
-        except InteractionTimeout:
-            logger.warning(f"Confirmation timeout, using default: {default}")
-            return default
-
-    async def get_validated_input(self, 
-                                prompt: str,
-                                validator: Optional[Callable[[str], bool]] = None,
-                                error_msg: str = "Invalid input",
-                                retries: Optional[int] = None,
-                                timeout: Optional[int] = None) -> Optional[str]:
-        retries = retries or self.config.max_retries
-        timeout = timeout or self.config.timeout
-
-        for attempt in range(retries):
-            try:
-                value = await self._get_input_with_timeout(prompt, timeout)
-                
-                # Safety checks
-                if self.config.safe_mode:
-                    if len(value) > self.config.max_input_length:
-                        raise ValueError("Input exceeds maximum length")
-                    if any(pattern in value for pattern in self.config.sanitize_patterns):
-                        raise ValueError("Input contains invalid patterns")
-                
-                if validator is None or validator(value):
-                    return value
-                
-                logger.warning(f"Validation failed: {error_msg}")
-                if attempt < retries - 1:
-                    await asyncio.sleep(self.config.error_retry_delay)
-                    print(f"Please try again ({retries-attempt-1} attempts remaining)")
-                    
-            except (asyncio.TimeoutError, ValueError) as e:
-                logger.warning(f"Input error on attempt {attempt+1}: {str(e)}")
-                if attempt == retries - 1:
-                    return None
-                    
-            except KeyboardInterrupt:
-                if await self.get_confirmation("\nDo you want to cancel input? (y/n): "):
-                    raise
-                if attempt < retries - 1:
-                    continue
-
-        return None
-
-    async def _periodic_backup(self):
-        """Periodically backup progress"""
+        result = []
         while True:
+            if msvcrt.kbhit():
+                char = msvcrt.getwche()
+                if char == '\r':  # Enter key
+                    print()
+                    break
+                result.append(char)
+        return ''.join(result)
+    
+    def _get_input_unix(self) -> str:
+        """Unix-specific input handling with timeout."""
+        has_alarm = hasattr(signal, 'SIGALRM') and hasattr(signal, 'alarm')
+        result = ""
+        
+        try:
+            # Set alarm if available (Unix systems only)
+            if has_alarm:
+                signal.signal(getattr(signal, 'SIGALRM'), self._input_timeout_handler)
+                if hasattr(signal, 'alarm'):
+                    signal.alarm(int(INTERACTION_TIMEOUT))
+            
+            # Get input
+            result = input()
+            # Disable alarm if it was set
+            if has_alarm and hasattr(signal, 'alarm'):
+                try:
+                    signal_module = signal  # Create local reference for type checking
+                    if hasattr(signal_module, 'alarm'):
+                        getattr(signal_module, 'alarm')(0)  # Use getattr to avoid static type checking issues
+                except (AttributeError, ValueError):
+                    pass
+                
+        except InteractionTimeout:
+            return ""  # Empty string on timeout
+        finally:
+            # Ensure alarm is disabled if it was set
+            # Ensure alarm is disabled if it was set
+            if has_alarm and hasattr(signal, 'alarm'):
+                try:
+                    if hasattr(signal, 'alarm'):  # Double-check to satisfy type checker
+                        signal.alarm(0)
+                except (AttributeError, ValueError):
+                    pass
+        return result
+        
+        return result
+    
+    async def get_input(self, prompt: str = "", timeout: Optional[int] = None) -> str:
+        """Get input with timeout handling."""
+        timeout = timeout or INTERACTION_TIMEOUT
+        
+        print(prompt, end='', flush=True)
+        
+        try:
+            loop = asyncio.get_event_loop()
+            result = await asyncio.wait_for(
+                loop.run_in_executor(None, self._get_input_unix if os.name != 'nt' else self._get_input_windows),
+                timeout
+            )
+            return result
+        except asyncio.TimeoutError:
+            self._restore_handlers()
+            raise InteractionTimeout(f"Input timed out after {timeout} seconds")
+        except (asyncio.CancelledError, OSError, IOError, ValueError) as e:
+            self._restore_handlers()
+            raise InteractionTimeout(f"Input error: {str(e)}") from e
+    
+    def _input_timeout_handler(self, signum: int, frame: Any) -> None:
+        """Handle timeout for input operations."""
+        raise InteractionTimeout(f"Input timed out after {INTERACTION_TIMEOUT} seconds")
+    
+    def _handle_interrupt(self, signum: int, frame: Any) -> None:
+        """Handle interrupt signal (SIGINT)."""
+        try:
+            # Disable alarm if it was set to avoid alarm signal during cleanup
+            if hasattr(signal, 'SIGALRM') and hasattr(signal, 'alarm'):
+                try:
+                    signal.alarm(0)
+                except (AttributeError, ValueError):
+                    pass
+                    
+            logger.info("Interrupt received, shutting down gracefully...")
+            
+            # Run cleanup immediately for synchronous context
+            self._cleanup()
+            
+            print("\nSession interrupted. Exiting gracefully...")
+            sys.exit(0)
+        except Exception as e:
+            logger.warning(f"Error handling interrupt: {e}")
+            sys.exit(1)
+    
+    def _handle_termination(self, signum: int, frame: Any) -> None:
+        """Handle termination signal (SIGTERM)."""
+        try:
+            logger.info("Termination signal received, shutting down...")
+            
+            # Run cleanup immediately for synchronous context
+            self._cleanup()
+            
+            print("\nSession terminated. Exiting...")
+            sys.exit(0)
+        except Exception as e:
+            logger.warning("Error handling termination: %s", e)
+            sys.exit(1)
+    
+    async def prompt_yes_no(self, question: str, default: Optional[str] = None, timeout: Optional[int] = None) -> bool:
+        """Prompt for a yes/no answer with timeout."""
+        timeout = timeout or INTERACTION_TIMEOUT
+        
+        if default is not None:
+            default = default.lower()
+            if default not in ('y', 'n'):
+                default = None
+        
+        choices = ' [Y/n]: ' if default == 'y' else ' [y/N]: ' if default == 'n' else ' [y/n]: '
+        
+        try:
+            while True:
+                response = await self.input(question + choices, timeout)
+                response = response.lower().strip()
+                
+                if not response and default:
+                    return default == 'y'
+                
+                if response in ('y', 'yes'):
+                    return True
+                if response in ('n', 'no'):
+                    return False
+                
+                print("Please respond with 'y' or 'n'")
+        except InteractionTimeout:
+            if default is not None:
+                logger.warning("Prompt timed out, using default: %s", default)
+                return default == 'y'
+            raise
+    
+    async def prompt_options(self, question: str, options: List[str], default: Optional[str] = None, timeout: Optional[int] = None) -> str:
+        """Prompt for selecting from a list of options with timeout."""
+        timeout = timeout or INTERACTION_TIMEOUT
+        
+        if default is not None and default not in options:
+            default = None
+        
+        # Format options with numbers
+        option_text = "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(options)])
+        prompt_text = f"{question}\n{option_text}\nSelect an option (1-{len(options)})"
+        
+        if default is not None:
+            default_num = options.index(default) + 1
+            prompt_text += f" [default: {default_num}]: "
+        else:
+            prompt_text += ": "
+        
+        try:
+            while True:
+                response = await self.input(prompt_text, timeout)
+                response = response.strip()
+                
+                if not response and default is not None:
+                    return default
+                
+                try:
+                    choice = int(response)
+                    if 1 <= choice <= len(options):
+                        return options[choice-1]
+                except ValueError:
+                    pass
+                
+                print(f"Please enter a number between 1 and {len(options)}")
+        except InteractionTimeout:
+            if default is not None:
+                logger.warning("Prompt timed out, using default: %s", default)
+                return default
+            raise
+    
+    def _save_progress(self) -> None:
+        """Save session progress to disk."""
+        progress_file = os.path.join(self.session_path, "progress.json")
+        try:
+            with open(progress_file, 'w', encoding='utf-8') as f:
+                json.dump(self._progress, f, indent=2)
+            logger.debug("Session progress saved")
+        except Exception as e:
+            logger.warning("Failed to save session progress: %s", e)
+    
+    async def _save_to_disk(self, data: Dict[str, Any], filename: str) -> None:
+        """Save data to disk asynchronously."""
+        try:
+            filepath = os.path.join(self.session_path, filename)
+            if aiofiles:
+                async with aiofiles.open(filepath, 'w', encoding='utf-8') as f:
+                    await f.write(json.dumps(data, indent=2))
+            else:
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=2)
+            logger.debug("Data saved to %s", filename)
+        except (IOError, OSError, PermissionError, json.JSONDecodeError) as e:
+            logger.warning(f"Failed to save data to {filename}: {e}")
+    
+    def register_cleanup_hook(self, hook: Callable[[], None]) -> None:
+        """Register a function to be called during cleanup."""
+        self._cleanup_hooks.append(hook)
+    
+    def update_progress(self, category: str, key: str, value: Any) -> None:
+        """Update session progress for tracking."""
+        if category not in self._progress:
+            self._progress[category] = {}
+        
+        self._progress[category][key] = value
+        self._save_progress()
+    
+    async def load_from_file(self, filename: str) -> Optional[Dict[str, Any]]:
+        """Load data from a file in the session directory."""
+        filepath = os.path.join(self.session_path, filename)
+        try:
+            if not os.path.exists(filepath):
+                return None
+                
+            if aiofiles:
+                async with aiofiles.open(filepath, 'r', encoding='utf-8') as f:
+                    content = await f.read()
+            else:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    content = f.read()
+            return cast(Dict[str, Any], json.loads(content))
+        except (IOError, OSError, json.JSONDecodeError) as e:
+            logger.warning(f"Failed to load {filename}: {e}")
+            return None
+    
+    def setup_signal_handler(self, signal_type: int, handler: Optional[Callable[[int, Any], None]] = None) -> Union[Callable[[int, Optional[FrameType]], Any], int, None]:
+        """Set up a signal handler and return the previous one."""
+        previous_handler = signal.getsignal(signal_type)
+        
+        if handler is not None:
+            signal.signal(signal_type, handler)
+            
+        # Ensure alarm handling on Unix-like systems
+        # Only set SIGALRM handler if it exists (Unix systems)
+        if hasattr(signal, 'SIGALRM') and hasattr(signal, 'alarm'):
             try:
-                await asyncio.sleep(self.config.backup_interval)
-                await self._save_progress()
-            except asyncio.CancelledError:
-                break
+                signal.signal(getattr(signal, 'SIGALRM'), self._input_timeout_handler)
+            except (AttributeError, ValueError):
+                logger.debug("SIGALRM is not available on this platform")
+            
+        return previous_handler
+    
+    def add_task(self, task: asyncio.Task[Any]) -> None:
+        """Track an active task."""
+        self._active_tasks.add(task)
+    
+    def remove_task(self, task: asyncio.Task[Any]) -> None:
+        """Remove a completed task from tracking."""
+        if task in self._active_tasks:
+            self._active_tasks.remove(task)
+    
+    def _start_resource_monitoring(self) -> None:
+        """Start monitoring system resources."""
+        async def _monitor_resources() -> None:
+            try:
+                while True:
+                    # Record basic stats about memory, CPU, etc.
+                    self._resource_stats = self._get_system_stats()
+                    
+                    # Save progress periodically
+                    self._save_progress()
+                    
+                    # Check for critical resource levels
+                    self._check_critical_levels()
+                    
+                    # Wait for next interval
+                    await asyncio.sleep(self._monitor_interval)
             except Exception as e:
-                logger.error(f"Backup failed: {str(e)}")
-
-    async def _save_progress(self):
-        """Save current progress atomically"""
-        if not self._progress:
+                logger.warning(f"Resource monitoring error: {e}")
+        
+        self._monitoring_task = asyncio.create_task(_monitor_resources())
+    
+    def _get_system_stats(self) -> Dict[str, Any]:
+        """Get current system resource stats."""
+        try:
+            import psutil
+            stats = {
+                "timestamp": datetime.now().isoformat(),
+                "memory_used": psutil.virtual_memory().percent,
+                "cpu_usage": psutil.cpu_percent(),
+                "disk_usage": psutil.disk_usage('/').percent
+            }
+            logger.debug(f"System stats: {stats}")
+            return stats
+        except (ImportError, MemoryError, OSError, RuntimeError) as e:
+            logger.warning(f"Failed to get system stats: {e}")
+            return {"error": str(e)}
+    
+    def _check_critical_levels(self) -> None:
+        """Check if any resources are at critical levels."""
+        if not self._resource_stats:
             return
 
+        critical_thresholds = {
+            "memory_used": 90,
+            "cpu_usage": 95,
+            "disk_usage": 95
+        }
+
+        for resource, value in self._resource_stats.items():
+            if resource in critical_thresholds and value > critical_thresholds[resource]:
+                logger.critical(
+                    "Critical resource level - %s: %s%%",
+                    resource, value
+                )
+    
+    def _check_operations_status(self) -> Dict[str, str]:
+        """Check the status of active operations."""
         try:
-            temp_path = self._progress_path.with_suffix('.tmp')
-            # Ensure directory exists
-            temp_path.parent.mkdir(parents=True, exist_ok=True)
+            status = {op: "running" for op in self._active_operations}
             
-            # Write to temporary file first
-            async with aiofiles.open(temp_path, 'w') as f:
-                data = {
-                    'last_input': self._last_input,
-                    'progress': self._progress,
-                    'level': self.level.value,
-                    'timestamp': asyncio.get_event_loop().time(),
-                    'version': '1.0'  # For future compatibility
-                }
-                await f.write(json.dumps(data, indent=2))
-            
-            # Atomic rename
-            temp_path.replace(self._progress_path)
-            
-        except Exception as e:
-            logger.error(f"Failed to save progress: {str(e)}")
-            # Attempt cleanup of temp file
-            if temp_path.exists():
-                temp_path.unlink()
-
-    async def _restore_progress(self):
-        """Restore previous progress if available"""
-        try:
-            if self._progress_path.exists():
-                with open(self._progress_path) as f:
-                    data = json.load(f)
-                    self._progress = data.get('progress', {})
-                    self._last_input = data.get('last_input')
-                    logger.info("Restored previous progress")
-        except Exception as e:
-            logger.error(f"Failed to restore progress: {str(e)}")
-
-    def _cleanup(self):
-        """Clean up resources and handlers"""
-        self._interrupt_flag = False
-        if self._progress_path.exists() and not self.config.auto_save:
-            try:
-                self._progress_path.unlink()
-            except Exception as e:
-                logger.error(f"Failed to cleanup progress file: {str(e)}")
-        self._progress.clear()
-
-    def emergency_timeout(self, handler: Callable):
-        """Set emergency timeout handler"""
-        self._prev_handlers[signal.SIGALRM] = signal.signal(
-            signal.SIGALRM, 
-            lambda s, f: handler()
-        )
-        signal.alarm(300)  # 5 minute emergency timeout
-
-    def register_cleanup(self, hook: Callable[[], None]):
-        self._cleanup_hooks.append(hook)
-
-    def _emergency_cleanup(self):
-        """Emergency cleanup handler for unexpected termination"""
-        if hasattr(self, '_progress_path') and self._progress_path.exists():
-            try:
-                self._progress_path.unlink()
-            except Exception as e:
-                logger.error(f"Emergency cleanup failed: {e}")
-
-    def register_shutdown_task(self, task: Callable[[], None]):
-        """Register a task to be run during shutdown"""
-        self._shutdown_tasks.append(task)
-
-    async def monitor_resources(self):
-        """Monitor system resources during interactive session"""
-        while True:
-            try:
-                metrics = await self.system_monitor.get_metrics()
-                if metrics.memory_usage > self.config.memory_threshold:
-                    logger.warning(f"High memory usage: {metrics.memory_usage}%")
-                    await self._save_progress()
+            # Update with completed operations from history
+            for op in self._operation_history:
+                if op["name"] in status and op["status"] == "completed":
+                    status[op["name"]] = "completed"
                     
-                if self.system_monitor._check_critical_levels(metrics):
-                    if not await self.get_confirmation(
-                        "Critical resource usage detected. Continue?",
-                        timeout=INTERACTION_TIMEOUTS["emergency"]
-                    ):
-                        await self.cleanup()
-                        break
-                        
-                await asyncio.sleep(self.config.heartbeat_interval)
-            except Exception as e:
-                logger.error(f"Resource monitoring error: {e}")
-                self.system_monitor.track_error(e, {"context": "resource_monitoring"})
-
-    async def _periodic_status(self):
-        """Periodic status updates for NORMAL mode"""
-        while not self._interrupt_flag:
-            try:
-                if self._active_operations:
-                    status = self._get_operations_status()
-                    if self.config.progress_callback:
-                        await self.config.progress_callback(status)
-                    else:
-                        logger.info(f"Active operations: {status}")
-                        
-                await asyncio.sleep(self.config.status_interval)
+            logger.debug(f"Operations status: {status}")
+            return status
+        except Exception as e:
+            logger.warning(f"Error checking operations: {e}")
+            return {}
+    
+    async def track_operation(self, operation_name: str, timeout: Optional[int] = None, details: Optional[Dict[str, Any]] = None) -> bool:
+        """Track an operation with timeout."""
+        timeout = timeout or INTERACTION_TIMEOUT
+        start_time = time.time()
+        
+        try:
+            # Register operation as active
+            self._active_operations.add(operation_name)
+            
+            # Record operation start
+            operation_record = {
+                "name": operation_name,
+                "start_time": start_time,
+                "details": details or {},
+                "status": "running"
+            }
+            self._operation_history.append(operation_record)
+            
+            # Wait for timeout or until operation is manually marked as complete
+            while time.time() - start_time < timeout:
+                if operation_name not in self._active_operations:
+                    # Operation was marked complete elsewhere
+                    return True
+                await asyncio.sleep(1)
                 
-            except Exception as e:
-                logger.error(f"Status update failed: {e}")
-
-    async def confirm_with_feedback(self, prompt: str, 
-                                  details: Optional[Dict] = None) -> bool:
-        """Enhanced confirmation with detailed feedback for NORMAL mode"""
-        if self.level != InteractionLevel.NORMAL:
-            return await self.get_confirmation(prompt)
-            
-        try:
-            if details and self.config.feedback_verbosity > 1:
-                print("\nOperation Details:")
-                for key, value in details.items():
-                    print(f"  {key}: {value}")
-                    
-            return await self.get_confirmation(f"\n{prompt}")
-            
-        except Exception as e:
-            logger.error(f"Confirmation dialog failed: {e}")
+            # Operation timed out
+            logger.warning(f"Operation timed out: {operation_name}")
             return False
-            
-    def _start_resource_monitoring(self):
-        """Start resource monitoring for NORMAL mode"""
-        async def monitor_resources():
-            while not self._interrupt_flag:
-                try:
-                    self._resource_stats = {
-                        'cpu': psutil.cpu_percent(interval=1) / 100,
-                        'memory': psutil.virtual_memory().percent / 100,
-                        'disk': psutil.disk_usage('/').percent / 100
-                    }
-                    
-                    # Check thresholds
-                    for resource, value in self._resource_stats.items():
-                        threshold = self.config.resource_thresholds.get(resource)
-                        if threshold and value > threshold:
-                            logger.warning(f"{resource.upper()} usage above threshold: {value:.1%}")
-                            
-                    await asyncio.sleep(2)
-                    
-                except Exception as e:
-                    logger.error(f"Resource monitoring failed: {e}")
-                    
-        self._active_tasks.add(asyncio.create_task(monitor_resources()))
+        except Exception as e:
+            logger.warning(f"Error tracking operation: {e}")
+            return False
+        finally:
+            # Always remove from active operations
+            if operation_name in self._active_operations:
+                self._active_operations.remove(operation_name)
+                
+                # Update operation history
+                for op in self._operation_history:
+                    if op["name"] == operation_name and op["status"] == "running":
+                        op["end_time"] = time.time()
+                        op["status"] = "completed" if operation_name not in self._active_operations else "failed"
+                        op["duration"] = op["end_time"] - op["start_time"]

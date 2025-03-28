@@ -1,62 +1,85 @@
-from dataclasses import dataclass
-from typing import Optional
 import os
-import json
 from pathlib import Path
+from typing import Optional, Union
+from dataclasses import dataclass
 import socket
 import ssl
 import logging
-try:
-    from dotenv import load_dotenv
-except ImportError:
-    print("python-dotenv not installed. Run: pip install python-dotenv")
-    raise
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Optional dotenv support
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    HAVE_DOTENV = True
+except ImportError:
+    logger.warning("python-dotenv not installed. Using environment variables directly.")
+    HAVE_DOTENV = False
 
 @dataclass
 class NetworkConfig:
     node_env: str
     port: int
     database_url: str
-    ssl_cert_path: Optional[str] = None
-    ssl_key_path: Optional[str] = None
-    max_connections: int = 100
-    timeout: int = 30
+    cert_path: Optional[Path] = None
+    key_path: Optional[Path] = None
+    node_id: Optional[str] = None
+    peer_timeout: int = 30
+    max_connections: int = 10
+
+    def __post_init__(self) -> None:
+        self.validate()
 
     @classmethod
-    def from_env(cls, database_url: str):
-        return cls(
-            node_env=os.getenv('NODE_ENV', 'production'),
-            port=int(os.getenv('PORT', 443)),
-            database_url=database_url,
-            ssl_cert_path=os.getenv('SSL_CERT_PATH'),
-            ssl_key_path=os.getenv('SSL_KEY_PATH'),
-            max_connections=int(os.getenv('MAX_CONNECTIONS', 100)),
-            timeout=int(os.getenv('TIMEOUT', 30))
-        )
+    def from_env(cls, database_url: str) -> "NetworkConfig":
+        """Create configuration from environment with fallbacks"""
+        # Get env vars with fallbacks
+        try:
+            cert_path_str = os.environ.get('SSL_CERT_PATH')
+            key_path_str = os.environ.get('SSL_KEY_PATH')
+            
+            return cls(
+                node_env=os.environ.get('NODE_ENV', 'production'),
+                port=int(os.environ.get('PORT', '443')), 
+                database_url=database_url,
+                cert_path=Path(cert_path_str) if cert_path_str else None,
+                key_path=Path(key_path_str) if key_path_str else None,
+                max_connections=int(os.environ.get('MAX_CONNECTIONS', '100')),
+                peer_timeout=int(os.environ.get('TIMEOUT', '30'))
+            )
+        except ValueError as e:
+            raise ValueError(f"Invalid environment variable: {str(e)}")
 
     def validate(self) -> None:
-        """Validate configuration"""
-        if self.node_env not in ['development', 'staging', 'production']:
-            raise ValueError(f"Invalid environment: {self.node_env}")
-            
-        if not (1024 <= self.port <= 65535):
-            raise ValueError(f"Invalid port: {self.port}")
-                raise ValueError(f"Invalid SSL certificate: {str(e)}") from e
-        if self.ssl_cert_path:
-            cert_path = Path(self.ssl_cert_path)
-            if not cert_path.exists():
-                raise ValueError(f"SSL certificate not found: {self.ssl_cert_path}")
-            try:
-                ssl.SSLContext().load_cert_chain(cert_path)
-            except ssl.SSLError as e:
-                raise ValueError(f"Invalid SSL certificate: {str(e)}")
+        """Validate network configuration"""
+        valid_envs = ['development', 'testing', 'production']
+        if self.node_env not in valid_envs:
+            raise ValueError(f"Invalid node_env: {self.node_env}")
+
+        if not isinstance(self.port, int) or self.port < 1024 or self.port > 65535:
+            raise ValueError(f"Invalid port number: {self.port}")
+
+        if not self.database_url:
+            raise ValueError("Database URL is required")
+
+        # Validate SSL paths if provided
+        if self.cert_path:
+            # Convert to Path if it's not already
+            self.cert_path = Path(self.cert_path) if not isinstance(self.cert_path, Path) else self.cert_path
+            if not self.cert_path.exists():
+                raise ValueError(f"Certificate file not found: {self.cert_path}")
+
+        if self.key_path:
+            # Convert to Path if it's not already
+            self.key_path = Path(self.key_path) if not isinstance(self.key_path, Path) else self.key_path
+            if not self.key_path.exists():
+                raise ValueError(f"Key file not found: {self.key_path}")
 
     @property
     def is_ssl_enabled(self) -> bool:
-        return bool(self.ssl_cert_path and self.ssl_key_path)
+        return bool(self.cert_path and self.key_path)
 
     def update_interactive(self) -> None:
         """Interactive configuration update with validation"""
@@ -77,8 +100,8 @@ class NetworkConfig:
 
             while True:
                 try:
-                    port = input(f"Enter port (1024-65535) [{self.port}]: ")
-                    port = int(port) if port else self.port
+                    port_input = input(f"Enter port (1024-65535) [{self.port}]: ")
+                    port = int(port_input) if port_input else self.port
                     
                     if not (1024 <= port <= 65535):
                         print("Port must be between 1024 and 65535")
@@ -99,18 +122,18 @@ class NetworkConfig:
             # SSL Configuration
             if input("Configure SSL? (y/n): ").lower() == 'y':
                 while True:
-                    cert_path = input("Enter SSL certificate path: ").strip()
-                    if not cert_path:
+                    cert_path_str = input("Enter SSL certificate path: ").strip()
+                    if not cert_path_str:
                         break
                         
-                    cert_path = Path(cert_path)
+                    cert_path = Path(cert_path_str)
                     if not cert_path.exists():
                         print("Certificate file not found")
                         continue
                         
                     try:
                         ssl.SSLContext().load_cert_chain(cert_path)
-                        self.ssl_cert_path = str(cert_path)
+                        self.cert_path = cert_path
                         break
                     except ssl.SSLError:
                         print("Invalid SSL certificate")
@@ -131,11 +154,9 @@ class NetworkConfig:
         print(f"Environment: {self.node_env}")
         print(f"Port: {self.port}")
         print(f"Max Connections: {self.max_connections}")
-        print(f"SSL Enabled: {self.is_ssl_enabled}")
-        print(f"Timeout: {self.timeout}s")
-
     def _save_config(self) -> None:
         """Save configuration to file"""
+        import json
         config_path = Path('config/network.json')
         config_path.parent.mkdir(exist_ok=True)
         
@@ -144,7 +165,7 @@ class NetworkConfig:
                 'node_env': self.node_env,
                 'port': self.port,
                 'max_connections': self.max_connections,
-                'ssl_cert_path': self.ssl_cert_path,
-                'ssl_key_path': self.ssl_key_path,
-                'timeout': self.timeout
+                'cert_path': str(self.cert_path) if self.cert_path else None,
+                'key_path': str(self.key_path) if self.key_path else None,
+                'timeout': self.peer_timeout
             }, f, indent=2)

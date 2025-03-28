@@ -1,36 +1,58 @@
-torch>=1.9.0
-transformers>=4.11.0
-numpy>=1.21.0
-pandas>=1.3.0
-scikit-learn>=0.24.2
-fastapi>=0.68.0
-pydantic>=1.8.2
-python-dotenv>=0.19.0
-psutil>=5.9.5
+# Core dependencies
+web3>=6.10.0,<7.0.0  # Ethereum interface
+python-dotenv>=1.0.0
+
+# Core ML dependencies
+torch>=2.0.0
+transformers>=4.30.0
+numpy>=1.24.0
+pandas>=2.0.0
+scikit-learn>=1.2.0
+
+# Web framework
+fastapi>=0.95.0
+pydantic>=2.0.0
+uvicorn>=0.22.0
+gunicorn>=20.1.0
+
+# System monitoring
+psutil>=5.9.0
 tqdm>=4.65.0
-aiofiles>=23.2.1
+aiofiles>=23.1.0
 aiologger>=0.7.0
-uvicorn>=0.15.0,<0.16.0  # Production ASGI server
-gunicorn>=20.1.0,<21.0.0 # WSGI HTTP Server
-sentry-sdk>=1.5.0  # Error tracking
-prometheus-client>=0.12.0  # Metrics collection
-python-jose[cryptography]>=3.3.0  # JWT token handling
-passlib[bcrypt]>=1.7.4  # Password hashing
-tenacity>=8.0.1  # Retry mechanisms
-aiohttp>=3.8.0  # Async HTTP client
-supervisor>=4.2.4  # Process management
-uvloop>=0.16.0  # Fast event loop
-httpx>=0.23.0  # HTTP client with timeout support
-structlog>=21.5.0  # Structured logging
-asyncio-throttle>=1.0.2  # Rate limiting
-cryptography>=35.0.0  # Strong crypto primitives
-pytest>=7.0.0  # Testing framework
-pytest-asyncio>=0.18.0  # Async test support
-mypy>=0.950  # Static type checking
-black>=22.3.0  # Code formatting
-bayes_opt>=1.4.0  # Bayesian optimization
-optuna>=2.10.0  # Advanced hyperparameter optimization
-ray>=1.13.0  # Distributed computing support
-pytorch-lightning>=1.5.0  # Deep learning utilities
-wandb>=0.12.0  # Experiment tracking
-mlflow>=1.20.0  # ML lifecycle management
+
+# Monitoring and logging
+sentry-sdk>=1.25.0
+prometheus-client>=0.17.0
+structlog>=23.1.0
+
+# Security
+python-jose>=3.3.0
+passlib>=1.7.4
+cryptography>=41.0.0
+
+# Networking
+aiohttp>=3.8.0
+httpx>=0.24.0
+uvloop>=0.17.0; sys_platform != "win32"
+asyncio-throttle>=1.0.0
+
+# Process management
+supervisor>=4.2.0
+
+# Optimization
+tenacity>=8.2.0
+bayes_opt>=1.4.0
+optuna>=3.2.0
+
+# Distributed training
+ray>=2.5.0
+pytorch-lightning>=2.0.0
+wandb>=0.15.0
+mlflow>=2.4.0
+
+# Development
+black>=23.3.0
+pytest>=7.0.0
+pytest-asyncio>=0.18.0
+mypy>=0.950

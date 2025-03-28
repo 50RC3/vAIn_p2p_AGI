@@ -1,10 +1,8 @@
 from dataclasses import dataclass, field
-from typing import Dict, List
 from statistics import mean
-import torch
-import numpy as np
-from typing import Dict, Any, Optional
 import logging
+import torch
+from typing import Dict, List, Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +32,7 @@ class ModelMetrics:
         self.epoch_counts.append(num_epochs)
         self.batch_counts.append(num_batches)
 
-    def get_summary(self) -> Dict:
+    def get_summary(self) -> Dict[str, Any]:
         """
         Return summary statistics.
         Returns:

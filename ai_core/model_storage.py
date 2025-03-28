@@ -1,5 +1,9 @@
 import torch
-import ipfshttpclient
+try:
+    import ipfshttpclient  # type: ignore
+except ImportError:
+    # Fallback to kubo, which is the successor to ipfshttpclient
+    import kubo as ipfshttpclient  # type: ignore
 from typing import Dict, Optional, Tuple, Any, Callable
 from pathlib import Path
 import tempfile
@@ -7,7 +11,26 @@ import uuid
 import logging
 from functools import lru_cache
 import time
-from retry import retry
+try:
+    from retry import retry  # type: ignore
+except ImportError:
+    # Define a simple retry decorator if the retry package is not available
+    def retry(tries: int = 3, delay: float = 1, backoff: float = 2, log_instance: Optional[logging.Logger] = None) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+            def wrapper(*args: Any, **kwargs: Any) -> Any:
+                mtries, mdelay = tries, delay
+                while mtries > 0:
+                    try:
+                        return func(*args, **kwargs)
+                    except (ConnectionError, TimeoutError, OSError, IOError) as e:
+                        if log_instance:
+                            log_instance.warning(f"Retrying {func.__name__} in {mdelay}s: {e}")
+                        time.sleep(mdelay)
+                        mtries -= 1
+                        mdelay *= backoff
+                return func(*args, **kwargs)
+            return wrapper
+        return decorator
 from tqdm import tqdm
 import asyncio
 from network.caching import CacheManager, CacheLevel, CachePolicy
@@ -21,19 +44,21 @@ class ModelStorage:
         self.ipfs = ipfshttpclient.connect(ipfs_host)
         self.chunk_size = chunk_size
         self.progress_callback = progress_callback
-        self._model_cache = {}
-        self._verify_connection()
+        self._model_cache: Dict[str, Dict[str, Any]] = {}
+        if not self._verify_connection():
+            raise ConnectionError("IPFS node not available")
         self.cache_manager = CacheManager({
             CacheLevel.MEMORY: CachePolicy(max_size=100, ttl=3600, level=CacheLevel.MEMORY),
             CacheLevel.DISK: CachePolicy(max_size=1000, ttl=86400, level=CacheLevel.DISK)
         })
-        
-    def _verify_connection(self):
-        """Verify IPFS connection is working"""
+    def _verify_connection(self) -> bool:
+        """Verify IPFS connection is working and return connection status"""
         try:
             self.ipfs.id()
+            return True
         except Exception as e:
             logger.error("Failed to connect to IPFS node: %s", e)
+            return False
             raise ConnectionError("IPFS node not available") from e
 
     def store_model(self, model: torch.nn.Module, metadata: Dict[str, Any], 
@@ -194,7 +219,7 @@ class ModelStorage:
                 sha256_hash.update(byte_block)
         return sha256_hash.hexdigest()
 
-    def _cache_model(self, ipfs_hash: str, metadata: Dict, ttl: int = 3600):
+    def _cache_model(self, ipfs_hash: str, metadata: Dict[str, Any], ttl: int = 3600) -> Any:
         """Cache model with TTL"""
         return self.cache_manager.put(
             ipfs_hash, 
@@ -203,7 +228,7 @@ class ModelStorage:
             level=CacheLevel.MEMORY
         )
 
-    def clear_expired_cache(self):
+    def clear_expired_cache(self) -> None:
         """Clear expired items from cache"""
         now = time.time()
         expired = [k for k, v in self._model_cache.items() 
@@ -219,7 +244,7 @@ class ModelStorage:
             None, self.store_model, model, metadata, interactive
         )
         
-    async def load_model_async(self, ipfs_hash: str, interactive: bool = True) -> Optional[Dict]:
+    async def load_model_async(self, ipfs_hash: str, interactive: bool = True) -> Optional[Dict[str, Any]]:
         """Async version of load_model"""
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(

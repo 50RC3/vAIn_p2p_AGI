@@ -1,7 +1,145 @@
 vAIn Project Structure
 =====================
 
-vain_vAIn_project/
+vain_p2p_AGI/
 │── main.py                        # Entry point for training execution
-│── config.py                      # Configuration settings (hyperparameters, paths)
-// ...rest of the structure as provided...
+│── config.py                      # Configuration settings
+│── install.js                     # Installation script
+│── README.md                      # Project overview
+│── requirements.txt               # Python dependencies
+│── package.json                   # Node.js dependencies
+│── hardhat.config.js             # Blockchain config
+│── .env                          # Environment variables
+│
+├── ai_core/                      # Core AI processing
+│   ├── evaluation/
+│   │   ├── benchmark.py         # Performance evaluation
+│   │   ├── metrics.py          # Evaluation metrics
+│   │   ├── validators/         # Model validation tools
+│   │   └── profiler/          # Performance profiling
+│   ├── models/
+│   │   ├── simple_nn.py        # Basic neural network
+│   │   ├── vain_transformer/   # Custom transformer
+│   │   ├── reptile_meta/      # Meta-learning implementation
+│   │   ├── genetic_algo/      # Evolutionary optimization
+│   ├── chatbot/               # Interactive interface
+│   │   ├── interface.py       # Chat interface implementation
+│   ├── unified_model_system.py # Model coordination system
+│   ├── model_coordinator.py   # Training orchestration
+│
+├── models/                      # Model definitions
+│   ├── hybrid_memory_system.py # Memory management system
+│   ├── __init__.py            # Model interfaces & configs
+│
+├── memory/                       # Memory management
+│   ├── memory_manager.py        # Memory management functions
+│   ├── memory_processing.py     # Memory data processing
+│   ├── state_persistence.py    # State persistence handlers
+│   ├── memory_metrics.py      # Memory analytics
+│   └── shared_memory.py       # Cross-node memory sharing
+│
+├── training/                     # Training system
+│   ├── contrastive_loss.py      # Contrastive learning
+│   ├── clustering_loss.py       # Clustering optimization
+│   ├── federated_client.py      # Local training client
+│   ├── reptile.py              # Meta-learning algorithm
+│   ├── federated_training.py    # Training orchestration
+│   ├── federated.py            # Core federated learning
+│   ├── aggregation.py          # Model aggregation
+│
+├── backend/                      # Backend services
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── auth.js         # Authentication
+│   │   │   ├── staking.js      # Staking endpoints
+│   │   │   ├── rewards.js      # Reward distribution
+│   │   │   ├── reputation.js   # Reputation system
+│   │   │   ├── nodes.js        # Node management API
+│   │   ├── models/
+│   │   │   ├── node.js        # Node data model
+│   │   │   ├── transaction.js # Transaction model
+│   │   │   ├── training_session.js # Training session model
+│   │   │   ├── user.js       # User model
+│   │   ├── services/
+│   │   │   ├── ipfs.js       # IPFS integration
+│   │   │   ├── blockchain.js # Blockchain interaction
+│   │   │   ├── websocket.js  # WebSocket handling
+│   │   │   ├── cache.js      # Caching layer
+│   │   │   ├── queue.js      # Task queue management
+│   ├── middleware/
+│   │   │   ├── auth.js       # Auth middleware
+│   │   │   ├── rateLimiter.js # Rate limiting
+│   │   │   ├── metrics.js    # Metrics collection
+│   │   │   ├── validator.js  # Request validation
+│   │   ├── utils/
+│   │   │   ├── logger.js     # Logging utilities
+│   │   │   ├── secure_key_manager.js # Key management
+│   │   ├── config.js          # Backend config
+│   ├── server.js               # API server
+│
+├── network/                     # P2P networking
+│   ├── peer_discovery.py       # UDP peer discovery
+│   ├── node_communication.py   # Node messaging
+│   ├── consensus.py           # Consensus protocol
+│   ├── monitoring.py          # Health monitoring
+│   ├── auth.py               # Authentication
+│   ├── firewall_rules.py     # Security rules
+│   ├── compression.py        # Adaptive compression
+│   ├── clustering.py         # Node clustering
+│   ├── mobile/               # Mobile device support
+│   │   ├── mobile_edge.py   # Edge computing management
+│   │   ├── mobile_node.py   # Mobile node implementation
+│
+├── contracts/                   # Smart contracts
+│   ├── governance_contract.sol # Governance
+│   ├── liquidity_pool.sol     # Token liquidity
+│   ├── reputation_contract.sol # Reputation system
+│   ├── staking_contract.sol   # Staking logic
+│   ├── vain_token.sol        # Token contract
+│
+├── frontend/                    # Web interface
+│   ├── public/                 # Static assets
+│   ├── src/
+│   │   ├── components/        # UI components
+│   │   ├── pages/            # Application views
+│   │   ├── hooks/            # React hooks
+│   │   ├── utils/            # Helper functions
+│   │   ├── services/         # API services
+│   ├── App.js                 # Main app
+│   ├── index.js              # Entry point
+│
+├── monitoring/                  # System monitoring
+│   ├── node_status.py         # Node health
+│   ├── analytics.py          # Network analytics
+│   ├── alerts.py             # Alert system
+│   ├── metrics.py            # Performance metrics
+│   ├── anomaly_detection.py # Anomaly detection
+│   └── resource_tracker.py  # Resource monitoring
+│
+├── scripts/                     # Utilities
+│   ├── deploy.sh              # Contract deployment
+│   ├── setup.py              # System setup
+│   ├── setup.js              # Interactive setup
+│   ├── interactive.js        # Interactive mode
+│   ├── monitor.js            # Monitoring
+│   ├── cleanup.py            # Cleanup
+│   ├── reward_distribution.py # Reward automation
+│
+├── tests/                      # Test suites
+│   ├── contracts/            # Contract tests
+│   ├── backend/             # API tests
+│   ├── ai_core/            # Model tests
+│   ├── network/            # P2P tests
+│
+├── docs/                       # Documentation
+│   ├── architecture.md        # System design
+│   ├── system_overview.md     # Overview
+│   ├── current_status.md     # Status
+│   ├── scalability.md       # Scaling features
+│   ├── tokenomics.md        # Token economics
+│   ├── api_reference.md     # API docs
+│   ├── project_structure.txt # This file
+│
+├── docker/                     # Docker configs
+│   ├── Dockerfile            # Container spec
+│   ├── docker-compose.yml    # Service config

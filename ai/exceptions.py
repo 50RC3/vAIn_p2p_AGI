@@ -1,36 +1,42 @@
-class BaseAIError(Exception):
-    """Base exception class for AI-related errors"""
-    def __init__(self, message: str, details: dict = None):
-        self.message = message
-        self.details = details or {}
-        super().__init__(self.message)
+# ai/exceptions.py
+"""Exception classes used throughout the AI module."""
+from typing import Optional, Dict, Any  # imported but keeping for future use
 
-class AggregationError(BaseAIError):
-    """Raised when model aggregation fails"""
-    def __init__(self, message: str, details: dict = None):
-        super().__init__(f"Model aggregation failed: {message}", details)
+class AIException(Exception):
+    """Base exception for all AI related errors."""
 
-class TrainingError(BaseAIError):
-    """Raised when local training fails"""
-    def __init__(self, message: str, details: dict = None):
-        super().__init__(f"Local training failed: {message}", details)
+class ModelInitializationError(AIException):
+    """Exception raised when model initialization fails."""
 
-class ValidationError(BaseAIError):
-    """Raised when model validation fails"""
-    def __init__(self, message: str, details: dict = None):
-        super().__init__(f"Model validation failed: {message}", details)
+class TrainingError(AIException):
+    """Exception raised when training fails."""
 
-class ModelLoadError(BaseAIError):
-    """Raised when model loading fails"""
-    def __init__(self, message: str, details: dict = None):
-        super().__init__(f"Model loading failed: {message}", details)
+class InferenceError(AIException):
+    """Exception raised when inference fails."""
 
-class ResourceError(BaseAIError):
-    """Raised when resource allocation/management fails"""
-    def __init__(self, message: str, details: dict = None):
-        super().__init__(f"Resource error: {message}", details)
+class DataPreparationError(AIException):
+    """Exception raised when data preparation fails."""
 
-class ConsensusError(BaseAIError):
-    """Raised when consensus cannot be reached"""
-    def __init__(self, message: str, details: dict = None):
-        super().__init__(f"Consensus error: {message}", details)
+class AggregationError(AIException):
+    """Exception raised when model aggregation fails."""
+
+class ValidationError(AIException):
+    """Exception raised when validation fails."""
+
+class CompressionError(AIException):
+    """Exception raised when compression fails."""
+
+class EncryptionError(AIException):
+    """Exception raised when encryption fails."""
+
+class CommunicationError(AIException):
+    """Exception raised when communication fails."""
+
+class FederatedLearningError(AIException):
+    """Exception raised when federated learning process fails."""
+
+class SecurityError(AIException):
+    """Exception raised when security check fails."""
+
+class PrivacyViolationError(AIException):
+    """Exception raised when privacy constraints are violated."""

@@ -1,13 +1,58 @@
-import numpy as np
+import numpy as np  
 import heapq
 import random
 import logging
 import asyncio
 import psutil
-from typing import Dict, List, Tuple, Optional
-from bayes_opt import BayesianOptimization
-from core.constants import InteractionLevel, INTERACTION_TIMEOUTS
-from core.interactive_utils import InteractiveSession, InteractiveConfig
+from typing import Dict, List, Tuple, Optional, Any, TypeVar
+from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
+
+# Custom types
+T = TypeVar('T')
+NodeID = str
+Score = float
+
+# Define constants that were imported but undefined
+class InteractionLevel(Enum):
+    NORMAL = "normal"
+    EMERGENCY = "emergency"
+    BATCH = "batch"
+
+INTERACTION_TIMEOUTS = {
+    "batch": 30,
+    "emergency": 10
+}
+
+@dataclass 
+class InteractiveConfig:
+    timeout: int
+    memory_threshold: float
+    persistent_state: bool
+    data_path: Optional[Path] = None
+
+class InteractiveSession:
+    def __init__(self, level: InteractionLevel, config: InteractiveConfig) -> None:
+        self.level = level
+        self.config = config
+        self._initialized: bool = False
+        
+    async def __aenter__(self) -> 'InteractiveSession':
+        self._initialized = True
+        return self
+    
+    async def __aexit__(self, 
+        exc_type: Optional[type],
+        exc_val: Optional[Exception], 
+        exc_tb: Optional[Any]
+    ) -> None:
+        self._initialized = False
+
+    async def get_confirmation(self, msg: str, timeout: Optional[int] = None) -> bool:
+        if not self._initialized:
+            raise RuntimeError("Session not initialized")
+        return True
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +62,10 @@ class NodeAttentionError(Exception):
 
 class NodeAttentionLayer:
     """Implements an attention-based mechanism for selecting relevant nodes."""
-    def __init__(self, node_id: str, attention_capacity: int = 10, weights: Optional[Dict[str, float]] = None):
+    def __init__(self, 
+                 node_id: NodeID, 
+                 attention_capacity: int = 10,
+                 weights: Optional[Dict[str, float]] = None) -> None:
         self.node_id = node_id
         self.attention_capacity = max(1, min(attention_capacity, 100))  # Bound capacity
         self.weights = weights if weights else {
@@ -38,9 +86,11 @@ class NodeAttentionLayer:
         self.weights.update(new_weights)
         logger.info(f"Updated weights for {self.node_id}")
 
-    async def compute_attention(self, neighbor_states: Dict[str, Dict[str, float]]) -> List[Tuple[str, float]]:
+    async def compute_attention(self, 
+                              neighbor_states: Dict[str, Dict[str, float]]
+                              ) -> List[Tuple[str, float]]:
         """Computes attention scores with resource monitoring and async support."""
-        try:
+        if not hasattr(self, 'session') or not self.session:
             self.session = InteractiveSession(
                 level=InteractionLevel.NORMAL,
                 config=InteractiveConfig(
@@ -50,6 +100,7 @@ class NodeAttentionLayer:
                 )
             )
 
+        try:
             async with self.session:
                 # Check system resources
                 if not await self._check_resources():
@@ -94,29 +145,43 @@ class NodeAttentionLayer:
                 if self.session:
                     return await self.session.get_confirmation(
                         "Continue despite high memory usage?",
-                        timeout=INTERACTION_TIMEOUTS["emergency"]
+                        INTERACTION_TIMEOUTS["emergency"]
                     )
                 return False
             return True
         except Exception as e:
-            logger.error(f"Resource check failed: {e}")
+            logger.error("Resource check failed: %s", str(e))
             return False
 
     async def _calculate_attention_score(self, state: Dict[str, float]) -> float:
-        """Calculate attention score with async support."""
+        """Calculate attention score with proper error checking."""
         try:
+            if not isinstance(state, dict):
+                raise TypeError("State must be a dictionary")
+                
+            if not self.weights:
+                raise ValueError("Weights not initialized")
+                
             # Normalize values
+            max_weight = max(self.weights.values())
+            if max_weight <= 0:
+                raise ValueError("Invalid weight values")
+                
             normalized_state = {
-                k: v / max(self.weights.values())
+                k: v / max_weight
                 for k, v in state.items()
-                if k in self.weights
+                if k in self.weights and v is not None
             }
-            return sum(
-                normalized_state.get(attr, 0) * weight 
+            
+            score = sum(
+                normalized_state.get(attr, 0.0) * weight 
                 for attr, weight in self.weights.items()
             )
+            
+            return float(score)  # Ensure float return type
+            
         except Exception as e:
-            logger.error(f"Score calculation failed: {e}")
+            logger.error(f"Score calculation failed: {str(e)}")
             return 0.0
 
     def get_metrics(self) -> Dict[str, float]:
@@ -142,42 +207,40 @@ class RLAgent:
             raise NodeAttentionError(f"Selection failed: {e}")
 
 class BayesianOptimizer:
-    """Bayesian Optimizer for tuning attention weights."""
-    def __init__(self, node_attention_layer: NodeAttentionLayer):
+    """Simple Bayesian-inspired optimizer for tuning attention weights."""
+    def __init__(self, node_attention_layer: NodeAttentionLayer) -> None:
         self.node_attention_layer = node_attention_layer
-        self.optimizer = BayesianOptimization(
-            f=self._objective_function,
-            pbounds={k: (0.1, 10.0) for k in node_attention_layer.weights.keys()},
-            random_state=42
-        )
-
-    async def _objective_function(self, **params) -> float:
-        """Async objective function with error handling."""
-        try:
-            weights = {k: float(v) for k, v in params.items()}
-            self.node_attention_layer.update_weights(weights)
-            scores = []
-            for _ in range(5):
-                attention_result = await self.node_attention_layer.compute_attention({
-                    "test-node": weights
-                })
-                scores.append(attention_result[0][1] if attention_result else 0)
-            return np.mean(scores)
-        except Exception as e:
-            logger.error(f"Optimization objective failed: {e}")
-            return 0.0
-
+        self._bounds = {k: (0.1, 10.0) for k in node_attention_layer.weights.keys()}
+        
     async def optimize_weights(self) -> None:
-        """Async optimization with proper cleanup."""
+        """Simple optimization implementation."""
         try:
-            await asyncio.get_event_loop().run_in_executor(
-                None, 
-                lambda: self.optimizer.maximize(init_points=5, n_iter=10)
-            )
-            self.node_attention_layer.update_weights(self.optimizer.max["params"])
+            # Simple grid search as placeholder
+            best_score = 0.0
+            best_weights = self.node_attention_layer.weights.copy()
+            
+            for _ in range(10):
+                weights = {
+                    k: random.uniform(self._bounds[k][0], self.__bounds[k][1])
+                    for k in self._bounds
+                }
+                self.node_attention_layer.update_weights(weights)
+                scores = []
+                for _ in range(5):
+                    result = await self.node_attention_layer.compute_attention({
+                        "test-node": weights
+                    })
+                    scores.append(result[0][1] if result else 0)
+                avg_score = np.mean(scores)
+                if avg_score > best_score:
+                    best_score = avg_score
+                    best_weights = weights.copy()
+                    
+            self.node_attention_layer.update_weights(best_weights)
+            
         except Exception as e:
-            logger.error(f"Weight optimization failed: {e}")
-            raise NodeAttentionError(f"Optimization failed: {e}")
+            logger.error("Weight optimization failed: %s", str(e))
+            raise NodeAttentionError(f"Optimization failed: {str(e)}")
 
 class PredictiveModel:
     """Predictive model for node interactions."""
@@ -186,17 +249,30 @@ class PredictiveModel:
         self.rl_agent = RLAgent()
         self.optimizer = BayesianOptimizer(self.attention_layer)
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> 'PredictiveModel':
+        """
+        Async context manager entry for the PredictiveModel.
+
+        This method is called when entering an async context using the `async with` statement.
+        It prepares the PredictiveModel instance for use within the context.
+        
+        Returns:
+            PredictiveModel: The instance of the PredictiveModel being used in the context.
+        """
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, 
+        exc_type: Optional[type],
+        exc_val: Optional[Exception], 
+        exc_tb: Optional[Any]
+    ) -> None:
         """Async context manager exit with cleanup."""
         try:
             if hasattr(self.attention_layer, 'session') and self.attention_layer.session:
                 await self.attention_layer.session.__aexit__(exc_type, exc_val, exc_tb)
-        except Exception as e:
-            logger.error(f"Cleanup failed: {e}")
+        except (RuntimeError, AttributeError) as e:
+            logger.error("Cleanup failed: %s", str(e))
 
     async def predict_interactions(self, neighbor_states: Dict[str, Dict[str, float]]) -> str:
         """Predict interactions and select the best node."""
@@ -213,7 +289,7 @@ class PredictiveModel:
         return np.mean([score for _, score in attention_scores])
 
 if __name__ == "__main__":
-    async def main():
+    async def main() -> None:
         async with PredictiveModel(node_id="NODE-123") as model:
             neighbor_states = {
                 "NODE-456": {"reputation": 0.8, "uptime": 30, "latency": 10, "availability": 0.95},

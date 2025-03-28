@@ -2,48 +2,61 @@ import os
 import json
 import logging
 import asyncio
+from typing import Dict, Any, Optional
 from pathlib import Path
-from typing import Optional, Dict, Any
-from dotenv import load_dotenv
-from core.constants import InteractionLevel, INTERACTION_TIMEOUTS 
-from core.interactive_utils import InteractiveSession, InteractiveConfig
+from dataclasses import dataclass
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = lambda: None
+
+from core.interactive_utils import InteractiveConfig, InteractionLevel 
+from core.constants import INTERACTION_TIMEOUTS
 
 logger = logging.getLogger(__name__)
 
+@dataclass
 class Config:
     def __init__(self, interactive: bool = True):
-        self.load_env()
+        self.interactive = interactive
+        self._config_path = Path(__file__).parent / 'config.json'
+        self._session: Optional[InteractiveSession] = None
+        self.last_validation: Optional[bool] = None
+        self._interrupt_requested = False
+        
+        # Load env vars
+        load_dotenv()
         
         # Node identification
-        self.node_id = os.getenv('NODE_ID', 'default_node_id')
+        self.node_id: str = os.getenv('NODE_ID', 'default_node_id')
         
         # Network configuration
-        self.network = {
+        self.network: Dict[str, Any] = {
             'udp': {
-                'port': int(os.getenv('UDP_PORT', 8468))
+                'port': int(os.getenv('UDP_PORT', '8468'))
             },
             'dht': {
-                'bootstrap_nodes': os.getenv('DHT_BOOTSTRAP_NODES', '').split(',')
+                'bootstrap_nodes': os.getenv('DHT_BOOTSTRAP_NODES', '').split(',') 
             },
             'secret_key': os.getenv('NETWORK_SECRET', 'default_secret')
         }
         
         # Training parameters
-        self.batch_size = int(os.getenv('BATCH_SIZE', 32))
-        self.learning_rate = float(os.getenv('LEARNING_RATE', 0.001))
-        self.num_epochs = 100
+        self.batch_size: int = int(os.getenv('BATCH_SIZE', 32))
+        self.learning_rate: float = float(os.getenv('LEARNING_RATE', 0.001))
+        self.num_epochs: int = 100
         
         # Model parameters
-        self.hidden_size = 256
-        self.num_layers = 4
+        self.hidden_size: int = 256
+        self.num_layers: int = 4
         
         # Federated learning parameters
-        self.num_rounds = 50
-        self.min_clients = 3
-        self.clients_per_round = 10
+        self.num_rounds: int = 50
+        self.min_clients: int = 3
+        self.clients_per_round: int = 10
         
         # Chatbot parameters
-        self.chatbot = {
+        self.chatbot: Dict[str, Any] = {
             'max_context': int(os.getenv('CHATBOT_MAX_CONTEXT', 1024)),
             'response_temp': float(os.getenv('CHATBOT_RESPONSE_TEMP', 0.7)),
             'top_p': float(os.getenv('CHATBOT_TOP_P', 0.9)),
@@ -51,7 +64,7 @@ class Config:
         }
         
         # RL parameters
-        self.rl = {
+        self.rl: Dict[str, Any] = {
             'gamma': float(os.getenv('RL_GAMMA', 0.99)),
             'learning_rate': float(os.getenv('RL_LEARNING_RATE', 0.001)),
             'batch_size': int(os.getenv('RL_BATCH_SIZE', 32)),
@@ -59,16 +72,6 @@ class Config:
             'memory_size': int(os.getenv('RL_MEMORY_SIZE', 10000))
         }
 
-        self.interactive = interactive
-        self._interrupt_requested = False
-        self._session: Optional[InteractiveSession] = None
-        self.last_validation = None
-        self._config_path = Path(__file__).parent / 'config.json'
-        
-    def load_env(self):
-        """Load environment variables from .env file"""
-        load_dotenv()
-        
     async def update_interactive(self) -> bool:
         """Interactive configuration update with validation and recovery"""
         try:

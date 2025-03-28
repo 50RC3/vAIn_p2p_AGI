@@ -1,6 +1,5 @@
 import logging
-from typing import Dict, Any, Optional, List
-import numpy as np
+from typing import Dict, Any, List
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from core.interactive_utils import InteractiveSession, InteractiveConfig
@@ -18,8 +17,17 @@ class ErrorMetrics:
     source: str
     remediation_attempts: int
 
+    def __post_init__(self) -> None:
+        """Validate values after initialization"""
+        if not 0 <= self.severity <= 1:
+            raise ValueError("Severity must be between 0 and 1")
+        if not 0 <= self.impact <= 1:
+            raise ValueError("Impact must be between 0 and 1")
+        if self.frequency < 0:
+            raise ValueError("Frequency cannot be negative")
+
 class ErrorFeedbackManager:
-    def __init__(self, interactive: bool = True):
+    def __init__(self, interactive: bool = True) -> None:
         self.interactive = interactive
         self.error_history: Dict[str, List[ErrorMetrics]] = {}
         self.malicious_patterns: Dict[str, int] = {}
@@ -161,3 +169,9 @@ class ErrorFeedbackManager:
             e for e in self.error_history[source]
             if e.timestamp > cutoff
         ]
+
+    def _calculate_time_factor(self, timestamp: datetime) -> float:
+        """Calculate time-based weight factor"""
+        time_diff = datetime.now() - timestamp
+        hours_passed = time_diff.total_seconds() / 3600
+        return max(0.1, 1 - (hours_passed / 24))

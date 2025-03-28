@@ -1,19 +1,28 @@
-import json
-import logging
-import asyncio
-import time
 from typing import Dict, Any, Optional
+import asyncio
+from dataclasses import dataclass
 from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
+from datetime import datetime
+import logging
+import json
+import time
 from cryptography.hazmat.primitives.asymmetric import ed25519
 import base64
 from core.interactive_utils import InteractiveSession, InteractiveConfig, InteractionLevel
 from core.constants import INTERACTION_TIMEOUTS
 from cryptography.exceptions import InvalidKey, InvalidSignature
 from cryptography.fernet import InvalidToken
-from security.key_history import KeyHistory
 
 logger = logging.getLogger(__name__)
+
+@dataclass
+class KeyHistory:
+    current_version: int = 0
+    keys: Dict[int, bytes] = None
+
+    def __post_init__(self):
+        if self.keys is None:
+            self.keys = {}
 
 class SecureMessageProtocol:
     def __init__(self, encryption_key: bytes, interactive: bool = True):

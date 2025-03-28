@@ -1,15 +1,14 @@
-import torch
 import gc
 import logging
 import asyncio
-from typing import Dict, List, Optional, NoReturn, Any
-from dataclasses import dataclass
+import torch
+from typing import Dict, Optional, Any
 from pathlib import Path
-from ..core.interactive_utils import InteractiveSession, InteractionLevel, InteractiveConfig
-from ..core.constants import INTERACTION_TIMEOUTS
-from ..ai_core.model_storage import ModelStorage
-import time
+import json
+
+from core.interactive_utils import InteractiveSession, InteractiveConfig, InteractionLevel
 from network.caching import CacheManager, CacheLevel, CachePolicy
+from ai_core.model_storage import ModelStorage
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +20,11 @@ class MemoryStatus:
     cached_tensors: int
 
 class MemoryManager:
-    def __init__(self, max_cache_size: int = 1024, interactive: bool = True):
+    def __init__(self, max_cache_size: int = 1024*1024*1024, interactive: bool = True):
         self.max_cache_size = max_cache_size
-        self.tensor_cache = {}
+        self.tensor_cache: Dict[str, torch.Tensor] = {}
         self.interactive = interactive
-        self.session = None
+        self.session: Optional[InteractiveSession] = None
         self._interrupt_requested = False
         self._progress_path = Path("./progress/memory_cache.json")
         self._progress_path.parent.mkdir(parents=True, exist_ok=True)
@@ -34,8 +33,8 @@ class MemoryManager:
         self._last_error_time = 0
         self._error_cooldown = 60  # 60 seconds between recovery attempts
         self.model_storage = ModelStorage()
-        self.storage_status = {}
-        self.memory_systems = {}
+        self.storage_status: Dict[str, Any] = {}
+        self.memory_systems: Dict[str, Any] = {}
         self.active_system = None
         self.cache_manager = CacheManager({
             CacheLevel.MEMORY: CachePolicy(
@@ -44,17 +43,29 @@ class MemoryManager:
                 level=CacheLevel.MEMORY
             )
         })
+        self._cleanup_lock = asyncio.Lock()
+        self._is_cleanup_pending = False
     
     async def register_memory_system(self, name: str, system: Any) -> bool:
-        """Register a memory system for management"""
+        """Register a memory system with validation"""
         try:
+            if not name or not system:
+                logger.error("Invalid name or system provided")
+                return False
+                
+            if name in self.memory_systems:
+                logger.warning(f"Memory system {name} already registered")
+                return True
+                
             if hasattr(system, 'memory_size'):
                 self.memory_systems[name] = system
                 if not self.active_system:
                     self.active_system = name
                 return True
+                
             logger.error(f"Invalid memory system: {name}")
             return False
+            
         except Exception as e:  
             logger.error(f"Failed to register memory system: {str(e)}")
             return False
@@ -262,20 +273,40 @@ class MemoryManager:
             logger.error(f"Cleanup error: {e}")
 
     async def coordinate_memory_systems(self, model_id: str) -> bool:
-        """Coordinate memory systems for multi-model operation"""
+        """Coordinate memory systems with enhanced safety"""
+        if not model_id:
+            logger.error("Invalid model_id provided")
+            return False
+            
         try:
-            if model_id in self.memory_systems:
-                self.active_system = model_id
+            if model_id not in self.memory_systems:
+                logger.error(f"Memory system {model_id} not registered")
+                return False
+
+            # Validate memory state
+            memory_status = self.get_memory_status()
+            if memory_status.used / memory_status.total > 0.8:
+                await self._handle_high_memory_usage()
                 
-                # Validate memory state
-                memory_status = self.get_memory_status()
-                if memory_status.used / memory_status.total > 0.8:
-                    await self._cleanup_storage()
-                    
-                return True
+            # Coordinate with active system
+            system = self.memory_systems[model_id]
+            state = await self._safely_cache_state(system)
+            if state:
+                self.storage_status[f"{model_id}_state"] = {
+                    "cached": True,
+                    "timestamp": time.time(),
+                    "size": state.get("size", 0)
+                }
+                
+            # Notify component coordinator if available
+            if hasattr(self, '_coordinator'):
+                await self._coordinator.coordinate_state_updates()
+            
+            return True
+            
         except Exception as e:
-            logger.error(f"Memory coordination failed: {e}")
-        return False
+            logger.error(f"Memory coordination failed: {str(e)}")
+            return False
 
     async def share_tensor(self, source_id: str, target_id: str, 
                          tensor_key: str) -> bool:
@@ -290,3 +321,75 @@ class MemoryManager:
         except Exception as e:
             logger.error(f"Tensor sharing failed: {e}")
         return False
+
+    async def coordinate_systems_state(self) -> bool:
+        """Coordinate state between memory systems"""
+        if not self.memory_systems:
+            return False
+
+        try:
+            # Collect states from all systems
+            states = {}
+            for name, system in self.memory_systems.items():
+                if hasattr(system, 'cache_state'):
+                    state = await system.cache_state()
+                    if state:
+                        states[name] = state
+
+            # Validate collective state
+            if await self._validate_collective_state(states):
+                # Update storage status
+                self.storage_status.update({
+                    f"{name}_state": {"cached": True, "timestamp": time.time()}
+                    for name in states.keys()
+                })
+                return True
+
+            return False
+
+        except Exception as e:
+            logger.error(f"System state coordination failed: {e}")
+            return False
+
+    async def _validate_collective_state(self, states: Dict[str, Any]) -> bool:
+        """Validate collective state of memory systems"""
+        try:
+            total_memory = sum(
+                state.get('memory', torch.tensor(0)).numel() 
+                for state in states.values()
+            )
+            
+            if total_memory > self.max_cache_size:
+                if self.interactive and self.session:
+                    return await self.session.get_confirmation(
+                        "Collective state exceeds cache size. Continue?",
+                        timeout=INTERACTION_TIMEOUTS["emergency"]
+                    )
+                return False
+                
+            return True
+            
+        except Exception as e:
+            logger.error(f"State validation failed: {e}")
+            return False
+
+    async def _safely_cache_state(self, system: Any) -> Optional[Dict]:
+        """Safely cache system state with error handling"""
+        try:
+            if hasattr(system, 'cache_state'):
+                return await system.cache_state()
+            return None
+        except Exception as e:
+            logger.error(f"State caching failed: {e}")
+            return None
+
+    async def _handle_high_memory_usage(self) -> None:
+        """Handle high memory usage conditions"""
+        if self.interactive and self.session:
+            if await self.session.get_confirmation(
+                "High memory usage detected. Perform cleanup?",
+                timeout=INTERACTION_TIMEOUTS["emergency"]
+            ):
+                await self._cleanup_storage()
+        else:
+            await self._cleanup_storage()

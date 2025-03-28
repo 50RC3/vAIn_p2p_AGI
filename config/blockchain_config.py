@@ -1,24 +1,30 @@
-from dataclasses import dataclass, field
-from typing import Dict, Optional
-from web3 import Web3
+import os
+import json
 import logging
 import time
 from pathlib import Path
-import json
+from typing import Dict, Optional, Any, Union
+from web3 import Web3
+from dotenv import load_dotenv
+from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
-@dataclass
+HAS_WEB3 = True
+
+@dataclass 
 class BlockchainConfig:
     private_key: str
-    infura_project_id: str
+    infura_project_id: str 
     network: str
     gas_limit: int = 6000000
     gas_price_gwei: int = 50
     max_gas_price_gwei: int = 150
     retry_attempts: int = 3
     retry_delay: int = 5
-    network_configs: Dict[str, Dict] = field(default_factory=lambda: {
+    _web3: Optional[Web3] = None
+    
+    network_configs: Dict[str, Dict[str, Any]] = field(default_factory=lambda: {
         'mainnet': {
             'chain_id': 1,
             'min_gas_price': 15,
@@ -26,7 +32,7 @@ class BlockchainConfig:
             'confirmations': 5
         },
         'polygon': {
-            'chain_id': 137,
+            'chain_id': 137, 
             'min_gas_price': 30,
             'block_time': 2,
             'confirmations': 15
@@ -38,13 +44,12 @@ class BlockchainConfig:
             'confirmations': 1
         }
     })
-    
-    def __post_init__(self):
+
+    def __post_init__(self) -> None:
         self.validate_config()
-        self._web3 = None
-    
+
     def validate_config(self) -> None:
-        """Validate configuration parameters"""
+        """Validate blockchain configuration"""
         if not self.private_key or len(self.private_key) != 64:
             raise ValueError("Invalid private key format")
         
@@ -53,28 +58,38 @@ class BlockchainConfig:
             
         if self.network not in self.network_configs:
             raise ValueError(f"Unsupported network: {self.network}")
-    
+        
+        if self.gas_price_gwei <= 0:
+            raise ValueError("Gas price must be positive")
+
+        if self.gas_limit < 21000:
+            raise ValueError("Gas limit must be at least 21000")
+
     @property
     def web3(self) -> Web3:
         """Get or create Web3 instance with automatic retry"""
         if not self._web3:
-            for attempt in range(self.retry_attempts):
-                try:
-                    if self.network == 'development':
-                        self._web3 = Web3(Web3.HTTPProvider('http://127.0.0.1:8545'))
-                    else:
-                        self._web3 = Web3(Web3.HTTPProvider(
-                            f"https://{self.network}.infura.io/v3/{self.infura_project_id}"
-                        ))
-                    if self._web3.is_connected():
-                        break
-                except Exception as e:
-                    logger.warning(f"Connection attempt {attempt + 1} failed: {str(e)}")
-                    if attempt < self.retry_attempts - 1:
-                        time.sleep(self.retry_delay)
-                    else:
-                        raise ConnectionError("Failed to establish Web3 connection")
+            self._web3 = self._create_web3()
         return self._web3
+
+    def _create_web3(self) -> Web3:
+        for attempt in range(self.retry_attempts):
+            try:
+                if self.network == 'development':
+                    w3 = Web3(Web3.HTTPProvider('http://127.0.0.1:8545'))
+                else:
+                    w3 = Web3(Web3.HTTPProvider(
+                        f"https://{self.network}.infura.io/v3/{self.infura_project_id}"
+                    ))
+                if w3.is_connected():
+                    return w3
+            except (ConnectionError, TimeoutError, ValueError) as e:
+                logger.warning("Connection attempt %s failed: %s", attempt + 1, e)
+                if attempt < self.retry_attempts - 1:
+                    time.sleep(self.retry_delay)
+                else:
+                    raise ConnectionError("Failed to establish Web3 connection") from e
+        raise ConnectionError("Failed to establish Web3 connection after all retry attempts")
 
     def estimate_gas_price(self) -> int:
         """Estimate optimal gas price with safety bounds"""
@@ -88,12 +103,12 @@ class BlockchainConfig:
             max_gwei = self.max_gas_price_gwei
             
             # Ensure gas price is within bounds
-            final_gwei = max(min_gwei, min(int(suggested_gwei * 1.1), max_gwei))
+            final_gwei = max(min_gwei, min(int(float(suggested_gwei) * 1.1), max_gwei))
             logger.info(f"Estimated gas price: {final_gwei} gwei")
-            return final_gwei
+            return int(final_gwei)
             
         except Exception as e:
-            logger.error(f"Gas price estimation failed: {str(e)}")
+            logger.error(f"Gas price estimation failed: {e}")
             return self.gas_price_gwei
 
     def update_interactive(self) -> None:
@@ -144,7 +159,7 @@ class BlockchainConfig:
                 except ValueError:
                     print("Gas limit must be a number")
 
-            self.validate()
+            self.validate_config()
             logger.info("Blockchain configuration updated successfully")
 
         except KeyboardInterrupt:
@@ -155,10 +170,7 @@ class BlockchainConfig:
             raise
 
     @classmethod
-    def from_env(cls):
-        """Create configuration from environment variables"""
-        from dotenv import load_dotenv
-        import os
+    def from_env(cls) -> 'BlockchainConfig':
         load_dotenv()
         
         config = cls(
@@ -167,11 +179,10 @@ class BlockchainConfig:
             network=os.getenv('NETWORK', 'development')
         )
         
-        # Test connection on creation
         try:
-            config.web3.is_connected()
-            logger.info(f"Successfully connected to {config.network}")
+            if config.web3.is_connected():
+                logger.info("Successfully connected to %s", config.network)
         except Exception as e:
-            logger.warning(f"Connection test failed: {str(e)}")
+            logger.warning("Connection test failed: %s", str(e))
             
         return config

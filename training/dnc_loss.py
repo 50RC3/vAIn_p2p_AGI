@@ -113,3 +113,43 @@ class DNCLoss(nn.Module):
         except Exception as e:
             logger.error(f"Loss computation failed: {str(e)}")
             raise DNCLossError(f"Loss computation failed: {str(e)}")
+
+    async def compute_loss_interactive(self, transformer_out: torch.Tensor, 
+                                     read_vector: torch.Tensor,
+                                     target: torch.Tensor, 
+                                     memory: torch.Tensor) -> torch.Tensor:
+        """Interactive loss computation with progress tracking"""
+        try:
+            self._validate_inputs(transformer_out, read_vector, target, memory)
+
+            # Track initial memory state
+            initial_state = {
+                'transformer_out': transformer_out.detach().clone(),
+                'memory': memory.detach().clone()
+            }
+
+            # Compute core loss components
+            task_loss = self.task_loss(transformer_out[-1], target)
+            if torch.isnan(task_loss):
+                raise DNCLossError("Task loss computation resulted in NaN")
+
+            memory_sparsity, memory_coherence = self._compute_memory_regularization(memory)
+            
+            # Store loss components for monitoring
+            self.components = LossComponents(
+                task_loss=task_loss.item(),
+                memory_sparsity=memory_sparsity.item(),
+                memory_coherence=memory_coherence.item(),
+                total_loss=(task_loss + self.memory_reg_factor * 
+                          (memory_sparsity + memory_coherence + self.eps)).item()
+            )
+
+            return self.components.total_loss
+
+        except Exception as e:
+            logger.error(f"Interactive loss computation failed: {str(e)}")
+            # Try to recover initial state
+            if 'initial_state' in locals():
+                transformer_out.data.copy_(initial_state['transformer_out'])
+                memory.data.copy_(initial_state['memory'])
+            raise DNCLossError(f"Loss computation failed: {str(e)}")

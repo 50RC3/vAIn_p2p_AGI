@@ -39,6 +39,39 @@ Note: Currently using basic ECDSA verification. Will be enhanced with hardware a
 - POST `/api/model/update` (Basic implementation)
 - GET `/api/metrics/cluster` (Basic implementation)
 
+### Additional Core Endpoints
+- POST `/api/node/authorize` ✓
+- GET `/api/node/network-stats` ✓
+- POST `/api/memory/share` ✓
+- GET `/api/memory/usage` ✓
+- POST `/api/cognitive/state` ✓
+- GET `/api/cognitive/metrics` ✓
+- POST `/api/model/register` ✓
+- GET `/api/model/state` ✓
+
+### Node Management
+- GET `/api/node/list` ✓
+- GET `/api/node/stats` ✓
+- POST `/api/node/register` ✓
+- PUT `/api/node/update` ✓
+
+### Training Control
+- POST `/api/training/start` ✓
+- POST `/api/training/stop` ✓
+- GET `/api/training/metrics` ✓
+- GET `/api/training/participants` ✓
+
+### Memory Management 
+- GET `/api/memory/status` ✓
+- POST `/api/memory/optimize` ✓
+- GET `/api/memory/metrics` ✓
+
+### Cache Management
+- POST `/api/cache/invalidate` ✓
+- GET `/api/cache/stats` ✓
+- POST `/api/cache/optimize` (70% complete)
+- GET `/api/cache/metrics` ✓
+
 ## WebSocket Events
 
 Currently working:
@@ -46,6 +79,17 @@ Currently working:
 - `node:metrics` ✓
 - `model:update` (Basic implementation)
 - `health:status` ✓
+
+### Additional WebSocket Events
+- `training:progress` ✓
+- `memory:status` ✓
+- `node:validation` ✓
+- `metrics:update` ✓
+- `cache:invalidate` ✓
+- `memory:shared` ✓
+- `cognitive:update` ✓
+- `model:registered` ✓
+- `validation:failed` ✓
 
 TODO:
 - Robust error handling

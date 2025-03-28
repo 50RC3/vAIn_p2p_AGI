@@ -1,153 +1,182 @@
-import torch
-import logging
-from typing import Dict, Any, Optional, List, Tuple, Callable, Set
-from dataclasses import dataclass, field
-from ..model_storage import ModelStorage
-from functools import lru_cache
-import hashlib
-import re
-from datetime import datetime
-from asyncio import Event, create_task
+# Standard library imports
 import asyncio
+import hashlib
+import logging
+import re 
 import time
+from dataclasses import dataclass, field
+from datetime import datetime
+from functools import lru_cache
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, TypeVar, Protocol
+
+# Third-party imports
+import torch
+from cachetools import LRUCache, TTLCache
+from torch import nn
+
+# Type aliases and protocols
+ModelType = TypeVar('ModelType', bound=nn.Module)
+
+class StorageProtocol(Protocol):
+    async def get_model_version(self) -> str: ...
+    async def store_feedback(self, feedback: Dict[str, Any]) -> None: ...
+    async def persist_feedback(self, session_id: str, feedback: List[Dict[str, Any]]) -> None: ...
+    """
+    Persists feedback for a specific chat session.
+
+    This asynchronous method stores the provided feedback data associated with
+    the specified session ID in a persistent storage system.
+
+    Args:
+        session_id (str): The unique identifier for the chat session.
+        feedback (List[Dict[str, Any]]): A list of feedback entries, where each entry
+            is represented as a dictionary containing feedback data.
+
+    Returns:
+        None: This method doesn't return any value.
+
+    Note:
+        The method is asynchronous and should be awaited when called.
+    """
+
+StorageType = TypeVar('StorageType', bound=StorageProtocol)
 
 logger = logging.getLogger(__name__)
 
 @dataclass
 class ChatResponse:
     text: str
-    confidence: float
+    confidence: float  
     model_version: str
     latency: float
     error: Optional[str] = None
 
-@dataclass 
+@dataclass
 class UIEvent:
     type: str
     data: Any
     timestamp: float = field(default_factory=time.time)
 
 class ChatbotInterface:
-    def __init__(self, model: torch.nn.Module, storage: ModelStorage, 
-                 max_history: int = 1000, max_input_len: int = 512):
-        """Initialize chatbot interface with configurable limits.
-        
-        Args:
-            model: The underlying ML model
-            storage: Model storage interface
-            max_history: Maximum number of interactions to store
-            max_input_len: Maximum allowed input length
-        """
+    event_handlers: Dict[str, Set[Callable[..., Any]]] = {}
+
+    def __init__(self, model: ModelType, storage: StorageType,
+                 max_history: int = 1000, max_input_len: int = 512,
+                 interactive: Optional[Any] = None) -> None:
         self.model = model
         self.storage = storage
-        self.history = []
-        self.feedback_scores = []
+        self.history: List[Tuple[str, str]] = []
+        self.feedback_scores: List[Dict[str, Any]] = []
         self.max_history = max_history
         self.max_input_len = max_input_len
-        self.session_id = None
-        self.response_cache = {}
-        self.cache_ttl = 3600  # 1 hour cache lifetime
-        self.event_handlers: Dict[str, Set[Callable]] = {
-            'message_processed': set(),
-            'feedback_stored': set(),
-            'session_cleared': set()
-        }
-        self.state_change = Event()
-        self.ui_queue = asyncio.Queue()
+        self.session_id: Optional[str] = None
+        self.response_cache: LRUCache[str, ChatResponse] = LRUCache(maxsize=1000)
+        self.feedback_cache: TTLCache[str, Dict[str, Any]] = TTLCache(maxsize=1000, ttl=3600)
+        self.context_cache: TTLCache[str, Dict[str, Any]] = TTLCache(maxsize=1000, ttl=3600)
+        self.state_change = asyncio.Event()
+        self.ui_queue: asyncio.Queue[UIEvent] = asyncio.Queue()
         self.ui_task = asyncio.create_task(self._process_ui_events())
+        self.cache_ttl = 3600  # 1 hour TTL default
+        self.interactive = interactive
 
-    def start_session(self) -> str:
+    async def start_session(self) -> str:
         """Start a new chat session."""
         import uuid
         self.session_id = str(uuid.uuid4())
         logger.info(f"Started new session {self.session_id}")
         return self.session_id
 
-    async def subscribe(self, event_type: str, handler: Callable):
+    async def subscribe(self, event_type: str, handler: Callable[..., Any]) -> None:
         """Subscribe to interface events"""
-        if event_type in self.event_handlers:
-            self.event_handlers[event_type].add(handler)
+        if event_type not in self.event_handlers:
+            self.event_handlers[event_type] = set()
+        self.event_handlers[event_type].add(handler)
 
-    async def _notify_handlers(self, event_type: str, data: Any):
+    async def _notify_handlers(self, event_type: str, data: Any) -> None:
         """Notify all handlers of an event"""
+        if event_type in self.event_handlers:  
+            for handler in self.event_handlers[event_type]:
+                await asyncio.create_task(handler(data))
+
+    async def _trigger_event(self, event_type: str, data: Any) -> None:
+        """Trigger event handlers"""
         if event_type in self.event_handlers:
             for handler in self.event_handlers[event_type]:
-                create_task(handler(data))
+                await handler(data)
 
-    async def process_message(self, message: str) -> ChatResponse:
-        """Process an incoming message and return a response.
-        
-        Args:
-            message: Input message string
-            
-        Returns:
-            ChatResponse containing the model's response
-            
-        Raises:
-            ValueError: If message is invalid
-            RuntimeError: If model processing fails
-        """
-        if not self.session_id:
-            self.start_session()
-
+    async def process_message(self, message: str, 
+                            context: Optional[Dict[str, Any]] = None) -> ChatResponse:
         try:
-            # Input validation
-            if not message or not isinstance(message, str):
-                raise ValueError("Invalid message format")
+            cache_key = self._generate_cache_key(message, context)
             
-            if len(message) > self.max_input_len:
-                raise ValueError(f"Message exceeds max length of {self.max_input_len}")
+            cached_response = self.response_cache.get(cache_key)
+            if cached_response and isinstance(cached_response, ChatResponse):
+                await self._trigger_event('cache_hit', {'message': message})
+                return cached_response
 
-            # Process input and generate response
+            await self._trigger_event('cache_miss', {'message': message})
+            response = await self._generate_response(message, context)
+            self.response_cache[cache_key] = response
+            
+            await self._trigger_event('response_generated', 
+                                    {'message': message, 'response': response})
+            return response
+
+        except Exception as exc:
+            error_msg = f"Error processing message: {str(exc)}"
+            logger.error(error_msg, exc_info=True)
+            await self._trigger_event('error', {'error': error_msg})
+            raise RuntimeError(error_msg) from exc
+
+    def _generate_cache_key(self, message: str, 
+                          context: Optional[Dict[str, Any]]) -> str:
+        # Generate deterministic cache key
+        components = [message]
+        if context:
+            components.extend(f"{k}:{v}" for k, v in sorted(context.items()))
+        return hashlib.sha256("|".join(components).encode()).hexdigest()
+
+    async def _generate_response(self, message: str,
+                               context: Optional[Dict[str, Any]] = None) -> ChatResponse:
+        """Generate model response"""
+        try:
             with torch.no_grad():
                 input_tensor = self._preprocess_message(message)
-                start_time = torch.cuda.Event(enable_timing=True)
-                end_time = torch.cuda.Event(enable_timing=True)
-                
-                start_time.record()
-                output = self.model(input_tensor)
-                end_time.record()
-                torch.cuda.synchronize()
-                
+                start_time = time.time()
+                output = self.model(input_tensor) 
+                latency = time.time() - start_time
                 response = self._postprocess_output(output)
-                latency = start_time.elapsed_time(end_time)
-                
-                # Manage history size
-                if len(self.history) >= self.max_history:
-                    self.history.pop(0)
-                    if self.feedback_scores:
-                        self.feedback_scores.pop(0)
-                        
-                self.history.append((message, response))
-                
-                logger.debug(f"Processed message in {latency}ms")
-                
-                await self._notify_handlers('message_processed', response)
-                
+
+                try:
+                    model_version = await self.storage.get_model_version()
+                except AttributeError:
+                    model_version = "unknown"
+
                 return ChatResponse(
                     text=response,
-                    confidence=float(output.max()),
-                    model_version=self.storage.get_model_version(),
+                    confidence=float(output.max().item()),
+                    model_version=model_version,
                     latency=latency
                 )
-
-        except ValueError as e:
-            logger.warning(f"Input validation error: {str(e)}")
+        except torch.cuda.OutOfMemoryError as exc:
+            error_msg = f"GPU memory exceeded: {str(exc)}"
+            logger.critical(error_msg, exc_info=True)
             return ChatResponse(
-                text="",
+                text="Server is overloaded, please try again later",
                 confidence=0.0,
-                model_version=self.storage.get_model_version(),
+                model_version="error",
                 latency=0.0,
-                error=str(e)
+                error=error_msg
             )
-        except Exception as e:
-            logger.error(f"Error processing message: {str(e)}", exc_info=True)
+        except (RuntimeError, ValueError, TypeError, AttributeError) as exc:
+            error_msg = f"Response generation failed: {str(exc)}"
+            logger.error(error_msg, exc_info=True)
             return ChatResponse(
-                text="",
+                text="Error generating response",
                 confidence=0.0,
-                model_version=self.storage.get_model_version(), 
+                model_version="error",
                 latency=0.0,
-                error="Internal processing error"
+                error=error_msg
             )
 
     @lru_cache(maxsize=1000)
@@ -164,8 +193,8 @@ class ChatbotInterface:
         probs = torch.softmax(output, dim=-1)
         tokens = torch.argmax(probs, dim=-1)
         return ''.join([chr(t) for t in tokens.squeeze()])
-        
-    async def store_feedback(self, response: ChatResponse, score: float):
+
+    async def store_feedback(self, response: ChatResponse, score: float) -> None:
         """Store user feedback for a response."""
         if not 0 <= score <= 1:
             raise ValueError("Score must be between 0 and 1")
@@ -185,14 +214,13 @@ class ChatbotInterface:
                 'score': float(score),
                 'timestamp': timestamp,
                 'session_id': self.session_id,
-                'model_version': self.storage.get_model_version(),
+                'model_version': await self.storage.get_model_version(),
                 'response_hash': response_hash
             }
             
             self.feedback_scores.append(feedback)
-            
-            # Cache response with feedback
-            self.response_cache[response_hash] = {
+            # Cache feedback separately from response
+            self.feedback_cache[response_hash] = {
                 'feedback': feedback,
                 'expires': timestamp + self.cache_ttl
             }
@@ -201,18 +229,18 @@ class ChatbotInterface:
             if hasattr(self.storage, 'store_feedback'):
                 await self.storage.store_feedback(feedback)
                 
-            logger.debug(f"Stored feedback score {score} for session {self.session_id}")
+            logger.debug("Stored feedback score %s for session %s", score, self.session_id)
             
             await self._notify_handlers('feedback_stored', feedback)
             
         except Exception as e:
-            logger.error(f"Error storing feedback: {str(e)}", exc_info=True)
+            logger.error("Error storing feedback: %s", str(e), exc_info=True)
             raise
 
-    async def clear_session(self):
+    async def clear_session(self) -> None:
         """Clear current session data and persist feedback."""
         try:
-            if self.feedback_scores:
+            if self.feedback_scores and self.session_id is not None:
                 # Attempt to persist feedback before clearing
                 if hasattr(self.storage, 'persist_feedback'):
                     await self.storage.persist_feedback(self.session_id, self.feedback_scores)
@@ -234,7 +262,7 @@ class ChatbotInterface:
         return [(msg, resp, score['score']) 
                 for (msg, resp), score in zip(self.history, self.feedback_scores)]
 
-    async def _process_ui_events(self):
+    async def _process_ui_events(self) -> None:
         """Process UI events from queue"""
         while True:
             try:
@@ -244,7 +272,7 @@ class ChatbotInterface:
             except Exception as e:
                 logger.error(f"Error processing UI event: {e}")
 
-    async def _handle_ui_event(self, event: UIEvent):
+    async def _handle_ui_event(self, event: UIEvent) -> None:
         """Handle UI events with proper error handling"""
         try:
             if event.type == "user_input":
@@ -252,6 +280,6 @@ class ChatbotInterface:
                 await self._notify_handlers("message_processed", response)
             elif event.type == "feedback":
                 await self.store_feedback(event.data["response"], event.data["score"])
-        except Exception as e:
-            logger.error(f"Error handling UI event: {e}")
+        except (KeyError, ValueError, RuntimeError) as e:
+            logger.error("Error handling UI event: %s", str(e))
             await self._notify_handlers("error", str(e))
