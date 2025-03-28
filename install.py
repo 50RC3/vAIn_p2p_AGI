@@ -14,7 +14,8 @@ def install_requirements():
         'python-dotenv',
         'psutil',
         'aiofiles',
-        'aiologger'
+        'aiologger',
+        'debugpy'  # Added debugpy for debugging support
     ]
     
     for package in requirements:

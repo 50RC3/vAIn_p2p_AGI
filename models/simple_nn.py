@@ -12,6 +12,82 @@ logger = logging.getLogger(__name__)
 class SimpleNNError(Exception):
     pass
 
+class SimpleNN(nn.Module):
+    """
+    A simple neural network implementation for basic inference tasks.
+    Simpler counterpart to the more complex AdvancedNN.
+    """
+    def __init__(self, config):
+        super(SimpleNN, self).__init__()
+        try:
+            # Extract configuration
+            self.input_dim = getattr(config, 'input_dim', 784)  # Default for MNIST
+            self.hidden_dim = getattr(config, 'hidden_dim', 128)
+            self.output_dim = getattr(config, 'output_dim', 10)  # Default 10 classes
+            self.dropout_rate = getattr(config, 'dropout', 0.1)
+            
+            # Create a simple feedforward neural network
+            self.model = nn.Sequential(
+                nn.Linear(self.input_dim, self.hidden_dim),
+                nn.ReLU(),
+                nn.Dropout(self.dropout_rate),
+                nn.Linear(self.hidden_dim, self.hidden_dim // 2),
+                nn.ReLU(),
+                nn.Dropout(self.dropout_rate),
+                nn.Linear(self.hidden_dim // 2, self.output_dim)
+            )
+            
+            # Initialize weights
+            self._init_weights()
+            
+            logger.info(f"Initialized SimpleNN with input_dim={self.input_dim}, "
+                        f"hidden_dim={self.hidden_dim}, output_dim={self.output_dim}")
+        
+        except Exception as e:
+            logger.error(f"Failed to initialize SimpleNN: {str(e)}")
+            raise SimpleNNError(f"Model initialization failed: {str(e)}")
+    
+    def _init_weights(self):
+        """Initialize model weights"""
+        for module in self.model:
+            if isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through the network"""
+        try:
+            # Ensure input has the right shape
+            if x.dim() > 2:
+                # Flatten all dimensions except batch dimension
+                x = x.view(x.size(0), -1)
+            
+            # Forward pass
+            return self.model(x)
+            
+        except Exception as e:
+            logger.error(f"Forward pass failed: {str(e)}")
+            raise SimpleNNError(f"Forward pass failed: {str(e)}")
+    
+    def save(self, path: str) -> None:
+        """Save model weights to disk"""
+        try:
+            torch.save(self.state_dict(), path)
+            logger.info(f"Model saved to {path}")
+        except Exception as e:
+            logger.error(f"Failed to save model: {str(e)}")
+            raise SimpleNNError(f"Model save failed: {str(e)}")
+    
+    def load(self, path: str) -> None:
+        """Load model weights from disk"""
+        try:
+            self.load_state_dict(torch.load(path))
+            logger.info(f"Model loaded from {path}")
+        except Exception as e:
+            logger.error(f"Failed to load model: {str(e)}")
+            raise SimpleNNError(f"Model load failed: {str(e)}")
+
 class AdvancedNN(nn.Module):
     def __init__(self, config: Dict):
         try:
