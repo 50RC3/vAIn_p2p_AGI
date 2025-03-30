@@ -2,11 +2,16 @@ import torch
 from torch.optim import Adam
 import torch.nn.functional as F
 import logging
-from typing import Optional, Dict, Tuple
+from typing import Optional, Dict, Tuple, TYPE_CHECKING
 import psutil
 import time
 from dataclasses import dataclass
 from .distillation import DistillationTrainer
+from core.interactive_utils import Session
+
+# Move the MemoryManager import inside TYPE_CHECKING block to avoid circular imports
+if TYPE_CHECKING:
+    from memory.memory_manager import MemoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +147,7 @@ class FederatedClient:
         self.optimizer.step()
         return loss.item()
 
-    async def coordinate_with_memory(self, memory_manager: MemoryManager) -> bool:
+    async def coordinate_with_memory(self, memory_manager: "MemoryManager") -> bool:
         """Coordinate with memory manager for efficient resource usage"""
         try:
             model_id = id(self.model)

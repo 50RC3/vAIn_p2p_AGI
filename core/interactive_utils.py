@@ -63,29 +63,25 @@ class Session:
         self._state: Dict[str, Any] = {}
         self._active = False
         
-    async def __aenter__(self) -> 'Session':
+    async def __aenter__(self):
         """Async context manager entry"""
         self._active = True
-        logger.info("Starting interactive session with level: %s", self.level)
+        logger.info(f"Starting interactive session with level: {self.level}")
         return self
         
-    async def __aexit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[Any]) -> None:
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit"""
         self._active = False
         if self.config.persistent_state:
             await self._save_state()
         logger.info("Interactive session ended")
         
-    async def get_confirmation(self, message: str, timeout: Optional[float] = None) -> bool:
+    async def get_confirmation(self, message: str, timeout: float = None) -> bool:
         """Get user confirmation for an action"""
-        if not self._active:
-            return True
-            
-        if self.level == InteractionLevel.NONE:
+        if not self._active or self.level == InteractionLevel.NONE:
             return True
             
         try:
-            # Implementation depends on your UI system
             # This is a simple console-based version
             print(f"\n{message} (y/n)")
             response = await asyncio.wait_for(
@@ -97,7 +93,7 @@ class Session:
             logger.warning("Confirmation timed out, proceeding with default action")
             return True
             
-    async def _save_progress(self, state: Optional[Dict[str, Any]] = None) -> None:
+    async def save_progress(self, state: Dict[str, Any] = None) -> None:
         """Save session progress"""
         if state:
             self._state.update(state)
@@ -106,19 +102,18 @@ class Session:
             
     async def _save_state(self) -> None:
         """Save session state to persistent storage"""
+        # Basic implementation - replace with your storage solution
         try:
-            state_file = os.path.join(SESSION_SAVE_PATH, f"{id(self)}_state.json")
-            if aiofiles:
-                async with aiofiles.open(state_file, 'w', encoding='utf-8') as f:
-                    await f.write(json.dumps(self._state))
-            else:
-                with open(state_file, 'w', encoding='utf-8') as f:
-                    json.dump(self._state, f)
-            logger.debug("Session state saved to %s", state_file)
-        except (IOError, OSError, PermissionError) as e:
-            logger.warning("Failed to save session state due to file error: %s", e)
-        except (TypeError, ValueError) as e:
-            logger.warning("Failed to save session state due to serialization error: %s", e)
+            import json
+            import os
+            
+            os.makedirs("./session_data", exist_ok=True)
+            session_id = id(self)
+            
+            with open(f"./session_data/session_{session_id}.json", "w") as f:
+                json.dump({k: str(v) for k, v in self._state.items()}, f)
+        except Exception as e:
+            logger.error(f"Failed to save session state: {e}")
         
     @staticmethod
     async def _get_input() -> str:

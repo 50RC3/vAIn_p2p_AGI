@@ -1,77 +1,53 @@
-import torch
-from .simple_nn import SimpleNN, AdvancedNN
-from .hybrid_memory_system import HybridMemorySystem
-from .reptile_meta.reptile_model import ReptileModel
-from .dnc.dnc_controller import DNCController
-from .vain_transformer.transformer import vAInTransformer
-from dataclasses import dataclass
-from typing import Dict, Any, Optional
-import psutil
+"""Models module for vAIn P2P AGI."""
 
-@dataclass
-class ModelOutput:
-    output: torch.Tensor
-    attention: Optional[torch.Tensor] = None
-    memory_state: Optional[Dict[str, Any]] = None
-    metadata: Optional[Dict[str, Any]] = None
+# Import only the SimpleNN and AdvancedNN directly
+# Avoid importing classes with complex dependencies
+try:
+    from .simple_nn import SimpleNN, AdvancedNN
+    __has_simple_nn = True
+except ImportError:
+    __has_simple_nn = False
+    import logging
+    logging.getLogger(__name__).warning("Could not import SimpleNN and AdvancedNN")
 
-@dataclass 
-class ResourceMetrics:
-    cpu_usage: float
-    memory_usage: float
-    gpu_usage: Optional[float] = None
+# Define what gets imported with "from models import *"
+__all__ = []
 
-@dataclass 
-class CognitiveState:
-    """Track cognitive system state"""
-    current_focus: torch.Tensor
-    memory_state: Dict[str, Any]
-    attention_patterns: Optional[torch.Tensor] = None
-    metacognitive_state: Optional[Dict] = None
+# Add SimpleNN and AdvancedNN to __all__ only if import succeeded
+if __has_simple_nn:
+    __all__.extend(['SimpleNN', 'AdvancedNN'])
 
-@dataclass
-class EvolutionMetrics:
-    """Metrics for cognitive evolution"""
-    learning_rate: float
-    adaptation_score: float
-    cognitive_complexity: float
-    response_quality: float
+# Dictionary of lazy-loaded model classes to avoid circular imports
+__lazy_modules = {}
+
+def __getattr__(name):
+    """Lazily load model classes to avoid circular imports"""
+    # Check if we've already loaded this module
+    if name in __lazy_modules:
+        return __lazy_modules[name]
     
-@dataclass
-class ModelState:
-    model_hash: str
-    version: int
-    timestamp: float
-    metrics: ResourceMetrics
-
-@dataclass
-class ModelRole:
-    """Define model roles in unified system"""
-    MEMORY = "memory"      # Memory-focused models (DNC, HMS)
-    PROCESSING = "processing"  # Processing models (Transformer)
-    META = "meta"         # Meta-learning models (Reptile)
-
-@dataclass
-class UnifiedModelConfig:
-    """Configuration for unified model system"""
-    role: str
-    memory_share: float = 0.3  # Portion of memory allocated
-    priority: int = 1
-    can_offload: bool = True
-
-__all__ = [
-    'SimpleNN', 'AdvancedNN', 'HybridMemorySystem', 
-    'ReptileModel', 'DNCController', 'vAInTransformer',
-    'ModelOutput', 'ModelRole', 'UnifiedModelConfig',
-    'CognitiveState', 'EvolutionMetrics'
-]
-
-# Add shared functionality
-def get_resource_metrics() -> ResourceMetrics:
-    metrics = ResourceMetrics(
-        cpu_usage=psutil.cpu_percent(),
-        memory_usage=psutil.virtual_memory().percent
-    )
-    if torch.cuda.is_available():
-        metrics.gpu_usage = torch.cuda.memory_allocated() / torch.cuda.max_memory_allocated()
-    return metrics
+    # Handle specific model types
+    if name == 'HybridMemorySystem':
+        try:
+            # Import only when requested to avoid circular dependency
+            from .hybrid_memory_system import HybridMemorySystem as cls
+            __lazy_modules[name] = cls
+            return cls
+        except ImportError as e:
+            import logging
+            logging.getLogger(__name__).error(f"Error importing HybridMemorySystem: {e}")
+            raise
+    
+    # Add other lazy imports as needed
+    elif name == 'DNCController':
+        try:
+            from .dnc.dnc_controller import DNCController as cls
+            __lazy_modules[name] = cls
+            return cls
+        except ImportError as e:
+            import logging
+            logging.getLogger(__name__).error(f"Error importing DNCController: {e}")
+            raise
+    
+    # If the name isn't recognized, raise AttributeError
+    raise AttributeError(f"module 'models' has no attribute '{name}'")

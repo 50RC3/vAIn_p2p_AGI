@@ -1,31 +1,40 @@
 import asyncio
 import aiohttp
 import logging
-from typing import Dict, Any, Optional
+import time
+import json
+import base64
+import torch
+from typing import Dict, Any, Optional, List, Union, Tuple
+from dataclasses import dataclass
+from collections import defaultdict
 from core.constants import INTERACTION_TIMEOUTS, InteractionLevel
 from core.interactive_utils import InteractiveSession, InteractiveConfig
 from .rate_limiter import AdaptiveRateLimiter
+from .gossip_protocol import GossipManager
 from training.compression import AdaptiveCompression
 
 logger = logging.getLogger(__name__)
 
+class NodeCommunicationError(Exception):
+    """Base exception for node communication errors"""
+    pass
+
 class NodeCommunication:
     def __init__(self, node_id: str, interactive: bool = True):
         self.node_id = node_id
-        self.message_queue = asyncio.Queue()
         self.interactive = interactive
-        self.session = None
+        self.session: Optional[InteractiveSession] = None
+        self.message_queue = asyncio.Queue()
         self._interrupt_requested = False
         self._retry_count = 3
         self._interactive_timeout = INTERACTION_TIMEOUTS["batch"]
         self._non_interactive_timeout = INTERACTION_TIMEOUTS["default"]
-        # Add session pool
         self._session_pool: Dict[str, aiohttp.ClientSession] = {}
         self._pool_lock = asyncio.Lock()
         self._max_pool_size = 10
         self._session_ttl = 300  # 5 minutes
         
-        # Add rate limiting
         self._rate_limiter = AdaptiveRateLimiter(
             initial_rate=1000.0,  # 1KB/s initial rate
             window_size=60,       # 1 minute window
@@ -34,7 +43,6 @@ class NodeCommunication:
         self._pending_messages: Dict[str, asyncio.Queue] = defaultdict(asyncio.Queue)
         self._worker_tasks: Set[asyncio.Task] = set()
         
-        # Add compression
         self.compressor = AdaptiveCompression(
             base_compression_rate=0.1,  # Start with 10x compression
             min_rate=0.01,
@@ -57,23 +65,19 @@ class NodeCommunication:
         async with self._pool_lock:
             now = asyncio.get_event_loop().time()
             
-            # Cleanup expired sessions
             expired = [node for node, (session, timestamp) in 
                       self._session_pool.items() if now - timestamp > self._session_ttl]
             for node in expired:
                 session, _ = self._session_pool.pop(node)
                 await session.close()
 
-            # Return existing valid session
             if target_node in self._session_pool:
                 session, timestamp = self._session_pool[target_node]
                 if now - timestamp <= self._session_ttl:
-                    self._session_pool[target_node] = (session, now)  # Update timestamp
+                    self._session_pool[target_node] = (session, now)
                     return session
 
-            # Create new session if pool not full
             if len(self._session_pool) >= self._max_pool_size:
-                # Remove oldest session
                 oldest_node = min(self._session_pool.keys(), 
                                 key=lambda k: self._session_pool[k][1])
                 old_session, _ = self._session_pool.pop(oldest_node)
@@ -102,16 +106,13 @@ class NodeCommunication:
             msg_id = f"{self.node_id}_{time.time()}_{target_node}"
             await self.msg_queue.put(msg_id, message)
             
-            # Select peers for gossip propagation
             peers = self.gossip.select_peers(self._get_peers(), {target_node})
             
-            # Asynchronously propagate to peers
             propagation_tasks = [
                 asyncio.create_task(self._send_message_internal(peer, message))
                 for peer in peers
             ]
             
-            # Don't wait for responses
             asyncio.gather(*propagation_tasks, return_exceptions=True)
             return True
             
@@ -122,7 +123,6 @@ class NodeCommunication:
     async def _compress_message(self, message: Dict[str, Any]) -> tuple[Dict, float]:
         """Compress message using edge computing when available"""
         try:
-            # Attempt edge compression
             if self.edge_service:
                 compressed = await self.edge_service.offload_task(
                     "compression",
@@ -131,18 +131,15 @@ class NodeCommunication:
                 if compressed:
                     return compressed, compressed.get('ratio', 1.0)
             
-            # Fallback to local compression
             msg_tensor = self._dict_to_tensor(message)
             original_size = len(str(message))
             
-            # Continue with existing compression logic
             compressed, ratio = await self.compressor.compress_model_updates({
                 'message': msg_tensor
             })
             
             compressed_size = len(str(compressed))
             
-            # Update compression statistics
             self._compression_stats.update({
                 'total_original': self._compression_stats['total_original'] + original_size,
                 'total_compressed': self._compression_stats['total_compressed'] + compressed_size,
@@ -158,12 +155,9 @@ class NodeCommunication:
             return message, 1.0
 
     def _dict_to_tensor(self, d: Dict) -> torch.Tensor:
-        """Convert dictionary to tensor for compression"""
-        import torch
-        import json
-        # Convert dict to bytes then to tensor
-        bytes_data = json.dumps(d).encode()
-        return torch.tensor([int(b) for b in bytes_data], dtype=torch.float32)
+        """Convert dictionary to tensor for transmission"""
+        base_size = len(str(d).encode())
+        return base_size
 
     async def _send_message_internal(self, target_node: str, message: Dict[str, Any]) -> bool:
         """Internal message sending implementation"""
@@ -236,21 +230,17 @@ class NodeCommunication:
             if not hasattr(self, 'mobile_optimizer'):
                 self.mobile_optimizer = MobileOptimizer()
 
-            # Compress message for mobile
             compressed_msg = self.mobile_optimizer.compress_for_mobile(message)
             
-            # Add metadata for mobile handling
             compressed_msg['_mobile'] = True
             compressed_msg['_timestamp'] = time.time()
             
-            # Track metrics
             metrics = {
                 'original_size': len(str(message)),
                 'compressed_size': len(str(compressed_msg)),
                 'target_node': target_node
             }
             
-            # Only send if compression achieved meaningful reduction
             if metrics['compressed_size'] < metrics['original_size'] * 0.8:
                 success = await self.send_message(target_node, compressed_msg)
                 if success:
@@ -275,15 +265,12 @@ class NodeCommunication:
         """Enhanced cleanup with message queue"""
         await self.msg_queue.cleanup_old_messages()
         try:
-            # Cancel all worker tasks
             for task in self._worker_tasks:
                 task.cancel()
             await asyncio.gather(*self._worker_tasks, return_exceptions=True)
             
-            # Cleanup rate limiter
             await self._rate_limiter.cleanup()
             
-            # Cleanup session pool
             async with self._pool_lock:
                 for session, _ in self._session_pool.values():
                     await session.close()
@@ -297,7 +284,7 @@ class NodeCommunication:
 
     async def handle_mobile_connection(self, mobile_node: str):
         """Configure connection for mobile optimization"""
-        self.compression.set_target_rate(0.1)  # Increase compression
+        self.compression.set_target_rate(0.1)
         self.batch_size = self._calculate_mobile_batch_size()
 
     def _calculate_mobile_batch_size(self) -> int:
@@ -305,6 +292,5 @@ class NodeCommunication:
         base_size = 32
         if hasattr(self, 'network_monitor'):
             quality = self.network_monitor.get_quality_sync()
-            # Adjust batch size based on network quality (0-1)
             return max(1, int(base_size * quality))
         return base_size

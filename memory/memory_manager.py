@@ -5,6 +5,7 @@ import torch
 from typing import Dict, Optional, Any
 from pathlib import Path
 import json
+from dataclasses import dataclass
 
 from core.interactive_utils import InteractiveSession, InteractiveConfig, InteractionLevel
 from network.caching import CacheManager, CacheLevel, CachePolicy

@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from cryptography.fernet import Fernet
 from datetime import datetime
 import logging
@@ -12,21 +12,64 @@ from core.interactive_utils import InteractiveSession, InteractiveConfig, Intera
 from core.constants import INTERACTION_TIMEOUTS
 from cryptography.exceptions import InvalidKey, InvalidSignature
 from cryptography.fernet import InvalidToken
+from training.compression import AdaptiveCompression  # Fixed import path
+from security.key_history import KeyHistory  # Import from security module
 
 logger = logging.getLogger(__name__)
 
 @dataclass
-class KeyHistory:
-    current_version: int = 0
-    keys: Dict[int, bytes] = None
-
-    def __post_init__(self):
-        if self.keys is None:
-            self.keys = {}
+class Message:
+    """Message class for network communication"""
+    sender: str
+    recipient: Optional[str]
+    message_type: str
+    content: Dict[str, Any]
+    timestamp: float = field(default_factory=time.time)
+    message_id: Optional[str] = None
+    is_encrypted: bool = False
+    signature: Optional[bytes] = None
+    ttl: int = 3600  # Time-to-live in seconds
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert message to dictionary format"""
+        result = {
+            "sender": self.sender,
+            "type": self.message_type,
+            "content": self.content,
+            "timestamp": self.timestamp
+        }
+        if self.recipient:
+            result["recipient"] = self.recipient
+        if self.message_id:
+            result["message_id"] = self.message_id
+        if self.is_encrypted:
+            result["encrypted"] = True
+        if self.signature:
+            result["signature"] = base64.b64encode(self.signature).decode('utf-8')
+        return result
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Message':
+        """Create message instance from dictionary"""
+        signature = None
+        if "signature" in data:
+            signature = base64.b64decode(data["signature"])
+        
+        return cls(
+            sender=data.get("sender", "unknown"),
+            recipient=data.get("recipient"),
+            message_type=data.get("type", "unknown"),
+            content=data.get("content", {}),
+            timestamp=data.get("timestamp", time.time()),
+            message_id=data.get("message_id"),
+            is_encrypted=data.get("encrypted", False),
+            signature=signature,
+            ttl=data.get("ttl", 3600)
+        )
 
 class SecureMessageProtocol:
     def __init__(self, encryption_key: bytes, interactive: bool = True):
-        self.key_history = KeyHistory()
+        self.key_history = KeyHistory()  # Using the imported KeyHistory class
         self.fernet = Fernet(encryption_key)
         self.signing_key = ed25519.Ed25519PrivateKey.generate()
         self.verify_key = self.signing_key.public_key()
@@ -50,6 +93,8 @@ class SecureMessageProtocol:
         # Key rotation settings
         self.key_rotation_interval = 86400  # 24 hours in seconds
         self._lock = asyncio.Lock()
+        self.current_key_version = 0
+        # Initialize the key history with the initial keys
         self.current_key_version = self.key_history.add_keys(encryption_key, self.signing_key)
 
     async def rotate_keys(self) -> bool:
@@ -184,121 +229,33 @@ class SecureMessageProtocol:
             logger.error(f"Unexpected error in message decoding: {e}")
             return None
 
-    async def decode_message_interactive(self, encoded_message: Dict[str, bytes]) -> Optional[Dict[str, Any]]:
-        """Decode message with enhanced security checks"""
-        try:
-            if not all(k in encoded_message for k in ['data', 'signature', 'public_key', 'key_version']):
-                async with self._metrics_lock:
-                    self.metrics['invalid_attempts'] += 1
-                raise ValueError("Missing required message fields")
-
-            # Prune old sessions periodically
-            if time.time() - self.metrics['last_key_rotation'] > self.session_prune_interval:
-                await self.prune_old_sessions()
-
-            await self.check_key_rotation()
-            try:
-                if self.interactive:
-                    verify_timeout = INTERACTION_TIMEOUTS.get("verify", 30)
-                    emergency_timeout = INTERACTION_TIMEOUTS.get("emergency", 15)
-                    
-                    self.session = InteractiveSession(
-                        level=InteractionLevel.NORMAL,
-                        config=InteractiveConfig(
-                            timeout=verify_timeout,
-                            persistent_state=True,
-                            safe_mode=True
-                        )
-                    )
-
-                async with self.session:
-                    # Validate required fields
-                    required_fields = {'data', 'signature', 'public_key'}
-                    missing_fields = required_fields - set(encoded_message.keys())
-                    if missing_fields:
-                        logger.error(f"Missing required message fields: {missing_fields}")
-                        async with self._metrics_lock:
-                            self.metrics['verification_failures'] += 1
-                        return None
-
-                    try:
-                        if 'key_version' in encoded_message:
-                            version = encoded_message['key_version']
-                            keys = self.key_history.get_keys(version)
-                            if keys:
-                                temp_fernet = Fernet(keys[0])
-                                temp_signing_key = keys[1]
-                                # Use historical keys for decryption
-                                # ...rest of decoding logic...
-                            else:
-                                logger.error(f"Required key version {version} not found")
-                                return None
-
-                        result = self.decode_message(encoded_message)
-                        if result:
-                            async with self._metrics_lock:
-                                self.metrics['messages_processed'] += 1
-                            
-                            # Validate message size after decoding
-                            msg_size = len(json.dumps(result))
-                            if msg_size > 1024 * 1024:  # 1MB limit
-                                if self.interactive:
-                                    proceed = await self.session.confirm_with_timeout(
-                                        f"Large decoded message ({msg_size/1024:.1f}KB). Process?",
-                                        timeout=emergency_timeout
-                                    )
-                                    if not proceed:
-                                        return None
-                        else:
-                            async with self._metrics_lock:
-                                self.metrics['verification_failures'] += 1
-                        return result
-
-                    except InvalidSignature:
-                        logger.error("Message signature verification failed")
-                        async with self._metrics_lock:
-                            self.metrics['verification_failures'] += 1
-                            self.metrics['last_error'] = "Invalid signature"
-                        raise
-                    except InvalidToken:
-                        logger.error("Message decryption failed - invalid token")
-                        async with self._metrics_lock:
-                            self.metrics['verification_failures'] += 1
-                            self.metrics['last_error'] = "Invalid token"
-                        raise
-                    except InvalidKey:
-                        logger.error("Message decryption failed - invalid key")
-                        async with self._metrics_lock:
-                            self.metrics['verification_failures'] += 1
-                            self.metrics['last_error'] = "Invalid key"
-                        raise
-                    except Exception as e:
-                        logger.error(f"Message decoding failed: {str(e)}")
-                        async with self._metrics_lock:
-                            self.metrics['verification_failures'] += 1
-                            self.metrics['last_error'] = str(e)
-                        raise
-
-            except Exception as e:
-                logger.error(f"Interactive decoding failed: {str(e)}")
-                raise
-            finally:
-                if self.session:
-                    await self.session.__aexit__(None, None, None)
-
     async def decode_message_interactive(self, encoded_message: Dict) -> Optional[Dict]:
+        """Interactive message decoding with decompression support"""
         try:
             # Check if message is compressed
             if 'compressed' in encoded_message:
                 encoded_message = await self._decompress_message(encoded_message)
                 
             # Continue with normal decoding
-            return await super().decode_message_interactive(encoded_message)
-            
+            if self.interactive:
+                self.session = InteractiveSession(
+                    level=InteractionLevel.NORMAL,
+                    config=InteractiveConfig(
+                        timeout=INTERACTION_TIMEOUTS["default"],
+                        persistent_state=True,
+                        safe_mode=True
+                    )
+                )
+            async with self.session:
+                return await self._decode_message_secure(encoded_message)
+                
         except Exception as e:
             logger.error(f"Interactive decoding failed: {str(e)}")
             return None
-            
+        finally:
+            if self.session:
+                await self.session.__aexit__(None, None, None)
+
     async def _decompress_message(self, message: Dict) -> Dict:
         """Decompress message using adaptive compression"""
         try:
@@ -311,9 +268,12 @@ class SecureMessageProtocol:
 
     def _tensor_to_dict(self, tensor) -> Dict:
         """Convert tensor back to dictionary"""
-        import json
-        bytes_data = bytes([int(i) for i in tensor.tolist()])
-        return json.loads(bytes_data.decode())
+        try:
+            bytes_data = bytes([int(i) for i in tensor.tolist()])
+            return json.loads(bytes_data.decode())
+        except Exception as e:
+            logger.error(f"Tensor conversion failed: {str(e)}")
+            raise
 
     def request_shutdown(self):
         """Request graceful shutdown"""

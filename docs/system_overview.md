@@ -78,6 +78,22 @@
 - TODO: Memory optimization
 - TODO: Enhanced persistence
 
+### 1.8 Metrics & Monitoring (75% Complete)
+- Resource metrics collection ✓
+  - CPU, memory, disk tracking ✓
+  - Network I/O monitoring ✓
+  - GPU utilization tracking ✓
+- Network health monitoring ✓
+  - Peer counts and connectivity ✓
+  - Latency measurements ✓
+  - Success rate tracking ✓
+- Metrics storage and persistence ✓
+- Alert generation system ✓
+- Dashboard integration (basic) ✓
+- TODO: Advanced analytics
+- TODO: Predictive monitoring
+- TODO: Automated interventions
+
 ## 2. Development Status
 
 ### 2.1 Current Priorities
@@ -86,25 +102,28 @@
 3. Implementing advanced compression algorithms
 4. Building comprehensive test infrastructure
 5. Completing NORMAL interaction mode
+6. Enhancing metrics and monitoring capabilities
 
 ### 2.2 Known Issues
 - Node scaling hits bottleneck at ~100 nodes
 - High bandwidth usage during training
 - Basic security implementation needs hardening
 - Limited support for mobile/low-power devices
+- Metrics storage requires optimization for long-term persistence
 
 ### 2.3 Next Steps
 1. Implement advanced P2P optimizations
 2. Improve compression algorithms
 3. Enhance security measures
 4. Add automated testing
+5. Expand metrics dashboard capabilities
 
 ## 3. Getting Involved
 
 While vAIn is currently my solo project, I welcome feedback and discussions about its development. I'm documenting everything carefully to make future collaboration smoother.
 
-Contact: vincent@vain.dev
-GitHub: github.com/vincent/vAIn_p2p_AGI
+Contact: vjjvr.vincent@gmail.com
+GitHub: github.com/50RC3/vAIn_p2p_AGI
 
 # vAIn API Reference - Development Build
 
@@ -121,3 +140,6 @@ GitHub: github.com/vincent/vAIn_p2p_AGI
 - POST `/api/model/update` (30% implemented)
 - GET `/api/metrics/cluster` (45% implemented)
 - POST `/api/node/peer-exchange` (In development)
+- GET `/api/metrics/system` ✓
+- GET `/api/metrics/network` ✓
+- GET `/api/metrics/training` (70% implemented)

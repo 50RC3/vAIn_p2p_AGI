@@ -5,20 +5,35 @@ __version__ = '0.2.1'
 try:
     from .federated_training import FederatedTraining
     from .federated_client import FederatedClient
-    from .contrastive_loss import ContrastiveLoss
-    from .clustering_loss import ClusteringLoss
-    from .meta_reptile import MetaReptile
-    from .distillation import DistillationTrainer
-    from .local_trainer import LocalTrainer
+    # Fix: Import from utils.metrics instead of training.metrics
+    from utils.metrics import (
+        compute_accuracy as calculate_accuracy,
+        compute_loss as calculate_loss
+    )
+    # Keep importing calculate_data_quality from training.metrics if it exists there
+    from .metrics import calculate_data_quality
+    
+    from .compression import (
+        AdaptiveCompression,
+        CompressionStats,
+        CompressionError
+    )
+    from .model_optimizer import ModelOptimizer
+    from .mobile_optimization import MobileOptimizer
+    from .dnc_loss import DNCLoss
 except ImportError as e:
     raise ImportError(f"Failed to import required training components: {e}")
 
 __all__ = [
     'FederatedTraining',
-    'FederatedClient', 
-    'ContrastiveLoss',
-    'ClusteringLoss',
-    'MetaReptile',
-    'DistillationTrainer',
-    'LocalTrainer'
+    'FederatedClient',
+    'calculate_accuracy',
+    'calculate_loss',
+    'calculate_data_quality',
+    'AdaptiveCompression',
+    'CompressionStats',
+    'CompressionError',
+    'ModelOptimizer',
+    'MobileOptimizer',
+    'DNCLoss'
 ]

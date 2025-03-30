@@ -8,7 +8,7 @@ from core.constants import INTERACTION_TIMEOUTS
 
 logger = logging.getLogger(__name__)
 
-class VAInTransformer(nn.Module):
+class vAInTransformer(nn.Module):  # Changed from VAInTransformer to vAInTransformer
     def __init__(self, 
                  input_dim: int,
                  hidden_dim: int,
@@ -26,6 +26,7 @@ class VAInTransformer(nn.Module):
         self._interrupt_requested = False
         self.memory_threshold = memory_threshold
         self.encoder = nn.Linear(input_dim, hidden_dim)  # Placeholder for actual encoder
+
     async def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.session is None:
             self.session = await self._register_session()
@@ -38,6 +39,7 @@ class VAInTransformer(nn.Module):
         except Exception as e:
             logger.error("Forward pass failed: %s", str(e))
             raise
+
     async def _register_session(self) -> Session:
         if not self._session_registered:
             self.session = Session(
@@ -53,6 +55,7 @@ class VAInTransformer(nn.Module):
             await self.session.__aenter__()
             self._session_registered = True
         return self.session
+
     async def forward_interactive(self, x) -> torch.Tensor:
         """Interactive forward pass with resource monitoring"""
         if not self.interactive:
@@ -84,6 +87,7 @@ class VAInTransformer(nn.Module):
             if self.session:
                 await self.session.save_progress({"stage": "error", "error": str(e)})
             raise
+
     async def _check_resources(self) -> bool:
         """Check system resources"""
         try:
@@ -98,12 +102,7 @@ class VAInTransformer(nn.Module):
             return True
         except Exception as e:
             logger.error(f"Resource check failed: {str(e)}")
-            return True
+            return False
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.encoder(x)
-            logger.error(f"Resource check failed: {str(e)}")
-            return True
-
-    def forward(self, x):
         return self.encoder(x)

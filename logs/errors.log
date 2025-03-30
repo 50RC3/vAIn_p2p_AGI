@@ -1,0 +1,139 @@
+2025-03-29 21:41:02 [ERROR] models.simple_nn (simple_nn.py:215): Failed to initialize transformer model: gpt2-small is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `huggingface-cli login` or by passing `token=<your_token>`
+2025-03-29 21:46:05 [ERROR] models.simple_nn (simple_nn.py:215): Failed to initialize transformer model: gpt2-small is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `huggingface-cli login` or by passing `token=<your_token>`
+2025-03-30 01:38:51 [ERROR] models.simple_nn (simple_nn.py:215): Failed to initialize transformer model: gpt2-small is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `huggingface-cli login` or by passing `token=<your_token>`
+2025-03-30 01:38:59 [ERROR] ai_core.chatbot.interface (interface.py:355): Error processing message: 'ChatbotInterface' object has no attribute '_trigger_event'
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\chatbot\interface.py", line 331, in process_message
+    await self._trigger_event('cache_miss', {'message': message})
+          ^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ChatbotInterface' object has no attribute '_trigger_event'
+2025-03-30 01:38:59 [ERROR] ai_core.ui.cli_interface (cli_interface.py:106): Error processing message
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\chatbot\interface.py", line 331, in process_message
+    await self._trigger_event('cache_miss', {'message': message})
+          ^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ChatbotInterface' object has no attribute '_trigger_event'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\ui\cli_interface.py", line 72, in start
+    response = await self.chatbot.process_message(user_input)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\chatbot\interface.py", line 356, in process_message
+    await self._trigger_event('error', {'error': error_msg})
+          ^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ChatbotInterface' object has no attribute '_trigger_event'
+2025-03-30 01:42:49 [ERROR] models.simple_nn (simple_nn.py:215): Failed to initialize transformer model: gpt2-small is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `huggingface-cli login` or by passing `token=<your_token>`
+2025-03-30 01:46:20 [ERROR] models.simple_nn (simple_nn.py:215): Failed to initialize transformer model: gpt2-small is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `huggingface-cli login` or by passing `token=<your_token>`
+2025-03-30 11:57:08 [ERROR] ai_core.chatbot.interface (interface.py:515): Response generation failed: mat1 and mat2 must have the same dtype, but got Long and Float
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\chatbot\interface.py", line 466, in _generate_response
+    output = self.model(input_tensor)
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\models\simple_nn.py", line 75, in forward
+    return self.base_model(x)
+           ~~~~~~~~~~~~~~~^^^
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\.venv\Lib\site-packages\torch\nn\modules\container.py", line 250, in forward
+    input = module(input)
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\.venv\Lib\site-packages\torch\nn\modules\linear.py", line 125, in forward
+    return F.linear(input, self.weight, self.bias)
+           ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: mat1 and mat2 must have the same dtype, but got Long and Float
+2025-03-30 13:55:18 [ERROR] ai_core.chatbot.interface (interface.py:967): Error clearing session: 'ChatbotInterface' object has no attribute '_notify_handlers'
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\ui\cli_interface.py", line 42, in start
+    session_id = await self.chatbot.start_session()
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ChatbotInterface' object has no attribute 'start_session'. Did you mean: 'clear_session'?
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\chatbot\interface.py", line 964, in clear_session
+    await self._notify_handlers('session_cleared', old_session)
+          ^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ChatbotInterface' object has no attribute '_notify_handlers'
+2025-03-30 13:55:18 [ERROR] root (main.py:142): Error setting up interface: 'ChatbotInterface' object has no attribute '_notify_handlers'
+2025-03-30 13:55:18 [ERROR] root (main.py:186): Fatal error: 'ChatbotInterface' object has no attribute '_notify_handlers'
+2025-03-30 17:21:09 [ERROR] ai_core.chatbot.interface (interface.py:967): Error clearing session: 'ChatbotInterface' object has no attribute '_notify_handlers'
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\ui\cli_interface.py", line 42, in start
+    session_id = await self.chatbot.start_session()
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ChatbotInterface' object has no attribute 'start_session'. Did you mean: 'clear_session'?
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\chatbot\interface.py", line 964, in clear_session
+    await self._notify_handlers('session_cleared', old_session)
+          ^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ChatbotInterface' object has no attribute '_notify_handlers'
+2025-03-30 17:21:09 [ERROR] root (main.py:142): Error setting up interface: 'ChatbotInterface' object has no attribute '_notify_handlers'
+2025-03-30 17:21:09 [ERROR] root (main.py:186): Fatal error: 'ChatbotInterface' object has no attribute '_notify_handlers'
+2025-03-30 17:49:37 [ERROR] ai_core.chatbot.interface (interface.py:967): Error clearing session: 'ChatbotInterface' object has no attribute '_notify_handlers'
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\ui\cli_interface.py", line 42, in start
+    session_id = await self.chatbot.start_session()
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ChatbotInterface' object has no attribute 'start_session'. Did you mean: 'clear_session'?
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\chatbot\interface.py", line 964, in clear_session
+    await self._notify_handlers('session_cleared', old_session)
+          ^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ChatbotInterface' object has no attribute '_notify_handlers'
+2025-03-30 17:49:37 [ERROR] root (main.py:142): Error setting up interface: 'ChatbotInterface' object has no attribute '_notify_handlers'
+2025-03-30 17:49:37 [ERROR] root (main.py:186): Fatal error: 'ChatbotInterface' object has no attribute '_notify_handlers'
+2025-03-30 17:55:00 [ERROR] root (main.py:142): Error setting up interface: 'ChatbotInterface' object has no attribute 'subscribe'
+2025-03-30 17:55:00 [ERROR] root (main.py:186): Fatal error: 'ChatbotInterface' object has no attribute 'subscribe'
+2025-03-30 17:58:01 [ERROR] root (main.py:142): Error setting up interface: 'ChatbotInterface' object has no attribute 'subscribe'
+2025-03-30 17:58:01 [ERROR] root (main.py:186): Fatal error: 'ChatbotInterface' object has no attribute 'subscribe'
+2025-03-30 18:00:13 [ERROR] root (main.py:142): Error setting up interface: object NoneType can't be used in 'await' expression
+2025-03-30 18:00:13 [ERROR] root (main.py:186): Fatal error: object NoneType can't be used in 'await' expression
+2025-03-30 18:02:07 [ERROR] root (main.py:142): Error setting up interface: object NoneType can't be used in 'await' expression
+2025-03-30 18:02:07 [ERROR] root (main.py:186): Fatal error: object NoneType can't be used in 'await' expression
+2025-03-30 18:03:34 [ERROR] root (main.py:142): Error setting up interface: object NoneType can't be used in 'await' expression
+2025-03-30 18:03:34 [ERROR] root (main.py:186): Fatal error: object NoneType can't be used in 'await' expression
+2025-03-30 18:05:49 [ERROR] ai_core.learning.unsupervised (unsupervised.py:193): Error clustering text: This KMeans instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.
+2025-03-30 18:05:49 [ERROR] ai_core.learning.unsupervised (unsupervised.py:193): Error clustering text: This KMeans instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.
+2025-03-30 18:05:58 [ERROR] ai_core.learning.unsupervised (unsupervised.py:193): Error clustering text: This KMeans instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.
+2025-03-30 18:05:58 [ERROR] ai_core.learning.unsupervised (unsupervised.py:193): Error clustering text: This KMeans instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.
+2025-03-30 18:13:41 [ERROR] ai_core.learning.unsupervised (unsupervised.py:193): Error clustering text: This KMeans instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.
+2025-03-30 18:13:41 [ERROR] ai_core.learning.unsupervised (unsupervised.py:193): Error clustering text: This KMeans instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.
+2025-03-30 18:17:40 [ERROR] ai_core.learning.unsupervised (unsupervised.py:193): Error clustering text: This KMeans instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.
+2025-03-30 18:17:54 [ERROR] root (main.py:189): ChatbotInterface missing process_message method
+2025-03-30 18:17:54 [ERROR] root (main.py:206): Error setting up interface: Interface missing required methods
+2025-03-30 18:17:54 [ERROR] root (main.py:217): Failed to set up interface. Exiting.
+2025-03-30 19:42:25 [ERROR] ai_core.chatbot.interface (interface.py:351): Failed to initialize learning modules: RLConfig.__init__() got an unexpected keyword argument 'device'
+2025-03-30 19:45:59 [ERROR] ai_core.chatbot.interface (interface.py:351): Failed to initialize learning modules: RLConfig.__init__() got an unexpected keyword argument 'device'
+2025-03-30 20:16:58 [ERROR] ai_core.chatbot.interface (interface.py:350): Failed to initialize learning modules: RLTrainer.__init__() got an unexpected keyword argument 'embedder'
+2025-03-30 20:27:11 [ERROR] ai_core.chatbot.interface (interface.py:350): Failed to initialize learning modules: RLTrainer.__init__() got an unexpected keyword argument 'embedder'
+2025-03-30 20:34:05 [ERROR] ai_core.chatbot.interface (interface.py:344): Failed to initialize learning modules: name 'PrioritizedReplayBuffer' is not defined
+2025-03-30 20:34:05 [ERROR] root (main.py:334): Error setting up monitoring dashboard: name 'dataclass' is not defined
+2025-03-30 20:39:58 [ERROR] ai_core.chatbot.interface (interface.py:345): Failed to initialize learning modules: name 'PrioritizedReplayBuffer' is not defined
+2025-03-30 22:22:23 [ERROR] ai_core.chatbot.interface (interface.py:345): Failed to initialize learning modules: name 'PrioritizedReplayBuffer' is not defined
+2025-03-30 22:26:14 [ERROR] ai_core.chatbot.interface (interface.py:345): Failed to initialize learning modules: name 'PrioritizedReplayBuffer' is not defined
+2025-03-30 22:36:25 [ERROR] ai_core.learning.unsupervised (unsupervised.py:90): Error predicting cluster: 'PCA' object has no attribute 'components_'

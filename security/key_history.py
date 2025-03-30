@@ -35,3 +35,11 @@ class KeyHistory:
             if current_time - self.encryption_keys[version][1] > self.max_key_age:
                 del self.encryption_keys[version]
                 del self.signing_keys[version]
+                
+    def remove_version(self, version: int) -> bool:
+        """Remove a specific key version"""
+        if version in self.encryption_keys:
+            del self.encryption_keys[version]
+            del self.signing_keys[version]
+            return True
+        return False

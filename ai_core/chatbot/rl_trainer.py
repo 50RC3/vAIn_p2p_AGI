@@ -1,190 +1,352 @@
+"""
+Reinforcement Learning Trainer for the chatbot interface.
+Implements online learning based on user feedback.
+"""
+
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
 import logging
 import asyncio
-from typing import List, Tuple, Dict, Optional, Callable, Any
+import time
+import random
+import numpy as np
+from typing import Dict, List, Optional, Callable, Any, Tuple
 from dataclasses import dataclass, field
+from collections import deque
 
 logger = logging.getLogger(__name__)
 
 @dataclass
 class RLConfig:
-    gamma: float = 0.99
-    lr: float = 0.001
+    """Configuration for reinforcement learning"""
+    learning_rate: float = 0.001
     batch_size: int = 32
-    update_interval: int = 100
-    memory_size: int = 1000
-    min_samples_to_train: int = 100
-    max_batch_retries: int = 3
-    device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    priority_alpha: float = 0.6  # Priority sampling parameter
-    priority_beta: float = 0.4   # Importance sampling parameter
-    grad_accum_steps: int = 4    # Number of steps for gradient accumulation
+    gamma: float = 0.99
+    update_interval: int = 1000
+    memory_size: int = 10000
+    min_samples_to_train: int = 64
+    epsilon_start: float = 1.0
+    epsilon_end: float = 0.1
+    epsilon_decay: int = 10000
+    training_frequency: int = 60  # seconds
+    prioritized_replay: bool = True
+    alpha: float = 0.6
+    beta: float = 0.4
+    
+    def __post_init__(self):
+        """Initialize device after construction"""
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 @dataclass
 class TrainerState:
-    is_training: bool = False
-    total_steps: int = 0
-    callbacks: Dict[str, Callable] = field(default_factory=dict)
+    """State tracking for RL trainer"""
+    running: bool = True
+    last_update_time: float = 0
+    update_count: int = 0
+    callbacks: Dict[str, Callable[[Any], Any]] = field(default_factory=dict)
+    metrics: Dict[str, float] = field(default_factory=dict)
+    total_experiences: int = 0
+    total_updates: int = 0
+    steps_since_last_update: int = 0
+
+class ReplayBuffer:
+    """Memory buffer for experience replay"""
+    
+    def __init__(self, capacity: int):
+        self.buffer = deque(maxlen=capacity)
+        
+    def __len__(self) -> int:
+        return len(self.buffer)
+        
+    def add(self, state: Any, action: Any, reward: float, next_state: Any, done: bool) -> None:
+        """Add experience to buffer"""
+        self.buffer.append((state, action, reward, next_state, done))
+    
+    def sample(self, batch_size: int) -> Tuple:
+        """Sample random batch from buffer"""
+        states, actions, rewards, next_states, dones = [], [], [], [], []
+        
+        # Sample batch_size items from buffer
+        indices = random.sample(range(len(self.buffer)), batch_size)
+        for idx in indices:
+            state, action, reward, next_state, done = self.buffer[idx]
+            states.append(state)
+            actions.append(action)
+            rewards.append(reward)
+            next_states.append(next_state)
+            dones.append(done)
+            
+        return (states, actions, rewards, next_states, dones)
+
+
+class PrioritizedReplayBuffer(ReplayBuffer):
+    """Prioritized replay buffer for experience replay with importance sampling"""
+    
+    def __init__(self, capacity: int, alpha: float = 0.6, beta: float = 0.4, beta_increment: float = 0.001):
+        """
+        Initialize prioritized replay buffer.
+        
+        Args:
+            capacity: Maximum buffer size
+            alpha: Priority exponent (0=uniform sampling, higher=more prioritization)
+            beta: Importance sampling exponent (0=no correction, 1=full correction)
+            beta_increment: Amount to increase beta each sampling
+        """
+        super().__init__(capacity)
+        self.priorities = deque(maxlen=capacity)
+        self.alpha = alpha
+        self.beta = beta
+        self.beta_increment = beta_increment
+        self.epsilon = 1e-6  # Small constant to avoid zero priority
+        self.max_priority = 1.0
+    
+    def add(self, state: Any, action: Any, reward: float, next_state: Any, done: bool) -> None:
+        """Add experience with max priority to buffer"""
+        super().add(state, action, reward, next_state, done)
+        self.priorities.append(self.max_priority)
+    
+    def sample(self, batch_size: int) -> Tuple:
+        """Sample batch based on priorities"""
+        if len(self.buffer) < batch_size:
+            # Fallback to uniform sampling if buffer is too small
+            return super().sample(batch_size)
+            
+        # Increase beta for importance sampling
+        self.beta = min(1.0, self.beta + self.beta_increment)
+        
+        # Calculate sampling probabilities
+        priorities = np.array(self.priorities)
+        probs = priorities ** self.alpha
+        probs = probs / np.sum(probs)
+        
+        # Sample indices based on priorities
+        indices = np.random.choice(len(self.buffer), batch_size, p=probs, replace=False)
+        
+        # Calculate importance sampling weights
+        weights = (len(self.buffer) * probs[indices]) ** (-self.beta)
+        weights = weights / np.max(weights)  # Normalize
+        
+        states, actions, rewards, next_states, dones = [], [], [], [], []
+        for idx in indices:
+            state, action, reward, next_state, done = self.buffer[idx]
+            states.append(state)
+            actions.append(action)
+            rewards.append(reward)
+            next_states.append(next_state)
+            dones.append(done)
+            
+        return (states, actions, rewards, next_states, dones, indices, weights)
+    
+    def update_priorities(self, indices: List[int], new_priorities: List[float]) -> None:
+        """Update priorities for experiences at the specified indices"""
+        for idx, priority in zip(indices, new_priorities):
+            if 0 <= idx < len(self.priorities):
+                # Add small constant to avoid zero priority
+                self.priorities[idx] = priority + self.epsilon
+                self.max_priority = max(self.max_priority, self.priorities[idx])
+
 
 class RLTrainer:
-    def __init__(self, model: nn.Module, config: RLConfig):
-        """Initialize RL trainer with model and config"""
-        self.model = model.to(config.device)
+    """Reinforcement learning trainer for response quality improvement"""
+    
+    def __init__(self, 
+                 quality_model: nn.Module, 
+                 config: RLConfig, 
+                 device: Optional[torch.device] = None,
+                 embedder: Optional[nn.Module] = None):
+        """
+        Initialize the RL trainer with quality model and config
+        
+        Args:
+            quality_model: Neural network for quality prediction
+            config: Configuration for reinforcement learning
+            device: Device to run calculations on (defaults to config.device)
+            embedder: Optional model to create embeddings
+        """
+        self.quality_model = quality_model
         self.config = config
-        self.optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
-        self.memory: List[Tuple] = []
-        self.max_memory_size = config.memory_size
-        self.training_lock = asyncio.Lock()
-        self._latest_loss: Optional[float] = None
-        self._training_stats = {"total_interactions": 0, "successful_updates": 0}
-        self.priorities = torch.ones(config.memory_size)
+        self.device = device or config.device
         self.grad_step = 0
-        self.scaler = torch.cuda.amp.GradScaler()
-        self.state = TrainerState()
+        self.optimizer = optim.Adam(
+            self.quality_model.parameters(), 
+            lr=self.config.learning_rate
+        )
+        self.running = True
+        self.lock = asyncio.Lock()
         
-    def register_callback(self, event: str, callback: Callable):
-        """Register callback for trainer events"""
-        self.state.callbacks[event] = callback
-
-    async def _notify_callback(self, event: str, data: Any):
-        """Notify registered callback"""
-        if event in self.state.callbacks:
-            await self.state.callbacks[event](data)
+        # Move model to device
+        self.quality_model = self.quality_model.to(self.device)
         
-    async def store_interaction(self, state: torch.Tensor, action: torch.Tensor, 
-                              reward: float, next_state: torch.Tensor) -> None:
-        """Stores interaction and triggers async policy update if needed"""
-        try:
-            # Validate inputs
-            if not all(isinstance(t, torch.Tensor) for t in [state, action, next_state]):
-                raise ValueError("State and action must be torch tensors")
-            if not isinstance(reward, (int, float)):
-                raise ValueError("Reward must be numeric")
-
-            # Move tensors to device and store
-            interaction = (
-                state.to(self.config.device),
-                action.to(self.config.device),
-                reward,
-                next_state.to(self.config.device)
+        # Initialize embedder if provided
+        self.embedder = None
+        if embedder is not None:
+            self.embedder = embedder.to(self.device)
+            
+        # Initialize replay buffer
+        if self.config.prioritized_replay:
+            self.memory = PrioritizedReplayBuffer(
+                capacity=self.config.memory_size,
+                alpha=self.config.alpha,
+                beta=self.config.beta
             )
-            self.memory.append(interaction)
-            self._training_stats["total_interactions"] += 1
-            self.priorities[len(self.memory)-1] = 1.0  # New experiences get max priority
-            
-            # Clear old samples if needed
-            await self.clear_old_samples()
-            
-            # Update policy if enough samples
-            if len(self.memory) >= self.config.min_samples_to_train:
-                async with self.training_lock:
-                    await self._update_policy()
-                    
-            await self._notify_callback('interaction_stored', {
-                'state': state,
-                'action': action,
-                'reward': reward
-            })
-                    
-        except Exception as e:
-            logger.error(f"Error storing interaction: {str(e)}")
-            raise
-
-    async def _update_policy(self) -> None:
-        """Update policy using sampled batch with retry logic"""
-        for attempt in range(self.config.max_batch_retries):
-            try:
-                batch, indices, weights = await self._sample_batch()
-                
-                with torch.cuda.amp.autocast():
-                    states, actions, rewards, next_states = zip(*batch)
-                    
-                    # Stack and move tensors, ensuring proper shapes
-                    states_t = torch.stack(states).squeeze(1)  # Remove extra dim
-                    next_states_t = torch.stack(next_states).squeeze(1)
-                    actions_t = torch.stack(actions).to(self.config.device)
-                    rewards_t = torch.tensor(rewards, device=self.config.device).float()
-
-                    # Compute TD error with proper dimensionality
-                    with torch.no_grad():
-                        next_values = self.model(next_states_t).detach()
-                    current_values = self.model(states_t)
-                    
-                    td_target = rewards_t + self.config.gamma * next_values.max(1)[0]
-                    td_error = td_target.unsqueeze(1) - current_values.gather(1, actions_t.unsqueeze(1))
-                    
-                    # Update model with gradient clipping
-                    loss = (td_error.pow(2) * weights.unsqueeze(1)).mean()
-                    
-                    # Scale loss for gradient accumulation
-                    loss = loss / self.config.grad_accum_steps
-
-                self.scaler.scale(loss).backward()
-                
-                # Update priorities
-                self.priorities[indices] = td_error.abs().detach().cpu() ** self.config.priority_alpha
-                
-                self.grad_step += 1
-                if self.grad_step % self.config.grad_accum_steps == 0:
-                    self.scaler.step(self.optimizer)
-                    self.scaler.update()
-                    self.optimizer.zero_grad()
-                
-                self._latest_loss = loss.item()
-                self._training_stats["successful_updates"] += 1
-                return
-
-            except Exception as e:
-                if attempt == self.config.max_batch_retries - 1:
-                    logger.error(f"Policy update failed after {attempt+1} attempts: {str(e)}")
-                    raise
-                logger.warning(f"Policy update attempt {attempt+1} failed: {str(e)}")
-                await asyncio.sleep(0.1 * (attempt + 1))
-
-    async def _sample_batch(self) -> Tuple[List[Tuple], torch.Tensor, torch.Tensor]:
-        """Sample random batch from memory with validation"""
-        if len(self.memory) < self.config.batch_size:
-            raise ValueError(f"Not enough samples in memory: {len(self.memory)}")
-        probs = self.priorities[:len(self.memory)] / self.priorities[:len(self.memory)].sum()
-        indices = torch.multinomial(probs, self.config.batch_size)
-        weights = (len(self.memory) * probs[indices]) ** -self.config.priority_beta
-        weights = weights / weights.max()
-        return [self.memory[i] for i in indices], indices, weights.to(self.config.device)
+        else:
+            self.memory = ReplayBuffer(capacity=self.config.memory_size)
         
-    async def clear_old_samples(self) -> None:
-        """Remove old samples if memory exceeds max size"""
-        if len(self.memory) > self.max_memory_size:
-            self.memory = self.memory[-self.max_memory_size:]
-            logger.debug(f"Cleared old samples. New memory size: {len(self.memory)}")
-
-    def get_training_stats(self) -> Dict[str, float]:
-        """Return comprehensive training statistics"""
-        stats = {
-            'memory_size': len(self.memory),
-            'device': self.config.device,
-            'latest_loss': self._latest_loss,
-            **self._training_stats
+        # Training state
+        self.state = TrainerState()
+        self._training_stats = {
+            "total_interactions": 0,
+            "successful_updates": 0
         }
+        self._latest_loss = None
+        self._last_update_time = time.time()
         
-        if self.memory:
-            stats['avg_reward'] = sum(r for _, _, r, _ in self.memory) / len(self.memory)
+        logger.info(f"RL trainer initialized with {self.device} device")
         
-        return stats
-
-    def save_state(self, path: str) -> None:
-        """Save trainer state for recovery"""
-        torch.save({
-            'model_state': self.model.state_dict(),
-            'optimizer_state': self.optimizer.state_dict(),
-            'memory': self.memory,
-            'stats': self._training_stats,
-        }, path)
-
-    def load_state(self, path: str) -> None:
-        """Load trainer state"""
-        checkpoint = torch.load(path, map_location=self.config.device)
-        self.model.load_state_dict(checkpoint['model_state'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state'])
-        self.memory = checkpoint['memory']
-        self._training_stats = checkpoint['stats']
+    def register_callback(self, event_name: str, callback: Callable[[Any], Any]) -> None:
+        """
+        Register callback for specific events.
+        
+        Args:
+            event_name: Name of event to register for
+            callback: Callback function
+        """
+        self.state.callbacks[event_name] = callback
+            
+    async def add_experience(self, 
+                          input_embedding: torch.Tensor, 
+                          response_embedding: torch.Tensor, 
+                          feedback_score: float) -> None:
+        """
+        Add experience to replay buffer.
+        
+        Args:
+            input_embedding: Embedding of input text
+            response_embedding: Embedding of response text
+            feedback_score: User feedback score normalized between 0 and 1
+        """
+        if not self.running:
+            return
+            
+        # Create combined state representation
+        state = torch.cat([input_embedding, response_embedding], dim=-1)
+        
+        # Simulate next state as a slight variation
+        next_state = state + torch.randn_like(state) * 0.01
+        
+        # Convert feedback to reward (-1 to 1 range)
+        reward = (feedback_score - 0.5) * 2.0
+        
+        # Add to replay buffer
+        self.memory.add(state, None, reward, next_state, False)
+        self.state.total_experiences += 1
+        self.state.steps_since_last_update += 1
+        
+        # Log the addition
+        logger.debug(f"Added experience with reward {reward:.3f}, total: {self.state.total_experiences}")
+        
+        # Trigger training if enough time has passed
+        if (time.time() - self.state.last_update_time > self.config.training_frequency and 
+            len(self.memory) > self.config.min_samples_to_train):
+            await self._update()
+            
+    async def _update(self) -> None:
+        """Update quality model using samples from replay buffer"""
+        if not self.running or len(self.memory) < self.config.batch_size:
+            return
+            
+        # Track update time
+        self.state.last_update_time = time.time()
+        self.state.update_count += 1
+        
+        # Sample from replay buffer
+        if self.config.prioritized_replay:
+            states, _, rewards, next_states, _, indices, weights = self.memory.sample(self.config.batch_size)
+            weight_tensor = torch.tensor(weights, dtype=torch.float32).unsqueeze(1)
+        else:
+            states, _, rewards, next_states, _ = self.memory.sample(self.config.batch_size)
+            weight_tensor = None
+        
+        # Convert to tensors
+        state_tensor = torch.stack([s for s in states if isinstance(s, torch.Tensor)])
+        reward_tensor = torch.tensor(rewards, dtype=torch.float32).unsqueeze(1)
+        
+        # Predict quality scores
+        predicted_quality = self.quality_model(state_tensor)
+        
+        # Calculate loss (MSE to target rewards)
+        if weight_tensor is not None:
+            # Weighted MSE loss for prioritized replay
+            squared_error = (predicted_quality - reward_tensor) ** 2
+            loss = (squared_error * weight_tensor).mean()
+            
+            # Update priorities based on TD error
+            with torch.no_grad():
+                td_errors = torch.abs(predicted_quality - reward_tensor).detach().cpu().numpy()
+                self.memory.update_priorities(indices, td_errors.flatten())
+        else:
+            loss = F.mse_loss(predicted_quality, reward_tensor)
+        
+        # Optimize
+        self.optimizer.zero_grad()
+        loss.backward()
+        # Clip gradients to avoid exploding gradients
+        torch.nn.utils.clip_grad_norm_(self.quality_model.parameters(), 1.0)
+        self.optimizer.step()
+        
+        # Update metrics
+        self.state.metrics["loss"] = loss.item()
+        self.state.metrics["mean_reward"] = reward_tensor.mean().item()
+        self.state.metrics["buffer_size"] = len(self.memory)
+        self.state.total_updates += 1
+        self.state.steps_since_last_update = 0
+        
+        # Log the update
+        logger.info(f"RL update #{self.state.total_updates}: loss={loss.item():.4f}, mean_reward={self.state.metrics['mean_reward']:.4f}")
+        
+        # Call update callback if registered
+        if "update_completed" in self.state.callbacks:
+            callback_data = {
+                "loss": loss.item(),
+                "mean_reward": self.state.metrics["mean_reward"],
+                "update_count": self.state.total_updates,
+                "buffer_size": len(self.memory)
+            }
+            await self._call_callback("update_completed", callback_data)
+            
+    async def _call_callback(self, event_name: str, data: Any) -> None:
+        """Safely call a registered callback"""
+        if event_name not in self.state.callbacks:
+            return
+            
+        try:
+            callback = self.state.callbacks[event_name]
+            if asyncio.iscoroutinefunction(callback):
+                await callback(data)
+            else:
+                callback(data)
+        except Exception as e:
+            logger.error(f"Error in RL callback {event_name}: {e}")
+            
+    def predict_quality(self, state_embedding: torch.Tensor) -> float:
+        """
+        Predict quality score for a given state embedding
+        
+        Args:
+            state_embedding: Combined state embedding
+            
+        Returns:
+            float: Predicted quality score 
+        """
+        with torch.no_grad():
+            score = self.quality_model(state_embedding).item()
+            return score
+            
+    async def shutdown(self) -> None:
+        """Shutdown the trainer"""
+        self.running = False
+        # Wait for any pending operations
+        async with self.lock:
+            pass

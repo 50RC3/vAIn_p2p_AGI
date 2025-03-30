@@ -1,0 +1,302 @@
+[
+  {
+    "session_id": "c2e931c1-2764-4013-8578-4590ac6b40b4",
+    "score": 0.0,
+    "timestamp": 1743195956.931735,
+    "response_hash": "a8445619abd08f3ba0ebfcb31183f7f9",
+    "model_version": "0.1.0",
+    "response_text": "\u0012",
+    "response_confidence": 121.0,
+    "response_latency": 0.000782012939453125
+  },
+  {
+    "session_id": "e26e5e11-8a6c-4841-aade-ecda0963f44a",
+    "score": 0.0,
+    "timestamp": 1743262421.488215,
+    "response_hash": "959f1708d8ed75fced83573f93fd981c",
+    "model_version": "0.1.0",
+    "response_text": "That's an interesting question. Let me think about that.",
+    "response_confidence": 1.0,
+    "response_latency": 0.0004220008850097656
+  },
+  {
+    "session_id": "e26e5e11-8a6c-4841-aade-ecda0963f44a",
+    "score": 0.0,
+    "timestamp": 1743262437.632169,
+    "response_hash": "8deb75fbad724bbf73c4b7469a5c5eeb",
+    "model_version": "0.1.0",
+    "response_text": "I understand what you're asking. Here's what I think.",
+    "response_confidence": 1.0,
+    "response_latency": 0.01891493797302246
+  },
+  {
+    "session_id": "e26e5e11-8a6c-4841-aade-ecda0963f44a",
+    "score": 0.0,
+    "timestamp": 1743262455.463896,
+    "response_hash": "007e153076172c4c4d3a273457ce176c",
+    "model_version": "0.1.0",
+    "response_text": "I appreciate your input. Let me process that information.",
+    "response_confidence": 1.0,
+    "response_latency": 0.0003070831298828125
+  },
+  {
+    "session_id": "e26e5e11-8a6c-4841-aade-ecda0963f44a",
+    "score": 0.0,
+    "timestamp": 1743262462.607587,
+    "response_hash": "007e153076172c4c4d3a273457ce176c",
+    "model_version": "0.1.0",
+    "response_text": "I appreciate your input. Let me process that information.",
+    "response_confidence": 1.0,
+    "response_latency": 0.0003070831298828125
+  },
+  {
+    "session_id": "e26e5e11-8a6c-4841-aade-ecda0963f44a",
+    "score": 0.0,
+    "timestamp": 1743262470.703425,
+    "response_hash": "007e153076172c4c4d3a273457ce176c",
+    "model_version": "0.1.0",
+    "response_text": "I appreciate your input. Let me process that information.",
+    "response_confidence": 1.0,
+    "response_latency": 0.0003070831298828125
+  },
+  {
+    "session_id": "e9281877-5d15-491e-8d94-6af8db64a11f",
+    "score": 0.0,
+    "timestamp": 1743263235.308129,
+    "response_hash": "f5433f08ef28e9d0a5c152be7d22b511",
+    "model_version": "0.1.0",
+    "response_text": "I understand what you're saying. My NLP modules help me interpret that.",
+    "response_confidence": 1.0,
+    "response_latency": 0.03903675079345703
+  },
+  {
+    "session_id": "eac031fc-87bd-42a6-afa3-bfb3c7c9326b",
+    "score": 0.0,
+    "timestamp": 1743264254.101016,
+    "response_hash": "f5433f08ef28e9d0a5c152be7d22b511",
+    "model_version": "0.1.0",
+    "response_text": "I understand what you're saying. My NLP modules help me interpret that.",
+    "response_confidence": 1.0,
+    "response_latency": 0.0001919269561767578
+  },
+  {
+    "session_id": "eac031fc-87bd-42a6-afa3-bfb3c7c9326b",
+    "score": 0.0,
+    "timestamp": 1743264259.292904,
+    "response_hash": "f5433f08ef28e9d0a5c152be7d22b511",
+    "model_version": "0.1.0",
+    "response_text": "I understand what you're saying. My NLP modules help me interpret that.",
+    "response_confidence": 1.0,
+    "response_latency": 0.0001919269561767578
+  },
+  {
+    "session_id": "eac031fc-87bd-42a6-afa3-bfb3c7c9326b",
+    "score": 0.0,
+    "timestamp": 1743264273.6685,
+    "response_hash": "f5433f08ef28e9d0a5c152be7d22b511",
+    "model_version": "0.1.0",
+    "response_text": "I understand what you're saying. My NLP modules help me interpret that.",
+    "response_confidence": 1.0,
+    "response_latency": 0.0001919269561767578
+  },
+  {
+    "session_id": "eac031fc-87bd-42a6-afa3-bfb3c7c9326b",
+    "score": 0.0,
+    "timestamp": 1743264287.020523,
+    "response_hash": "fd3f20c11351fb1349f8735e9b5d6fe9",
+    "model_version": "0.1.0",
+    "response_text": "I see. Would you like me to provide more information on this topic?",
+    "response_confidence": 1.0,
+    "response_latency": 7.939338684082031e-05
+  },
+  {
+    "session_id": "a6b35151-1bc5-4a61-abe0-5a13594cdb75",
+    "score": 1.0,
+    "timestamp": 1743267936.256901,
+    "response_hash": "edd27f7ee55cf3a5efbe9d8cd25f9574",
+    "model_version": "0.1.0",
+    "response_text": "Hi there! I'm your AI assistant. What can I help you with?",
+    "response_confidence": 1.0,
+    "response_latency": 0.0010423660278320312
+  },
+  {
+    "session_id": "e7c56159-5533-496c-9358-b26b9248c11e",
+    "score": 1.0,
+    "timestamp": 1743268139.71866,
+    "response_hash": "8a9cd4a0ec9d5e9f782cb702e173ad18",
+    "model_version": "0.1.0",
+    "response_text": "Greetings! How may I be of service today?",
+    "response_confidence": 1.0,
+    "response_latency": 0.0008604526519775391
+  },
+  {
+    "session_id": "e7c56159-5533-496c-9358-b26b9248c11e",
+    "score": 0.0,
+    "timestamp": 1743268172.559033,
+    "response_hash": "fd3f20c11351fb1349f8735e9b5d6fe9",
+    "model_version": "0.1.0",
+    "response_text": "I see. Would you like me to provide more information on this topic?",
+    "response_confidence": 1.0,
+    "response_latency": 0.00036978721618652344
+  },
+  {
+    "session_id": "67360fd7-588a-4aed-bd44-62f64cd735ed",
+    "score": 1.0,
+    "timestamp": 1743277284.215077,
+    "response_hash": "b219c6972355bc64b95088848a8e2503",
+    "model_version": "0.1.0",
+    "response_text": "Hello! It's nice to chat with you. How can I assist?",
+    "response_confidence": 1.0,
+    "response_latency": 0.0027132034301757812
+  },
+  {
+    "session_id": "67360fd7-588a-4aed-bd44-62f64cd735ed",
+    "score": 0.0,
+    "timestamp": 1743277322.069877,
+    "response_hash": "f5433f08ef28e9d0a5c152be7d22b511",
+    "model_version": "0.1.0",
+    "response_text": "I understand what you're saying. My NLP modules help me interpret that.",
+    "response_confidence": 1.0,
+    "response_latency": 0.00042510032653808594
+  },
+  {
+    "session_id": "67360fd7-588a-4aed-bd44-62f64cd735ed",
+    "score": 0.0,
+    "timestamp": 1743277332.461636,
+    "response_hash": "f5433f08ef28e9d0a5c152be7d22b511",
+    "model_version": "0.1.0",
+    "response_text": "I understand what you're saying. My NLP modules help me interpret that.",
+    "response_confidence": 1.0,
+    "response_latency": 0.0002543926239013672
+  },
+  {
+    "session_id": "e2ed251a-b4e3-423f-98b9-20a19adf454e",
+    "score": 1.0,
+    "timestamp": 1743277788.31169,
+    "response_hash": "9d371a0a645ad59e195404520e618df3",
+    "model_version": "0.1.0",
+    "response_text": "Hello there! How can I help you today?",
+    "response_confidence": 1.0,
+    "response_latency": 0.0006890296936035156
+  },
+  {
+    "session_id": "e2ed251a-b4e3-423f-98b9-20a19adf454e",
+    "score": 0.0,
+    "timestamp": 1743277821.143605,
+    "response_hash": "fd3f20c11351fb1349f8735e9b5d6fe9",
+    "model_version": "0.1.0",
+    "response_text": "I see. Would you like me to provide more information on this topic?",
+    "response_confidence": 1.0,
+    "response_latency": 0.0003886222839355469
+  },
+  {
+    "session_id": "2e122ac3-ed38-4fae-b9e2-687ac79d2a39",
+    "score": 0.0,
+    "timestamp": 1743291840.399462,
+    "response_hash": "84083819ba8f7bbf6d6add01fb426879",
+    "model_version": "0.1.0",
+    "response_text": "That's an interesting point. Would you like me to analyze it further?",
+    "response_confidence": 1.0,
+    "response_latency": 0.0003292560577392578
+  },
+  {
+    "session_id": "23fc5e9e-4de7-423a-a155-b30ad32f55b6",
+    "score": 0.0,
+    "timestamp": 1743328974.364544,
+    "response_hash": "83acb6e67e50e31db6ed341dd2de1595",
+    "model_version": "0.1.0",
+    "response_text": "\u007f",
+    "response_confidence": 0.08561483025550842,
+    "response_latency": 0.006524801254272461
+  },
+  {
+    "session_id": "937a45da-977c-454e-b112-5e723a5c70b3",
+    "score": 1.0,
+    "timestamp": 1743329147.417913,
+    "response_hash": "b9075213edac1cdbb351b5490c8ff812",
+    "model_version": "0.1.0",
+    "response_text": "Hi there! How can I assist you?",
+    "response_confidence": 1.0,
+    "response_latency": 0.01
+  },
+  {
+    "session_id": "937a45da-977c-454e-b112-5e723a5c70b3",
+    "score": 0.0,
+    "timestamp": 1743329176.545461,
+    "response_hash": "c8de7cc48470b4053b01f919dddbef62",
+    "model_version": "0.1.0",
+    "response_text": "??????????\nThe team will be on their way back to the field, but will they be in the stands to do that?\nThat\u2019s a good question. But it\u202cs not a question",
+    "response_confidence": 0.9,
+    "response_latency": 1.1313791275024414
+  },
+  {
+    "session_id": "937a45da-977c-454e-b112-5e723a5c70b3",
+    "score": 0.0,
+    "timestamp": 1743329241.89663,
+    "response_hash": "a9e88dffb0a0668e68b4f8bcddba1edb",
+    "model_version": "0.1.0",
+    "response_text": "what can you do it?\u201d\n\n\u203b\nYou can use this code to save the file.\nWhen you\u2019re done, you can just press Ctrl-C and the program will close.",
+    "response_confidence": 0.9,
+    "response_latency": 1.0344924926757812
+  },
+  {
+    "session_id": "937a45da-977c-454e-b112-5e723a5c70b3",
+    "score": 0.0,
+    "timestamp": 1743329268.840553,
+    "response_hash": "f60890be9df8df8d2337961520c09829",
+    "model_version": "0.1.0",
+    "response_text": "what is a question of what is the purpose of a company's philosophy?\n\nThis is not an analysis of the individual, but a theory of how the business works.\nThe question is why we want to make it a business. We want",
+    "response_confidence": 0.9,
+    "response_latency": 1.2057006359100342
+  },
+  {
+    "session_id": "fc1b3db5-f61d-4f14-919a-b3e9bfe3b463",
+    "score": 0.0,
+    "timestamp": 1743329467.942232,
+    "response_hash": "9bbaee431dde8d065495b670c7a6228b",
+    "model_version": "0.1.0",
+    "response_text": "__________________\nThis is a very long time ago, but it is now being done. There is no way to find a way, and I am sure that this is going to get a lot more work done,",
+    "response_confidence": 0.9,
+    "response_latency": 0.01
+  },
+  {
+    "session_id": "15926565-1a33-421e-a381-54e12e2f5088",
+    "score": 1.0,
+    "timestamp": 1743329721.043487,
+    "response_hash": "618522e5d4504bad5d3b944900d4ea7a",
+    "model_version": "0.1.0",
+    "response_text": "Hello! I'm here to help. What do you need?",
+    "response_confidence": 0.9,
+    "response_latency": 0.01
+  },
+  {
+    "session_id": "15926565-1a33-421e-a381-54e12e2f5088",
+    "score": 0.0,
+    "timestamp": 1743329876.305437,
+    "response_hash": "3eb31dd1183a357debb70b41620fb21a",
+    "model_version": "0.1.0",
+    "response_text": "I'll respond clearly and helpfully. __________________\n\nI've been working on the project for a few weeks.",
+    "response_confidence": 0.9,
+    "response_latency": 0.01
+  },
+  {
+    "session_id": "90f15272-1e7e-4cc4-86c8-246c470b11a3",
+    "score": 0.0,
+    "timestamp": 1743330170.013311,
+    "response_hash": "eb07f3188ff558058a7f3b33b1137def",
+    "model_version": "0.1.0",
+    "response_text": "what's the time for you to start your own business.\n\n\nThe following are the top 10 companies that you should consider investing in:",
+    "response_confidence": 0.9,
+    "response_latency": 0.01
+  },
+  {
+    "session_id": "48c047b7-b251-464d-bb07-ce7cf1617843",
+    "score": 0.0,
+    "timestamp": 1743330355.011132,
+    "response_hash": "972b0eaaafdb73d840c700616bf5851c",
+    "model_version": "0.1.0",
+    "response_text": "I'll provide a clear, helpful response without artifacts.\nIf you want to use this tool, please refer.",
+    "response_confidence": 0.9,
+    "response_latency": 0.01
+  }
+]

@@ -1,9 +1,33 @@
 import logging
 import asyncio
+import os
+import sys
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from datetime import datetime
-from tabulate import tabulate
+
+# Import tabulate with fallback
+try:
+    from tabulate import tabulate
+    TABULATE_AVAILABLE = True
+except ImportError:
+    TABULATE_AVAILABLE = False
+    logging.warning("tabulate package not found. Admin command formatting will be limited.")
+    # Simple fallback function
+    def tabulate(data, headers=None, tablefmt=None):
+        if not data:
+            return "No data available"
+        
+        result = []
+        if headers:
+            result.append(" | ".join(str(h) for h in headers))
+            result.append("-" * len(result[0]))
+        
+        for row in data:
+            result.append(" | ".join(str(cell) for cell in row))
+            
+        return "\n".join(result)
+
 from core.constants import InteractionLevel
 from core.interactive_utils import InteractiveSession, InteractiveConfig
 

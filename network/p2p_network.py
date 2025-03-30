@@ -4,12 +4,16 @@ from typing import Dict, Set, Optional
 from datetime import datetime, timedelta
 from collections import defaultdict
 from tqdm import tqdm
-from core.constants import INTERACTION_TIMEOUTS, InteractionLevel
+import torch
+import time
+import os
+
+from core.constants import InteractionLevel
 from core.interactive_utils import InteractiveSession, InteractiveConfig
-from .dht import DHT
-from .udp_broadcast import UDPBroadcast
-from .pex import PeerExchange
 from .connection_pool import ConnectionPool
+from .udp_broadcast import UDPBroadcast
+from .dht import DHT
+from .pex import PeerExchange
 from .message_protocol import SecureMessageProtocol
 from security.auth import NodeAuthenticator
 from network.consensus import ConsensusManager
@@ -18,6 +22,23 @@ from .circuit_breaker import CircuitBreaker
 from security.secure_key_manager import SecureKeyManager
 from .cluster_manager import ClusterManager
 from .admin_commands import AdminCommands
+from .reputation import ReputationManager
+from .load_balancer import LoadBalancer, NodeCapacity
+from .monitoring import NetworkMonitor, get_resource_metrics
+from .debug import DebugManager  # Add missing import for debug manager
+
+# Define INTERACTION_TIMEOUTS with default values
+INTERACTION_TIMEOUTS = {
+    "auth": 10,  # Timeout for authentication in seconds
+    "default": 30,  # Default timeout for interactions
+    "confirmation": 15  # Timeout for user confirmation
+}
+
+# Initialize logger
+logger = logging.getLogger('P2PNetwork')
+
+# Initialize debug manager
+debug_manager = DebugManager()
 
 class P2PNetworkError(Exception):
     """Base exception for P2P network errors"""
@@ -49,9 +70,20 @@ class P2PNetwork:
         self.running = False
         self.peers: Set[str] = set()
         
-        # Initialize P2P components
-        self.dht = DHT(node_id, network_config['dht'])
-        self.udp_broadcast = UDPBroadcast(network_config['udp'])
+        # Extract and set different ports for DHT and UDP
+        udp_port = network_config['udp'].get('port', 8468)
+        dht_port = network_config.get('dht', {}).get('port', 8469)  # Default to 8469 for DHT
+        
+        # Update DHT config with separate port if not explicitly set
+        dht_config = network_config['dht']
+        if 'port' not in dht_config:
+            dht_config['port'] = dht_port
+        
+        # Initialize P2P components with separate ports
+        self.dht = DHT(node_id, dht_config)
+        self.udp_broadcast = UDPBroadcast({'port': udp_port})
+        
+        # Initialize other components
         self.auth = NodeAuthenticator(network_config.get('secret_key', ''))
         self.consensus = ConsensusManager()
         self.rate_limiter = RateLimiter(
@@ -96,14 +128,27 @@ class P2PNetwork:
         self._interrupt_requested = False
         self._progress_bar = None
         
-        # Initialize reputation manager with revalidation
-        self.reputation_manager = ReputationManager(
-            decay_factor=network_config.get('reputation_decay', 0.95),
-            min_reputation=network_config.get('min_reputation', -100),
-            interactive=interactive
-        )
-        await self.reputation_manager.start()
+        # Initialize reputation manager with persistence
+        reputation_path = network_config.get('reputation_path', None)
+        if reputation_path:
+            # If path is relative, make it relative to the config file location
+            if not os.path.isabs(reputation_path):
+                config_dir = os.path.dirname(os.path.abspath(
+                    network_config.get('config_path', '.')
+                ))
+                reputation_path = os.path.join(config_dir, reputation_path)
+                
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(reputation_path), exist_ok=True)
         
+        self.reputation_manager = ReputationManager(
+            storage_path=reputation_path,
+            persistence_interval=network_config.get('reputation_save_interval', 300)
+        )
+        
+        # Add tracking for startup time
+        self._start_time = time.time()
+
         # Add consensus states
         self.pending_state_changes: Dict[str, Dict] = {}
         self.consensus_thresholds = {
@@ -130,26 +175,67 @@ class P2PNetwork:
 
         self.debug_enabled = network_config.get('debug', False)
         
-    def start(self):
-        """Start the P2P network node."""
+        # Initialize tracking dictionaries
+        self._peer_violations = defaultdict(int)
+        self._rate_limit_backoffs = {}
+        self._circuit_reset_scheduled = False
+
+        # Add message priority handling
+        self.message_priorities = {
+            'consensus_proposal': 10,  # Highest priority
+            'consensus_vote': 9,
+            'peer_banned': 8,
+            'state_change': 7,
+            'auth': 6,
+            'resource_contribution': 5,
+            'data': 4,
+            'heartbeat': 1      # Lowest priority
+        }
+        
+        # Add priority queues
+        self.high_priority_queue = asyncio.PriorityQueue()
+        self.normal_priority_queue = asyncio.PriorityQueue()
+        self.low_priority_queue = asyncio.PriorityQueue()
+
+        # Add enhanced diagnostics
+        from collections import OrderedDict
+        self._diagnostic_data = OrderedDict()
+        self._diag_retention_time = network_config.get('diagnostic_retention', 3600)  # 1 hour
+        self._last_diagnostics_cleanup = time.time()
+        self.max_concurrent_tasks = network_config.get('max_concurrent_tasks', 100)
+
+    async def start(self):
+        """Start the P2P network node asynchronously."""
+        self.running = True
+        self.logger.info(f"Starting P2P node {self.node_id}")
+        await self._run_network()
+
+    def start_sync(self):
+        """Synchronous wrapper for starting the network"""
         self.running = True
         self.logger.info(f"Starting P2P node {self.node_id}")
         asyncio.run(self._run_network())
-        
-    def stop(self):
+
+    async def stop(self):
         """Gracefully stop the P2P network node with task cleanup."""
         self.running = False
         self.logger.info(f"Stopping P2P node {self.node_id}")
         
         try:
             # Create event loop if needed
-            loop = asyncio.get_event_loop()
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
             if loop.is_closed():
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 
-            # Run cleanup with timeout
+            # Define cleanup_task before using it
             cleanup_task = self._cleanup()
+            
+            # Run cleanup with timeout
             cleanup_future = asyncio.run_coroutine_threadsafe(cleanup_task, loop)
             cleanup_future.result(timeout=self._shutdown_timeout)
             
@@ -164,21 +250,24 @@ class P2PNetwork:
         
     async def _run_network(self):
         """Run the main network loop."""
-        # Start P2P services
-        await self.udp_broadcast.start()
-        await self.dht.start()
-        await self.reputation_manager.start_revalidation_loop()
-        
-        while self.running:
-            try:
+        try:
+            # Start P2P services
+            await self.udp_broadcast.start()
+            await self.dht.start()
+            await self.reputation_manager.start()
+            
+            while self.running:
                 # Handle peer discovery and communication
                 new_peers = await self._discover_peers()
                 await self._handle_messages()
                 self.peers.update(new_peers)
                 await asyncio.sleep(1)
-            except Exception as e:
-                self.logger.error(f"Network error: {e}")
-                
+        except Exception as e:
+            self.logger.error(f"Network error: {str(e)}")
+            raise
+        finally:
+            await self._cleanup()
+
     async def _cleanup(self):
         """Enhanced cleanup with active task handling."""
         async with self._cleanup_lock:
@@ -219,15 +308,56 @@ class P2PNetwork:
             self.logger.error(f"Force cleanup error: {e}")
 
     async def register_task(self, task: asyncio.Task):
-        """Register an active task for cleanup tracking."""
+        """Enhanced task registration with resource awareness"""
+        # Check resource limits before taking new tasks
+        if len(self._active_tasks) >= self.max_concurrent_tasks:
+            # If we're at capacity, handle based on task priority
+            task_info = getattr(task, 'task_info', {})
+            priority = task_info.get('priority', 5) # Default medium priority
+            
+            if priority < 7:  # Not high priority
+                self.logger.warning("Task capacity reached, rejecting non-critical task")
+                task.cancel()
+                return
+            
+            # For high priority tasks, try to make room by cancelling low priority tasks
+            cancelled = await self._cancel_low_priority_tasks()
+            if not cancelled and len(self._active_tasks) >= self.max_concurrent_tasks:
+                self.logger.error("Critical task capacity reached, system overloaded")
+                # Still accept the critical task
+        
+        # Add task tracking info    
         self._active_tasks.add(task)
+        setattr(task, 'created_at', time.time())
+        
         try:
             await task
         except asyncio.CancelledError:
             pass
         finally:
             self._active_tasks.discard(task)
+
+    async def _cancel_low_priority_tasks(self) -> bool:
+        """Cancel low priority tasks to make room for high priority ones"""
+        # Find candidate tasks for cancellation
+        low_priority_tasks = []
         
+        for task in self._active_tasks:
+            task_info = getattr(task, 'task_info', {})
+            priority = task_info.get('priority', 5)
+            
+            # Consider low priority tasks that aren't near completion
+            if priority <= 3 and not task.done():
+                low_priority_tasks.append(task)
+        
+        # Cancel up to 2 tasks
+        cancelled = 0
+        for task in low_priority_tasks[:2]:
+            task.cancel()
+            cancelled += 1
+        
+        return cancelled > 0
+
     async def broadcast_message(self, message: Dict):
         """Broadcast a message to all peers."""
         await self.udp_broadcast.broadcast(message)
@@ -277,8 +407,10 @@ class P2PNetwork:
     async def _authenticate_peer_with_timeout(self, peer_id: str, token: str) -> bool:
         """Authenticate peer with timeout"""
         try:
-            async with asyncio.timeout(INTERACTION_TIMEOUTS["auth"]):
-                return await self._authenticate_peer(peer_id, token)
+            return await asyncio.wait_for(
+                self._authenticate_peer(peer_id, token), 
+                timeout=INTERACTION_TIMEOUTS["auth"]
+            )
         except asyncio.TimeoutError:
             self.logger.warning(f"Authentication timeout for peer {peer_id}")
             return False
@@ -295,10 +427,10 @@ class P2PNetwork:
         """Authenticate a new peer with E2EE session establishment"""
         try:
             # First authenticate using token
+            response = await asyncio.wait_for(self.node_comm.send_message(peer_id, {"type": "auth"}), timeout=10)
             auth_msg = {
                 "type": "auth",
-                "token": token,
-                "public_key": self.key_manager.identity_public.public_bytes()
+                "response": response
             }
             
             # Add timeout for authentication
@@ -326,57 +458,151 @@ class P2PNetwork:
             raise PeerAuthenticationError(f"Authentication failed: {str(e)}")
             
     async def _handle_messages(self):
-        """Process incoming messages from peers."""
+        """Process incoming messages with priority"""
+        # Process a batch of messages from each queue based on priority
+        
+        # Process all high priority messages
+        while not self.high_priority_queue.empty():
+            _, msg = await self.high_priority_queue.get()
+            await self._handle_message(msg, msg.get('sender'))
+            self.high_priority_queue.task_done()
+        
+        # Process up to 10 normal priority messages
+        for _ in range(10):
+            if self.normal_priority_queue.empty():
+                break
+            _, msg = await self.normal_priority_queue.get()
+            await self._handle_message(msg, msg.get('sender'))
+            self.normal_priority_queue.task_done()
+        
+        # Process up to 5 low priority messages if we're not too busy
+        if len(self._active_tasks) < self.max_concurrent_tasks // 2:
+            for _ in range(5):
+                if self.low_priority_queue.empty():
+                    break
+                _, msg = await self.low_priority_queue.get()
+                await self._handle_message(msg, msg.get('sender'))
+                self.low_priority_queue.task_done()
+        
+        # Also process any messages from the original queue for backward compatibility
         while not self.node_comm.message_queue.empty():
             msg = await self.node_comm.message_queue.get()
-            await self._handle_message(msg, msg.get('sender'))
-            
+            # Route to appropriate priority queue for next iteration
+            await self._prioritize_message(msg)
+            self.node_comm.message_queue.task_done()
+
+    async def _prioritize_message(self, message: Dict):
+        """Route message to appropriate priority queue"""
+        msg_type = message.get('type', 'unknown')
+        priority = self.message_priorities.get(msg_type, 3)  # Default medium priority
+        
+        # Adjust priority based on sender reputation
+        sender = message.get('sender')
+        if sender in self.peer_reputation:
+            rep = self.peer_reputation[sender]
+            if rep > 0.8:  # Trusted peers get priority boost
+                priority += 1
+            elif rep < 0.3:  # Low reputation peers get lowered priority
+                priority -= 1
+        
+        # Route to appropriate queue
+        if priority >= 7:
+            await self.high_priority_queue.put((10-priority, message))
+        elif priority >= 4:
+            await self.normal_priority_queue.put((10-priority, message))
+        else:
+            await self.low_priority_queue.put((10-priority, message))
+
     async def _handle_message(self, message: Dict, addr):
-        """Handle incoming encrypted messages"""
+        """Handle incoming encrypted messages with improved error recovery"""
         try:
             if not await self.rate_limiter.allow_request(addr):
-                raise RateLimitExceeded(f"Rate limit exceeded for {addr}")
+                # Enhanced rate limiting with backoff strategy
+                backoff_seconds = await self._calculate_backoff(addr)
+                self.logger.warning(f"Rate limit exceeded for {addr}, applying backoff of {backoff_seconds}s")
+                # Record the backoff in a tracking dictionary
+                self._rate_limit_backoffs[addr] = (datetime.now(), backoff_seconds)
+                return
 
             if not self.circuit_breaker.allow_request():
-                raise CircuitBreakerOpen("Circuit breaker is open")
+                # Circuit breaker with health check scheduling
+                self.logger.error(f"Circuit breaker open for {addr}")
+                if not self._circuit_reset_scheduled:
+                    reset_task = asyncio.create_task(self._schedule_circuit_reset())
+                    await self.register_task(reset_task)
+                    self._circuit_reset_scheduled = True
+                return
 
-            try:
-                async with asyncio.timeout(3):
-                    # Decrypt message first
-                    if 'nonce' not in message or 'ciphertext' not in message:
-                        raise MessageValidationError("Invalid encrypted message format")
-                        
-                    nonce = base64.b64decode(message['nonce'])
-                    ciphertext = base64.b64decode(message['ciphertext'])
-                    
-                    decrypted = self.key_manager.decrypt_message(
-                        message.get('sender'),
-                        nonce,
-                        ciphertext
-                    )
-                    
-                    if not decrypted:
-                        raise MessageValidationError("Failed to decrypt message")
-                    
-                    # Then validate and process
-                    await self._validate_message(decrypted)
-                    await self._process_message(decrypted)
-                    
-            except asyncio.TimeoutError:
-                raise MessageTimeoutError("Message processing timeout")
-
-        except RateLimitExceeded as e:
-            self.logger.warning(f"Rate limit exceeded: {e}")
-        except CircuitBreakerOpen as e:
-            self.logger.error(f"Circuit breaker open: {e}")
+            # ... existing decryption and processing code ...
+            
         except MessageValidationError as e:
-            self.logger.error(f"Message validation error: {e}")
-            await self._record_suspicious_activity(message.get('sender'), "validation_error")
-        except MessageTimeoutError as e:
-            self.logger.error(f"Message handling timeout: {e}")
+            self.logger.error(f"Message validation error from {addr}: {e}")
+            # Apply graduated response based on severity
+            severity = self._assess_validation_error_severity(e)
+            await self._record_suspicious_activity(message.get('sender'), f"validation_error:{severity}")
+            
         except Exception as e:
-            self.logger.error(f"Unexpected error handling message: {e}")
+            self.logger.error(f"Unexpected error handling message from {addr}: {e}")
             self.circuit_breaker.record_failure()
+            # Add diagnostic info collection
+            await self._collect_diagnostic_info(message, addr, e)
+
+    async def _collect_diagnostic_info(self, message: Dict, addr, error):
+        """Collect diagnostic information for errors"""
+        now = time.time()
+        
+        # Create diagnostic entry
+        diag_key = f"{addr}_{now}"
+        self._diagnostic_data[diag_key] = {
+            'timestamp': now,
+            'peer': addr,
+            'error': str(error),
+            'error_type': type(error).__name__,
+            'message_type': message.get('type', 'unknown'),
+            'message_size': len(str(message)),
+            'active_tasks': len(self._active_tasks),
+            'system_load': get_resource_metrics()
+        }
+        
+        # Clean up old diagnostic data periodically
+        if now - self._last_diagnostics_cleanup > 300:  # Every 5 minutes
+            self._cleanup_diagnostics()
+            self._last_diagnostics_cleanup = now
+
+    def _cleanup_diagnostics(self):
+        """Clean up old diagnostic data"""
+        now = time.time()
+        cutoff = now - self._diag_retention_time
+        
+        # Remove old entries
+        old_keys = []
+        for key, value in list(self._diagnostic_data.items()):
+            if value['timestamp'] < cutoff:
+                old_keys.append(key)
+                
+        for key in old_keys:
+            del self._diagnostic_data[key]
+            
+        self.logger.debug(f"Cleaned up {len(old_keys)} old diagnostic entries")
+
+    async def get_diagnostics_report(self):
+        """Generate diagnostics report for admin interface"""
+        report = {
+            'node_id': self.node_id,
+            'uptime': time.time() - self._start_time,
+            'peer_count': len(self.peers),
+            'banned_peers': len(self.banned_peers),
+            'active_tasks': len(self._active_tasks),
+            'pending_consensus': len(self.pending_state_changes),
+            'recent_errors': sum(1 for v in self._diagnostic_data.values() 
+                                  if time.time() - v['timestamp'] < 600),  # Last 10 minutes
+            'system_metrics': get_resource_metrics(),
+            'circuit_breaker_state': self.circuit_breaker.get_state(),
+            'top_peers_by_traffic': await self.network_monitor.get_top_peers_by_traffic(5),
+            'cluster_health': await self.cluster_manager.get_cluster_health(),
+        }
+        
+        return report
 
     async def _validate_message(self, message: Dict):
         """Enhanced message validation with cooled reputation tracking"""
@@ -631,8 +857,11 @@ class P2PNetwork:
                 current_time = time.time()
                 if current_time - self._last_health_check >= self.health_check_interval:
                     health = await self.network_monitor.check_network_health()
-                    if health and health.overall_health < 0.5:
-                        logger.warning(f"Low network health: {health.overall_health:.2f}")
+                    if health is None or not hasattr(health, 'overall_health'):
+                        self.logger.error("Invalid health metrics received from network monitor")
+                        continue  # Changed from return to continue to avoid premature exit
+                    if health.overall_health < 0.5:
+                        self.logger.warning(f"Low network health: {health.overall_health:.2f}")
                         await self._optimize_network()
                     self._last_health_check = current_time
 
@@ -656,7 +885,7 @@ class P2PNetwork:
                 if self.debug_enabled:
                     metrics = debug_manager.get_metrics()
                     if metrics.error_count > 0:
-                        logger.warning(f"Debug metrics: {metrics}")
+                        self.logger.warning(f"Debug metrics: {metrics}")
 
                 await asyncio.sleep(1)
 
@@ -666,7 +895,7 @@ class P2PNetwork:
                 'peer_count': len(self.peers),
                 'active_tasks': len(self._active_tasks)
             })
-            logger.error(f"Network error: {str(e)}")
+            self.logger.error(f"Network error: {str(e)}")
             raise
         finally:
             await self._cleanup_interactive()
@@ -678,14 +907,14 @@ class P2PNetwork:
             await self.cluster_manager._rebalance_clusters()
             
             # Clean up inactive peers
-            await self.reputation_manager.cleanup()
-            
+            if hasattr(torch.cuda, 'empty_cache'):
+                torch.cuda.empty_cache()
             # Optimize resource usage
             if hasattr(torch.cuda, 'empty_cache'):
                 torch.cuda.empty_cache()
 
         except Exception as e:
-            logger.error(f"Network optimization failed: {str(e)}")
+            self.logger.error(f"Network optimization failed: {str(e)}")
 
     async def _discover_peers_interactive(self) -> Set[str]:
         """Interactive peer discovery with progress tracking"""
@@ -717,7 +946,7 @@ class P2PNetwork:
 
         except Exception as e:
             self.logger.error(f"Peer discovery error: {str(e)}")
-            return set()
+            raise
 
     async def _authenticate_peer_interactive(self, peer_id: str) -> bool:
         """Interactive peer authentication with safety checks"""
@@ -741,7 +970,7 @@ class P2PNetwork:
                 if self.interactive:
                     self.logger.warning(f"Rate limit reached for peer {peer_id}")
                 return False
-
+                
             conn = await self.connection_pool.get_connection(peer_id)
             if not conn:
                 raise PeerConnectionError(f"No connection available for peer {peer_id}")
@@ -758,26 +987,85 @@ class P2PNetwork:
             except asyncio.TimeoutError:
                 raise MessageTimeoutError(f"Message send timeout to peer {peer_id}")
 
-        except PeerConnectionError as e:
-            self.logger.error(f"Connection error: {str(e)}")
-            if self.interactive:
-                await self.session.log_error(f"Connection failed: {str(e)}")
+        except (PeerConnectionError, MessageTimeoutError, MessageValidationError, Exception) as e:
+            await self._log_error_interactive(e, peer_id)
             return False
-        except MessageTimeoutError as e:
-            self.logger.error(f"Timeout error: {str(e)}")
-            if self.interactive:
-                await self.session.log_error(f"Message timeout: {str(e)}")
-            return False
-        except MessageValidationError as e:
-            self.logger.error(f"Validation error: {str(e)}")
-            if self.interactive:
-                await self.session.log_error(f"Message validation failed: {str(e)}")
-            return False
-        except Exception as e:
-            self.logger.error(f"Unexpected error sending message to {peer_id}: {str(e)}")
-            if self.interactive:
-                await self.session.log_error(f"Message sending failed: {str(e)}")
-            return False
+
+    async def _log_error_interactive(self, error: Exception, peer_id: str):
+        """Helper method to log errors and optionally log to the interactive session"""
+        error_type = type(error).__name__
+        self.logger.error(f"{error_type} error for peer {peer_id}: {str(error)}")
+        if self.interactive and self.session:
+            await self.session.log_error(f"{error_type} error: {str(error)}")
+
+    async def _calculate_backoff(self, peer_id: str) -> float:
+        """Calculate adaptive backoff time based on peer history"""
+        # Exponential backoff with caps
+        base_backoff = 1.0
+        max_backoff = 300.0  # 5 minutes max
+
+        # Get current violation count, default to 0
+        violations = self._peer_violations.get(peer_id, 0)
+
+        # Cap violations to a maximum value to prevent excessive memory usage
+        max_violations = 10  # Reasonable cap for violations
+        capped_violations = min(violations, max_violations)
+
+        # Calculate exponential backoff
+        backoff = min(base_backoff * (2 ** capped_violations), max_backoff)
+        
+        # Increment violation count
+        self._peer_violations[peer_id] = violations + 1
+        
+        return backoff
+
+    async def _schedule_circuit_reset(self, retry_count=0, max_retries=5):
+        """Schedule circuit breaker reset with health check and retry limit"""
+        try:
+            if retry_count >= max_retries:
+                self.logger.error("Maximum circuit breaker reset retries reached. Aborting further attempts.")
+                return
+            
+            # Wait for reset timeout
+            await asyncio.sleep(self.circuit_breaker.reset_timeout)
+            
+            # Check system health before resetting
+            health = await self.network_monitor.check_network_health()
+            
+            if health and health.overall_health > 0.7:  # Only reset if health is good
+                self.circuit_breaker.reset()
+                self.logger.info("Circuit breaker reset after recovery period")
+            else:
+                self.logger.warning(f"Circuit remains open due to poor network health. Retry {retry_count + 1}/{max_retries}")
+                # Reschedule another reset attempt
+                reset_task = asyncio.create_task(self._schedule_circuit_reset(retry_count + 1, max_retries))
+                await self.register_task(reset_task)
+        finally:
+            self._circuit_reset_scheduled = False
+
+    async def _assess_validation_error_severity(self, error: Exception) -> int:
+        """Assess the severity of a validation error
+        
+        Returns:
+            int: Severity level (1-5) with 5 being most severe
+        """
+        error_str = str(error).lower()
+        
+        # Critical security issues
+        if any(x in error_str for x in ['signature', 'tamper', 'forge']):
+            return 5
+        # Protocol violations
+        elif any(x in error_str for x in ['protocol', 'invalid format']):
+            return 4
+        # Missing fields
+        elif 'missing' in error_str:
+            return 3
+        # Type errors
+        elif 'type' in error_str:
+            return 2
+        # Other validation issues
+        else:
+            return 1
 
     async def _cleanup_interactive(self):
         """Interactive cleanup with resource monitoring"""

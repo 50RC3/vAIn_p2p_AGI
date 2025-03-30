@@ -47,19 +47,38 @@ class UnifiedModelSystem:
         try:
             # Process through model pipeline
             for model_id, model in self.models.items():
-                interface = self.interfaces[model_id]
+                interface = self.interfaces.get(model_id)
+                if not interface:
+                    logger.warning(f"No interface found for model {model_id}")
+                    continue
                 
-                # Share memory state
-                if memory_state:
-                    await self._share_memory_state(model_id, memory_state)
+                # Check if model needs resources before inference
+                self._resource_allocations.setdefault(model_id, {'active': True})
                 
-                # Forward pass with memory coordination
-                output = await interface.forward(current_output)
-                current_output = output.output
+                # Add monitoring task to active tasks
+                task_id = f"inference_{model_id}_{time.time()}"
+                self._active_tasks.add(task_id)
                 
-                # Update shared memory state
-                if output.memory_state:
-                    memory_state.update(output.memory_state)
+                try:
+                    # Perform inference with resource awareness
+                    output = await interface.forward_interactive(current_output)
+                    
+                    # Update current output for next model in pipeline
+                    if isinstance(output, tuple):
+                        current_output = output[0]
+                        # Extract attention or memory information if available
+                        if len(output) > 1:
+                            memory_state[f"{model_id}_memory"] = output[1]
+                    else:
+                        current_output = output
+                    
+                    # Share memory state with other models
+                    if hasattr(model, 'memory_state'):
+                        await self._share_memory_state(model_id, model.memory_state)
+                        
+                finally:
+                    # Remove task from active tasks
+                    self._active_tasks.discard(task_id)
 
             return ModelOutput(
                 output=current_output,
@@ -82,20 +101,34 @@ class UnifiedModelSystem:
 
             # Process through model pipeline with cognitive tracking
             for model_id, model in self.models.items():
-                interface = self.interfaces[model_id]
+                interface = self.interfaces.get(model_id)
+                if not interface:
+                    continue
+                
+                # Forward pass with resource management
+                output = await interface.forward_interactive(current_state.current_focus)
                 
                 # Update cognitive state
-                if hasattr(model, 'get_cognitive_state'):
-                    current_state.metacognitive_state = await model.get_cognitive_state()
+                if isinstance(output, tuple):
+                    current_state.current_focus = output[0]  
+                    # If attention weights are available
+                    if len(output) > 1 and output[1] is not None:
+                        if current_state.attention_patterns is None:
+                            current_state.attention_patterns = output[1]
+                        else:
+                            # Combine attention patterns
+                            current_state.attention_patterns = torch.cat(
+                                [current_state.attention_patterns, output[1]], 
+                                dim=0
+                            )
+                else:
+                    current_state.current_focus = output
                 
-                # Process with cognitive awareness
-                output = await interface.forward(current_state.current_focus)
-                current_state.current_focus = output.output
-                
-                if output.attention is not None:
-                    current_state.attention_patterns = output.attention
-                if output.memory_state:
-                    current_state.memory_state.update(output.memory_state)
+                # Collect memory state
+                if hasattr(model, 'get_memory_state'):
+                    mem_state = await model.get_memory_state()
+                    if mem_state:
+                        current_state.memory_state[model_id] = mem_state
 
             return ModelOutput(
                 output=current_state.current_focus,
@@ -112,11 +145,14 @@ class UnifiedModelSystem:
         """Share memory state between models"""
         try:
             for key, tensor in memory_state.items():
-                await self.memory_manager.share_tensor(
-                    source_id='shared_pool',
-                    target_id=f"model_{model_id}",
-                    tensor_key=key
-                )
+                memory_key = f"{model_id}_{key}"
+                self.shared_memory[memory_key] = tensor
+                
+                # Notify other models about memory update
+                for other_id, model in self.models.items():
+                    if other_id != model_id and hasattr(model, 'update_external_memory'):
+                        await model.update_external_memory(memory_key, tensor)
+                
         except Exception as e:
             logger.error(f"Memory sharing failed: {e}")
 
@@ -128,8 +164,18 @@ class UnifiedModelSystem:
                              for alloc in self._resource_allocations.values())
 
             # Adjust allocations if needed
-            if metrics.memory_usage > 85:  # High memory usage
+            if metrics.memory_usage > 85:
+                # High memory usage - rebalance resources
                 await self._rebalance_resources()
+                
+                # Clear CUDA cache if available
+                if hasattr(torch.cuda, 'empty_cache'):
+                    torch.cuda.empty_cache()
+                    
+                # Notify models about resource constraint
+                for model_id, interface in self.interfaces.items():
+                    if hasattr(interface, 'notify_resource_constraint'):
+                        await interface.notify_resource_constraint('memory', metrics.memory_usage)
 
         except Exception as e:
             logger.error(f"Resource optimization failed: {e}")
@@ -139,10 +185,18 @@ class UnifiedModelSystem:
         try:
             # Free up resources from inactive models
             for model_id in self.models:
-                if model_id not in self._active_tasks:
-                    await self.memory_manager._cleanup_storage()
-                    if hasattr(self.models[model_id], 'release_resources'):
-                        await self.models[model_id].release_resources()
+                allocation = self._resource_allocations.get(model_id, {})
+                
+                # Check if model has been inactive
+                if not any(task_id.startswith(f"inference_{model_id}") 
+                         for task_id in self._active_tasks):
+                    # Mark as inactive
+                    allocation['active'] = False
+                    
+                    # Optimize memory usage for this model
+                    interface = self.interfaces.get(model_id)
+                    if interface and hasattr(interface, 'optimize_memory'):
+                        await interface.optimize_memory()
 
         except Exception as e:
             logger.error(f"Resource rebalancing failed: {e}")
@@ -155,3 +209,15 @@ class UnifiedModelSystem:
             self._register_processing_handlers(model_id)
         elif role == 'meta':
             self._register_meta_handlers(model_id)
+    
+    def _register_memory_handlers(self, model_id: str):
+        """Register memory-specific handlers"""
+        pass
+        
+    def _register_processing_handlers(self, model_id: str):
+        """Register processing-specific handlers"""
+        pass
+        
+    def _register_meta_handlers(self, model_id: str):
+        """Register meta-learning handlers"""
+        pass

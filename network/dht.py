@@ -65,57 +65,17 @@ class DHT:
         self.zone_stats: DefaultDict[str, Dict] = defaultdict(dict)
 
     async def start(self):
-        """Start DHT node and join network with interactive progress."""
+        """Start DHT node and join network"""
         try:
-            if self.interactive:
-                self.session = InteractiveSession(
-                    level=InteractionLevel.NORMAL,
-                    config=InteractiveConfig(
-                        timeout=INTERACTION_TIMEOUTS["default"],
-                        persistent_state=True,
-                        safe_mode=True
-                    )
-                )
-                
-            async with self.session if self.session else asyncio.nullcontext():
-                self.logger.info(f"Starting DHT node {self.node_id}")
-                
-                if self.interactive:
-                    print("\nInitializing DHT Node")
-                    print("=" * 50)
-                    
-                await self.server.listen(self.port)
-                await self._join_network_interactive()
-                await self._bootstrap()
-                
+            await self.server.listen(self.port)
+            await self._join_network_interactive()
         except Exception as e:
-            self.logger.error(f"Failed to start DHT node: {e}")
+            self.logger.error(f"Failed to start DHT: {e}")
             raise
-        finally:
-            if self.session:
-                await self.session.__aexit__(None, None, None)
 
     async def stop(self):
-        """Clean up DHT resources with progress tracking."""
-        try:
-            self._interrupt_requested = True
-            
-            if self.interactive:
-                print("\nStopping DHT Node")
-                print("-" * 30)
-            
-            # Cancel pending tasks
-            for task in self._cleanup_tasks:
-                task.cancel()
-            
-            await asyncio.gather(*self._cleanup_tasks, return_exceptions=True)
-            self.server.stop()
-            
-            self.logger.info(f"DHT node {self.node_id} stopped successfully")
-            
-        except Exception as e:
-            self.logger.error(f"Error during DHT shutdown: {e}")
-            raise
+        """Stop DHT node"""
+        self.server.stop()
 
     async def lookup(self, key: str) -> Optional[str]:
         """Look up node address in DHT."""
@@ -149,7 +109,8 @@ class DHT:
                     level=InteractionLevel.NORMAL,
                     config=InteractiveConfig(
                         timeout=INTERACTION_TIMEOUTS["default"],
-                        persistent_state=True
+                        persistent_state=True,
+                        safe_mode=True
                     )
                 )
 
@@ -377,7 +338,7 @@ class DHT:
         successful = 0
         failed_nodes = []
 
-        with tqdm(total(len(self.bootstrap_nodes), desc="Joining Network") as pbar:
+        with tqdm(total=len(self.bootstrap_nodes), desc="Joining Network") as pbar:
             for node in self.bootstrap_nodes:
                 if self._interrupt_requested:
                     break
@@ -503,4 +464,22 @@ class DHT:
                 status.get('uptime', 0) > 3600  # 1 hour minimum uptime
             )
         except Exception:
+            return False
+
+    async def join_network(self) -> bool:
+        """Join the DHT network through bootstrap nodes"""
+        try:
+            # Fix the syntax error in the progress bar
+            with tqdm(total=len(self.bootstrap_nodes), desc="Joining Network") as pbar:
+                for node in self.bootstrap_nodes:
+                    try:
+                        await self.ping_node(node)
+                        pbar.update(1)
+                    except Exception as e:
+                        self.logger.warning(f"Failed to connect to bootstrap node {node}: {e}")
+            
+            return len(self.routing_table) > 0
+        
+        except Exception as e:
+            self.logger.error(f"Failed to join network: {e}")
             return False

@@ -2,7 +2,7 @@
 
 > Note: This API is under active development by me (Vincent). Breaking changes should be expected.
 > Current Version: 0.2.1
-> Last Updated: 2024-01-20
+> Last Updated: 2024-01-25
 
 ## REST API Endpoints
 
@@ -11,12 +11,15 @@
 - Simple staking operations ✓
 - Basic training status queries ✓
 - Node health monitoring ✓
+- Resource metrics tracking ✓
+- Network health monitoring ✓
 
 ### Rate Limiting
 Current implementation:
 - Auth endpoints: 30 requests/minute
 - General endpoints: 10 requests/minute
 - Websocket connections: 1 per node
+- Metrics endpoints: 60 requests/minute
 - TODO: Dynamic rate limiting
 - TODO: Reputation-based limits
 
@@ -72,6 +75,20 @@ Note: Currently using basic ECDSA verification. Will be enhanced with hardware a
 - POST `/api/cache/optimize` (70% complete)
 - GET `/api/cache/metrics` ✓
 
+### Metrics & Monitoring
+- GET `/api/metrics/system` ✓
+  - Returns current system resource metrics (CPU, memory, disk)
+- GET `/api/metrics/network` ✓
+  - Returns network health metrics (peers, latency, bandwidth)
+- GET `/api/metrics/training` (70% complete)
+  - Returns model training performance metrics
+- GET `/api/metrics/history?type=system&duration=24h` ✓
+  - Returns historical metrics for specified type and duration
+- POST `/api/metrics/alerts/configure` ✓
+  - Configure alert thresholds and notification settings
+- GET `/api/metrics/alerts/status` ✓
+  - Get current alert status and recent notifications
+
 ## WebSocket Events
 
 Currently working:
@@ -90,6 +107,16 @@ Currently working:
 - `cognitive:update` ✓
 - `model:registered` ✓
 - `validation:failed` ✓
+
+### Metrics WebSocket Events
+- `metrics:system:update` ✓
+  - Real-time system metrics updates
+- `metrics:network:update` ✓
+  - Real-time network metrics updates
+- `metrics:alert` ✓
+  - Real-time alert notifications
+- `metrics:threshold:exceeded` ✓
+  - Notification when metrics exceed configured thresholds
 
 TODO:
 - Robust error handling

@@ -23,6 +23,7 @@ class BlockchainConfig:
     retry_attempts: int = 3
     retry_delay: int = 5
     _web3: Optional[Web3] = None
+    development_mode: bool = False
     
     network_configs: Dict[str, Dict[str, Any]] = field(default_factory=lambda: {
         'mainnet': {
@@ -50,12 +51,22 @@ class BlockchainConfig:
 
     def validate_config(self) -> None:
         """Validate blockchain configuration"""
-        if not self.private_key or len(self.private_key) != 64:
-            raise ValueError("Invalid private key format")
-        
-        if not self.infura_project_id and self.network != 'development':
-            raise ValueError("Infura project ID required for non-development networks")
+        # In development mode, we allow empty keys
+        if self.network == 'development':
+            self.development_mode = True
+            # For development, provide a warning but continue
+            if not self.private_key or len(self.private_key) != 64:
+                logger.warning("Using development mode with invalid/missing private key")
+                return
+        # For production networks, enforce strict validation
+        else:
+            if not self.private_key or len(self.private_key) != 64:
+                raise ValueError("Invalid private key format")
             
+            if not self.infura_project_id:
+                raise ValueError("Infura project ID required for non-development networks")
+            
+        # Common validations for all modes
         if self.network not in self.network_configs:
             raise ValueError(f"Unsupported network: {self.network}")
         
@@ -173,16 +184,21 @@ class BlockchainConfig:
     def from_env(cls) -> 'BlockchainConfig':
         load_dotenv()
         
+        network = os.getenv('NETWORK', 'development')
+        
         config = cls(
             private_key=os.getenv('PRIVATE_KEY', ''),
             infura_project_id=os.getenv('INFURA_PROJECT_ID', ''),
-            network=os.getenv('NETWORK', 'development')
+            network=network
         )
         
         try:
-            if config.web3.is_connected():
+            if network != 'development' and config.web3.is_connected():
                 logger.info("Successfully connected to %s", config.network)
         except Exception as e:
-            logger.warning("Connection test failed: %s", str(e))
+            if network != 'development':
+                logger.warning("Connection test failed: %s", str(e))
+            else:
+                logger.info("Running in development mode without blockchain connection")
             
         return config

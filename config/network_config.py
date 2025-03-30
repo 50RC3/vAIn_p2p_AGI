@@ -33,16 +33,17 @@ class NetworkConfig:
         self.validate()
 
     @classmethod
-    def from_env(cls, database_url: str) -> "NetworkConfig":
+    def from_env(cls) -> "NetworkConfig":
         """Create configuration from environment with fallbacks"""
         # Get env vars with fallbacks
         try:
             cert_path_str = os.environ.get('SSL_CERT_PATH')
             key_path_str = os.environ.get('SSL_KEY_PATH')
+            database_url = os.environ.get('DATABASE_URL', 'sqlite:///db.sqlite3')
             
             return cls(
-                node_env=os.environ.get('NODE_ENV', 'production'),
-                port=int(os.environ.get('PORT', '443')), 
+                node_env=os.environ.get('NODE_ENV', 'development'),
+                port=int(os.environ.get('PORT', '3000')), 
                 database_url=database_url,
                 cert_path=Path(cert_path_str) if cert_path_str else None,
                 key_path=Path(key_path_str) if key_path_str else None,

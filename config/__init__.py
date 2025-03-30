@@ -2,9 +2,16 @@ import logging
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 from pathlib import Path
+import os
 
 try:
-    from core.interactive_session import InteractiveSession
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+try:
+    from core.interactive_utils import InteractiveSession
 except ImportError:
     InteractiveSession = None
 
@@ -32,6 +39,9 @@ class Config:
         port=8000,
         database_url='sqlite:///db.sqlite'
     ))
+    # Add node identification attributes
+    node_id: str = field(default_factory=lambda: os.getenv('NODE_ID', 'default_node_id'))
+    interactive: bool = True
 
     def validate(self) -> None:
         """Enhanced configuration validation"""
@@ -71,19 +81,15 @@ class Config:
             raise
 
     @classmethod
-    def load(cls) -> 'Config':
-        try:
-            return cls(
-                blockchain=BlockchainConfig.from_env(),
-                training=TrainingConfig.from_env(),
-                network=NetworkConfig.from_env()
-            )
-        except ImportError:
-            logger.warning("Some dependencies missing - install required packages first")
-            return cls()
+    def load(cls):
+        return cls(
+            blockchain=BlockchainConfig.from_env(),
+            training=TrainingConfig.from_env(),
+            network=NetworkConfig.from_env()
+        )
 
     @classmethod
-    def load_and_update(cls) -> 'Config':
+    def load_and_update(cls):
         """Enhanced config loading with validation"""
         try:
             config = cls.load()
@@ -92,7 +98,28 @@ class Config:
                 config.validate()
             return config
         except Exception as e:
-            logger.error("Config loading failed: %s", str(e))
+            logger.error(f"Config loading failed: {e}")
             raise
 
-__all__ = ['Config']
+def get_config(interactive: bool = True) -> Config:
+    """Get configuration instance with optional interactive setup
+    
+    Args:
+        interactive: Whether to allow interactive configuration
+        
+    Returns:
+        Config: Configured instance
+    """
+    try:
+        config = Config.load()
+        config.interactive = interactive
+        logger.info("Configuration loaded successfully")
+        return config
+    except Exception as e:
+        logger.warning(f"Error loading full configuration: {e}")
+        # Return minimal config
+        minimal_config = Config()
+        minimal_config.interactive = interactive
+        return minimal_config
+
+__all__ = ['Config', 'get_config']
