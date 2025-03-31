@@ -14,7 +14,8 @@ from pathlib import Path
 
 from core.constants import InteractionLevel
 from core.interactive_utils import InteractiveSession, InteractiveConfig
-from network.debug import DebugManager
+# Fix the circular import by importing DebugManager from utils.debug_utils instead of from itself
+from utils.debug_utils import DebugManager
 
 logger = logging.getLogger(__name__)
 

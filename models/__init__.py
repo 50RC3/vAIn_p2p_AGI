@@ -1,4 +1,7 @@
-"""Model definitions for vAIn P2P AGI system."""
+"""
+Models package for vAIn P2P AGI system.
+Contains model definitions, interfaces and related utilities.
+"""
 
 __version__ = "0.1.0"
 
@@ -15,12 +18,25 @@ from .hybrid_memory_system import (
     get_memory_manager
 )
 
+# Import and expose key classes and functions from the types module
+from .types import (
+    ModelOutput, 
+    ModelState, 
+    ModelRole,
+    get_resource_metrics
+)
+
+# Define package exports
 __all__ = [
     'HybridMemorySystem',
     'MemoryAccessType',
     'MemoryOperation',
     'get_dnc_controller',
-    'get_memory_manager'
+    'get_memory_manager',
+    'ModelOutput',
+    'ModelState',
+    'ModelRole',
+    'get_resource_metrics',
 ]
 
 # Register with module registry if available

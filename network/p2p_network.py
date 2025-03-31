@@ -25,7 +25,7 @@ from .admin_commands import AdminCommands
 from .reputation import ReputationManager
 from .load_balancer import LoadBalancer, NodeCapacity
 from .monitoring import NetworkMonitor, get_resource_metrics
-from .debug import DebugManager  # Add missing import for debug manager
+from utils.debug_utils import DebugManager  # Import from the correct source
 
 # Define INTERACTION_TIMEOUTS with default values
 INTERACTION_TIMEOUTS = {

@@ -4,6 +4,8 @@ import time
 from typing import Dict, Any, List, Optional, Set, Type, Callable
 import json
 import os
+import inspect
+import threading
 
 from .resource_management import ResourceManager
 
@@ -25,12 +27,14 @@ class ModuleRegistry:
     """
     
     _instance = None
+    _lock = threading.Lock()
     
     @classmethod
     def get_instance(cls):
         """Get singleton instance"""
-        if cls._instance is None:
-            cls._instance = ModuleRegistry()
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = ModuleRegistry()
         return cls._instance
     
     def __init__(self):
@@ -38,6 +42,7 @@ class ModuleRegistry:
             raise RuntimeError("ModuleRegistry is a singleton. Use ModuleRegistry.get_instance()")
         
         self.modules: Dict[str, Dict[str, Any]] = {}
+        self.module_types: Dict[str, str] = {}
         self.dependencies: Dict[str, List[str]] = {}
         self.startup_order: List[str] = []
         self.resource_manager: Optional[ResourceManager] = None
@@ -168,13 +173,17 @@ class ModuleRegistry:
     
     async def register_module(self, module_id: str, module_class: Type, 
                             dependencies: List[str] = None, 
-                            config: Dict[str, Any] = None) -> bool:
+                            config: Dict[str, Any] = None,
+                            replace: bool = False) -> bool:
         """Register a module with the registry"""
         async with self.registry_lock:
             try:
                 if module_id in self.modules:
-                    logger.warning(f"Module {module_id} already registered")
-                    return False
+                    if replace:
+                        logger.info(f"Replacing existing module: {module_id}")
+                    else:
+                        logger.warning(f"Module {module_id} already registered")
+                        return True
                     
                 # Register module
                 self.modules[module_id] = {
@@ -425,6 +434,49 @@ class ModuleRegistry:
             result[dependency] = dependency in self.modules
             
         return result
+    
+    async def initialize_modules(self):
+        """Initialize all registered modules in dependency order."""
+        if self.is_initialized:
+            logger.warning("Modules already initialized")
+            return
+        
+        for module_name in self.startup_order:
+            module = self.modules[module_name]
+            if hasattr(module, 'initialize'):
+                try:
+                    init_method = getattr(module, 'initialize')
+                    if inspect.iscoroutinefunction(init_method):
+                        await init_method()
+                    else:
+                        init_method()
+                    logger.info(f"Initialized module: {module_name}")
+                except Exception as e:
+                    logger.error(f"Failed to initialize module {module_name}: {e}")
+        
+        self.is_initialized = True
+    
+    async def shutdown_modules(self):
+        """Shutdown all registered modules in reverse dependency order."""
+        if not self.is_initialized:
+            logger.warning("Modules not initialized, nothing to shut down")
+            return
+            
+        # Shutdown in reverse order
+        for module_name in reversed(self.startup_order):
+            module = self.modules[module_name]
+            if hasattr(module, 'shutdown'):
+                try:
+                    shutdown_method = getattr(module, 'shutdown')
+                    if inspect.iscoroutinefunction(shutdown_method):
+                        await shutdown_method()
+                    else:
+                        shutdown_method()
+                    logger.info(f"Shutdown module: {module_name}")
+                except Exception as e:
+                    logger.error(f"Error shutting down module {module_name}: {e}")
+                    
+        self.is_initialized = False
     
     async def shutdown(self):
         """Gracefully shut down module registry"""

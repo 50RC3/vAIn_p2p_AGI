@@ -1,172 +1,125 @@
+"""
+Network configuration for vAIn P2P AGI system
+"""
 import os
-from pathlib import Path
-from typing import Optional, Union
-from dataclasses import dataclass
-import socket
-import ssl
+import json
 import logging
+import secrets
+from pathlib import Path
+from typing import Dict, Any, Optional
 
-# Configure logging
 logger = logging.getLogger(__name__)
 
-# Optional dotenv support
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-    HAVE_DOTENV = True
-except ImportError:
-    logger.warning("python-dotenv not installed. Using environment variables directly.")
-    HAVE_DOTENV = False
-
-@dataclass
 class NetworkConfig:
-    node_env: str
-    port: int
-    database_url: str
-    cert_path: Optional[Path] = None
-    key_path: Optional[Path] = None
-    node_id: Optional[str] = None
-    peer_timeout: int = 30
-    max_connections: int = 10
-
-    def __post_init__(self) -> None:
-        self.validate()
-
-    @classmethod
-    def from_env(cls) -> "NetworkConfig":
-        """Create configuration from environment with fallbacks"""
-        # Get env vars with fallbacks
-        try:
-            cert_path_str = os.environ.get('SSL_CERT_PATH')
-            key_path_str = os.environ.get('SSL_KEY_PATH')
-            database_url = os.environ.get('DATABASE_URL', 'sqlite:///db.sqlite3')
-            
-            return cls(
-                node_env=os.environ.get('NODE_ENV', 'development'),
-                port=int(os.environ.get('PORT', '3000')), 
-                database_url=database_url,
-                cert_path=Path(cert_path_str) if cert_path_str else None,
-                key_path=Path(key_path_str) if key_path_str else None,
-                max_connections=int(os.environ.get('MAX_CONNECTIONS', '100')),
-                peer_timeout=int(os.environ.get('TIMEOUT', '30'))
-            )
-        except ValueError as e:
-            raise ValueError(f"Invalid environment variable: {str(e)}")
-
-    def validate(self) -> None:
-        """Validate network configuration"""
-        valid_envs = ['development', 'testing', 'production']
-        if self.node_env not in valid_envs:
-            raise ValueError(f"Invalid node_env: {self.node_env}")
-
-        if not isinstance(self.port, int) or self.port < 1024 or self.port > 65535:
-            raise ValueError(f"Invalid port number: {self.port}")
-
-        if not self.database_url:
-            raise ValueError("Database URL is required")
-
-        # Validate SSL paths if provided
-        if self.cert_path:
-            # Convert to Path if it's not already
-            self.cert_path = Path(self.cert_path) if not isinstance(self.cert_path, Path) else self.cert_path
-            if not self.cert_path.exists():
-                raise ValueError(f"Certificate file not found: {self.cert_path}")
-
-        if self.key_path:
-            # Convert to Path if it's not already
-            self.key_path = Path(self.key_path) if not isinstance(self.key_path, Path) else self.key_path
-            if not self.key_path.exists():
-                raise ValueError(f"Key file not found: {self.key_path}")
-
-    @property
-    def is_ssl_enabled(self) -> bool:
-        return bool(self.cert_path and self.key_path)
-
-    def update_interactive(self) -> None:
-        """Interactive configuration update with validation"""
-        try:
-            print("\nCurrent Network Configuration:")
-            self._display_current_config()
-            
-            if input("\nUpdate configuration? (y/n): ").lower() != 'y':
-                return
-
-            valid_envs = ['development', 'staging', 'production'] 
-            while True:
-                env = input(f"Enter environment {valid_envs} [{self.node_env}]: ") or self.node_env
-                if env in valid_envs:
-                    self.node_env = env
-                    break
-                print(f"Invalid environment. Must be one of: {valid_envs}")
-
-            while True:
-                try:
-                    port_input = input(f"Enter port (1024-65535) [{self.port}]: ")
-                    port = int(port_input) if port_input else self.port
-                    
-                    if not (1024 <= port <= 65535):
-                        print("Port must be between 1024 and 65535")
-                        continue
-
-                    # Test if port is available
-                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    if sock.connect_ex(('localhost', port)) == 0:
-                        print(f"Warning: Port {port} is already in use")
-                        if input("Continue anyway? (y/n): ").lower() != 'y':
-                            continue
-                    sock.close()
-                    self.port = port
-                    break
-                except ValueError:
-                    print("Port must be a number")
-
-            # SSL Configuration
-            if input("Configure SSL? (y/n): ").lower() == 'y':
-                while True:
-                    cert_path_str = input("Enter SSL certificate path: ").strip()
-                    if not cert_path_str:
-                        break
-                        
-                    cert_path = Path(cert_path_str)
-                    if not cert_path.exists():
-                        print("Certificate file not found")
-                        continue
-                        
-                    try:
-                        ssl.SSLContext().load_cert_chain(cert_path)
-                        self.cert_path = cert_path
-                        break
-                    except ssl.SSLError:
-                        print("Invalid SSL certificate")
-
-            self.validate()
-            self._save_config()
-            logger.info("Network configuration updated successfully")
-            
-        except KeyboardInterrupt:
-            print("\nConfiguration update cancelled")
-            return
-        except Exception as e:
-            logger.error(f"Configuration update failed: {str(e)}")
-            raise
-
-    def _display_current_config(self) -> None:
-        """Display current configuration settings"""
-        print(f"Environment: {self.node_env}")
-        print(f"Port: {self.port}")
-        print(f"Max Connections: {self.max_connections}")
-    def _save_config(self) -> None:
-        """Save configuration to file"""
-        import json
-        config_path = Path('config/network.json')
-        config_path.parent.mkdir(exist_ok=True)
+    """Configuration for P2P network settings"""
+    
+    def __init__(self):
+        # Default UDP configuration
+        self.udp = {
+            'port': 8468,  # Default UDP port
+            'broadcast': True,
+            'discovery_interval': 60,  # Seconds
+            'buffer_size': 4096
+        }
         
-        with config_path.open('w', encoding='utf-8') as f:
-            json.dump({
-                'node_env': self.node_env,
-                'port': self.port,
-                'max_connections': self.max_connections,
-                'cert_path': str(self.cert_path) if self.cert_path else None,
-                'key_path': str(self.key_path) if self.key_path else None,
-                'timeout': self.peer_timeout
-            }, f, indent=2)
+        # Default TCP configuration
+        self.tcp = {
+            'port': 8469,  # Default TCP port
+            'max_connections': 50,
+            'timeout': 30  # Seconds
+        }
+        
+        # Default DHT configuration
+        self.dht = {
+            'bootstrap_nodes': [],
+            'port': 8470,
+            'id_bits': 160,
+            'bucket_size': 20,
+            'refresh_interval': 3600  # 1 hour in seconds
+        }
+        
+        # Discovery settings
+        self.discovery = {
+            'enabled': True,
+            'interval': 60,  # Seconds
+            'ping_timeout': 5  # Seconds
+        }
+        
+        # Security settings
+        self.security = {
+            'encryption': True,
+            'authentication': True,
+            'key_rotation': 86400,  # 24 hours in seconds
+            'encryption_key': secrets.token_hex(16)  # Add a default encryption key
+        }
+    
+    @classmethod
+    def from_env(cls) -> 'NetworkConfig':
+        """Create network configuration from environment variables"""
+        config = cls()
+        
+        # Try to load from environment variable first
+        config_path = os.environ.get('NETWORK_CONFIG_PATH')
+        
+        if config_path and Path(config_path).exists():
+            logger.info(f"Loading network configuration from {config_path}")
+            try:
+                with open(config_path, 'r') as f:
+                    config_data = json.load(f)
+                    
+                # Update configuration with loaded data
+                for key, value in config_data.items():
+                    if hasattr(config, key):
+                        setattr(config, key, value)
+            except Exception as e:
+                logger.error(f"Failed to load network configuration: {e}")
+        else:
+            # Load individual settings from environment variables
+            try:
+                if os.environ.get('UDP_PORT'):
+                    config.udp['port'] = int(os.environ.get('UDP_PORT'))
+                
+                if os.environ.get('TCP_PORT'):
+                    config.tcp['port'] = int(os.environ.get('TCP_PORT'))
+                
+                if os.environ.get('DISCOVERY_ENABLED') is not None:
+                    config.discovery['enabled'] = os.environ.get('DISCOVERY_ENABLED').lower() == 'true'
+                
+                if os.environ.get('SECURITY_ENCRYPTION') is not None:
+                    config.security['encryption'] = os.environ.get('SECURITY_ENCRYPTION').lower() == 'true'
+            except Exception as e:
+                logger.error(f"Error parsing environment variables: {e}")
+        
+        return config
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert configuration to dictionary"""
+        return {
+            'udp': self.udp,
+            'tcp': self.tcp,
+            'dht': self.dht,  # Added DHT to the dictionary
+            'discovery': self.discovery,
+            'security': self.security
+        }
+    
+    def save(self, path: Optional[str] = None) -> None:
+        """Save configuration to file"""
+        if path is None:
+            # Default to config directory
+            path = os.path.join(
+                os.environ.get('PROJECT_ROOT', '.'), 
+                'config', 
+                'network_config.json'
+            )
+        
+        try:
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            
+            # Write config to file
+            with open(path, 'w') as f:
+                json.dump(self.to_dict(), f, indent=2)
+            
+            logger.info(f"Network configuration saved to {path}")
+        except Exception as e:
+            logger.error(f"Failed to save network configuration: {e}")

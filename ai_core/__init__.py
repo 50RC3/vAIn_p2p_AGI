@@ -18,13 +18,15 @@ __all__ = [
 ]
 
 # Async initialization function
-async def initialize_cognitive_system(memory_manager=None, resource_metrics=None):
+async def initialize_cognitive_system(memory_manager=None, resource_metrics=None, config=None, params=None):
     """
     Initialize the cognitive system components.
     
     Args:
         memory_manager: Optional memory manager instance
-        resource_metrics: Optional resource metrics instance
+        resource_metrics: Optional resource metrics or parameters
+        config: Optional configuration parameters (alternative to resource_metrics)
+        params: Optional parameters (another alternative)
         
     Returns:
         Tuple of (UnifiedModelSystem, CognitiveEvolution)
@@ -35,19 +37,23 @@ async def initialize_cognitive_system(memory_manager=None, resource_metrics=None
     logger = logging.getLogger("ai_core")
     
     try:
+        # Use whichever parameters are provided (config, params, or resource_metrics)
+        # This makes the function more robust to different parameter names
+        parameters = config or params or resource_metrics or {}
+        
         # Initialize memory manager if not provided
         if memory_manager is None:
             from core.constants import MAX_CACHE_SIZE
             memory_manager = MemoryManager(max_cache_size=MAX_CACHE_SIZE)
         
-        # Initialize unified model system
+        # Initialize unified model system with parameters
         unified_system = UnifiedModelSystem(memory_manager)
         
         # Initialize cognitive evolution
         cognitive_system = CognitiveEvolution(unified_system, memory_manager)
         
-        # Initialize the cognitive network
-        success = await cognitive_system.initialize_cognitive_network()
+        # Initialize the cognitive network with parameters
+        success = await cognitive_system.initialize_cognitive_network(**parameters if isinstance(parameters, dict) else {})
         if not success:
             logger.warning("Cognitive network initialization failed, some features may not work")
         

@@ -13,7 +13,34 @@
       },
       "status": "registered",
       "registered_time": 1743378329.0600111
+    },
+    "cognitive_evolution": {
+      "class": "CognitiveEvolution",
+      "module": "ai_core.cognitive_evolution",
+      "config": {
+        "resource_requirements": {
+          "memory": "high",
+          "cpu": "high",
+          "gpu": "high",
+          "importance": "critical"
+        }
+      },
+      "status": "registered",
+      "registered_time": 1743421723.294337
+    },
+    "memory_manager": {
+      "class": "MemoryManager",
+      "module": "memory",
+      "config": {
+        "resource_requirements": {
+          "memory": "medium",
+          "cpu": "low",
+          "importance": "high"
+        }
+      },
+      "status": "registered",
+      "registered_time": 1743421723.295816
     }
   },
-  "last_updated": 1743378329.060595
+  "last_updated": 1743421723.2962012
 }
