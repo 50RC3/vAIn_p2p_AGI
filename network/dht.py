@@ -4,6 +4,8 @@ from typing import Dict, Optional, List, Set, Tuple, Any, DefaultDict
 import logging
 from collections import OrderedDict, defaultdict
 from tqdm import tqdm
+import time  # Added missing import
+import base64  # Added missing import
 from core.interactive_utils import InteractiveSession, InteractiveConfig, InteractionLevel
 from core.constants import INTERACTION_TIMEOUTS
 

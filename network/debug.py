@@ -14,6 +14,7 @@ from pathlib import Path
 
 from core.constants import InteractionLevel
 from core.interactive_utils import InteractiveSession, InteractiveConfig
+from network.debug import DebugManager
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,7 @@ class DebugMonitor:
         self.is_monitoring = False
         self._monitor_task = None
         self.interaction_level = InteractionLevel.NORMAL
+        self.debug_manager = DebugManager(str(self.log_dir))
 
     async def start_monitoring(self, session: Optional[InteractiveSession] = None) -> None:
         """Start monitoring network activity"""
@@ -96,6 +98,7 @@ class DebugMonitor:
             logger.debug("Debug monitoring task cancelled")
         except Exception as e:
             logger.error(f"Error in debug monitoring: {e}")
+            self.debug_manager.track_error(e)
 
     def _collect_metrics(self) -> DebugMetrics:
         """Collect current system metrics"""
@@ -121,6 +124,7 @@ class DebugMonitor:
         except Exception as e:
             logger.error(f"Error collecting metrics: {e}")
             metrics.error_count += 1
+            self.debug_manager.track_error(e)
             
         return metrics
     
@@ -149,6 +153,7 @@ class DebugMonitor:
             })
         except Exception as e:
             logger.error(f"Error saving debug progress: {e}")
+            self.debug_manager.track_error(e)
     
     async def check_network_health(self) -> Dict[str, Any]:
         """Check current network health"""

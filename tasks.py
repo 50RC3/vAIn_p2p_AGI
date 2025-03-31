@@ -240,21 +240,24 @@ class TaskManager:
                 self.results.append(result)
                 return result if kwargs.get("detailed_result", False) else False
 
+        start_time = time.time()
         try:
             if self.interactive and self.session:
-                proceed = await self.session.get_confirmation(
-                    f"Run task '{name}'? (y/n): ",
-                    timeout=INTERACTION_TIMEOUTS.get("confirmation", 30)
-                )
-                if not proceed:
-                    result = TaskResult(success=False, execution_time=0, task_name=name, 
-                                       error_message="Task execution cancelled by user")
-                    self.results.append(result)
-                    return result if kwargs.get("detailed_result", False) else False
+                try:
+                    proceed = await self.session.get_confirmation(
+                        f"Run task '{name}'? (y/n): ",
+                        timeout=INTERACTION_TIMEOUTS.get("confirmation", 30)
+                    )
+                    if not proceed:
+                        result = TaskResult(success=False, execution_time=0, task_name=name, 
+                                          error_message="Task execution cancelled by user")
+                        self.results.append(result)
+                        return result if kwargs.get("detailed_result", False) else False
+                except Exception as e:
+                    logger.warning(f"Error in interactive confirmation: {e}, proceeding with task")
 
             # Capture resource usage before execution
             start_resource = self.get_resource_usage()
-            start_time = time.time()
             
             # Execute with timeout if specified
             if task.timeout:
@@ -292,9 +295,10 @@ class TaskManager:
             
             # Record success
             task.metrics["success_count"] = task.metrics.get("success_count", 0) + 1
+            task.metrics["last_success_time"] = time.time()
             
             result = TaskResult(
-                success=bool(output),
+                success=True if output is None else bool(output),
                 execution_time=execution_time,
                 task_name=name,
                 output=str(output) if output is not None else None,
@@ -314,6 +318,12 @@ class TaskManager:
             
             # Record failure
             task.metrics["failure_count"] = task.metrics.get("failure_count", 0) + 1
+            task.metrics["last_failure_time"] = time.time()
+            
+            # Include traceback for better debugging
+            import traceback
+            tb = traceback.format_exc()
+            logger.debug(f"Exception traceback for task '{name}':\n{tb}")
             
             result = TaskResult(
                 success=False,

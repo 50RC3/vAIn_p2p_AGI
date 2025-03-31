@@ -20,7 +20,9 @@
     "ipfs-http-client": "^60.0.1",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
-    "winston": "^3.11.0"
+    "multiaddr": "^10.0.1",
+    "winston": "^3.11.0",
+    "dotenv": "^16.0.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

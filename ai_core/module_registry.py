@@ -41,6 +41,7 @@ class ModuleRegistry:
         self.dependencies: Dict[str, List[str]] = {}
         self.startup_order: List[str] = []
         self.resource_manager: Optional[ResourceManager] = None
+        self.metrics_collector = None
         self.is_initialized = False
         self.config_path = os.path.join("config", "modules.json")
         self.registry_lock = asyncio.Lock()
@@ -51,7 +52,8 @@ class ModuleRegistry:
             "error": set()
         }
     
-    async def initialize(self, resource_manager: Optional[ResourceManager] = None):
+    async def initialize(self, resource_manager: Optional[ResourceManager] = None,
+                       metrics_collector=None) -> bool:
         """Initialize the module registry"""
         async with self.registry_lock:
             if self.is_initialized:
@@ -61,10 +63,13 @@ class ModuleRegistry:
             try:
                 logger.info("Initializing module registry")
                 
+                # Store metrics collector reference
+                self.metrics_collector = metrics_collector
+                
                 # Set resource manager
                 self.resource_manager = resource_manager or ResourceManager()
                 if not resource_manager:
-                    await self.resource_manager.initialize()
+                    await self.resource_manager.initialize(metrics_collector=metrics_collector)
                 
                 # Load configuration if exists
                 await self._load_configuration()
@@ -198,6 +203,25 @@ class ModuleRegistry:
                         resource_requirements
                     )
                 
+                # Track module registration in metrics if available
+                if self.metrics_collector:
+                    try:
+                        timestamp = time.time()
+                        await self.metrics_collector._add_metric_point(
+                            "module_registrations",
+                            1.0,  # Count
+                            timestamp,
+                            {"module_id": module_id, "class": module_class.__name__}
+                        )
+                        await self.metrics_collector._add_metric_point(
+                            f"module_{module_id}_status",
+                            1.0,  # 1 = registered
+                            timestamp,
+                            {"status": "registered"}
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to add module registration metric: {e}")
+                
                 # Notify callbacks
                 await self._notify_callbacks("module_added", {
                     "module_id": module_id,
@@ -263,6 +287,54 @@ class ModuleRegistry:
                 })
                 return False
     
+    async def update_module_status(self, module_id: str, status: str) -> bool:
+        """Update the status of a registered module"""
+        if module_id not in self.modules:
+            logger.warning(f"Cannot update status for unregistered module {module_id}")
+            return False
+            
+        try:
+            self.modules[module_id]["status"] = status
+            self.modules[module_id]["last_status_update"] = time.time()
+            
+            # Track status change in metrics if available
+            if self.metrics_collector:
+                try:
+                    timestamp = time.time()
+                    status_code = {
+                        "registered": 1.0,
+                        "initializing": 2.0,
+                        "active": 3.0,
+                        "suspended": 4.0,
+                        "error": 5.0,
+                        "terminated": 6.0
+                    }.get(status, 0.0)
+                    
+                    await self.metrics_collector._add_metric_point(
+                        f"module_{module_id}_status",
+                        status_code,
+                        timestamp,
+                        {"status": status}
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to add module status metric: {e}")
+            
+            # Save configuration
+            await self._save_configuration()
+            
+            # Notify callbacks of status change
+            await self._notify_callbacks("module_status_change", {
+                "module_id": module_id,
+                "status": status,
+                "timestamp": time.time()
+            })
+            
+            logger.info(f"Updated status for module {module_id} to {status}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update module status: {e}")
+            return False
+    
     async def get_module_info(self, module_id: str) -> Optional[Dict[str, Any]]:
         """Get information about a registered module"""
         if module_id not in self.modules:
@@ -287,6 +359,44 @@ class ModuleRegistry:
         for module_id in self.modules:
             result[module_id] = await self.get_module_info(module_id)
         return result
+    
+    async def get_system_metrics(self) -> Dict[str, Any]:
+        """Get comprehensive system metrics and module status"""
+        metrics = {
+            "timestamp": time.time(),
+            "modules": {
+                "total": len(self.modules),
+                "active": sum(1 for info in self.modules.values() if info.get("status") == "active"),
+                "error": sum(1 for info in self.modules.values() if info.get("status") == "error"),
+                "suspended": sum(1 for info in self.modules.values() if info.get("status") == "suspended")
+            },
+            "startup_order_length": len(self.startup_order)
+        }
+        
+        # Add resource metrics if available
+        if self.resource_manager:
+            try:
+                import psutil
+                metrics["system"] = {
+                    "memory": {
+                        "percent": psutil.virtual_memory().percent,
+                        "available": psutil.virtual_memory().available,
+                        "total": psutil.virtual_memory().total
+                    },
+                    "cpu": {
+                        "percent": psutil.cpu_percent(),
+                        "count": psutil.cpu_count()
+                    },
+                    "disk": {
+                        "percent": psutil.disk_usage('/').percent,
+                        "free": psutil.disk_usage('/').free,
+                        "total": psutil.disk_usage('/').total
+                    }
+                }
+            except (ImportError, Exception) as e:
+                logger.warning(f"Failed to get system metrics: {e}")
+        
+        return metrics
     
     def register_callback(self, event_type: str, callback: Callable) -> None:
         """Register a callback for registry events"""
@@ -321,8 +431,25 @@ class ModuleRegistry:
         try:
             logger.info("Shutting down module registry")
             
+            # Update status for all modules
+            for module_id in self.modules:
+                await self.update_module_status(module_id, "terminated")
+            
             # Save configuration
             await self._save_configuration()
+            
+            # Track shutdown in metrics if available
+            if self.metrics_collector:
+                try:
+                    timestamp = time.time()
+                    await self.metrics_collector._add_metric_point(
+                        "registry_shutdown",
+                        1.0,
+                        timestamp,
+                        {"modules_count": len(self.modules)}
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to add shutdown metric: {e}")
             
             # Shut down resource manager if we created it
             if self.resource_manager and hasattr(self.resource_manager, "shutdown"):

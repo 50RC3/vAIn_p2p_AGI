@@ -1021,3 +1021,46 @@ AttributeError: 'ChatbotInterface' object has no attribute '_notify_handlers'
 2025-03-30 22:53:08 [INFO] root (main.py:286): Started mock network monitoring
 2025-03-30 22:54:14 [INFO] ai_core.chatbot.interface (interface.py:496): Chatbot interface cleaned up successfully
 2025-03-30 22:54:14 [INFO] root (main.py:292): Mock network monitor shutdown requested
+2025-03-31 01:45:09 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-31 01:45:20 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-31 01:45:20 [WARNING] config.system_config (system_config.py:221): Config file not found: C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\config\system.json, using defaults
+2025-03-31 01:45:20 [INFO] config (__init__.py:291): Configuration loaded successfully
+2025-03-31 01:45:28 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-31 01:45:29 [WARNING] root (__init__.py:18): Could not import all learning modules: cannot import name 'DebugManager' from 'network.debug' (C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\network\debug.py)
+2025-03-31 01:45:29 [INFO] ai_core.module_registry (module_registry.py:64): Initializing module registry
+2025-03-31 01:45:29 [INFO] ai_core.resource_management (resource_management.py:56): Initializing resource manager
+2025-03-31 01:45:29 [INFO] ai_core.resource_management (resource_management.py:65): Resource manager initialized
+2025-03-31 01:45:29 [INFO] ai_core.module_registry (module_registry.py:167): Computed startup order: 
+2025-03-31 01:45:29 [INFO] ai_core.module_registry (module_registry.py:81): Module registry initialized
+2025-03-31 01:45:29 [WARNING] ai_core.module_registry (module_registry.py:154): Missing dependency: dnc_controller for module hybrid_memory
+2025-03-31 01:45:29 [WARNING] ai_core.module_registry (module_registry.py:154): Missing dependency: memory_manager for module hybrid_memory
+2025-03-31 01:45:29 [INFO] ai_core.module_registry (module_registry.py:167): Computed startup order: hybrid_memory
+2025-03-31 01:45:29 [INFO] ai_core.module_registry (module_registry.py:129): Saved module configuration to config\modules.json
+2025-03-31 01:45:29 [INFO] ai_core.resource_management (resource_management.py:94): Registered module: hybrid_memory (type: HybridMemorySystem)
+2025-03-31 01:45:29 [INFO] ai_core.module_registry (module_registry.py:231): Registered module: hybrid_memory (HybridMemorySystem)
+2025-03-31 01:45:44 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-31 01:45:44 [INFO] root (main.py:81): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-31 01:45:44 [INFO] root (main.py:107): Initializing user interface...
+2025-03-31 01:45:44 [WARNING] root (main.py:117): spaCy not available. NLP features will be limited.
+2025-03-31 01:45:44 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-31 01:45:48 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-31 01:45:48 [INFO] ai_core.chatbot.interface (interface.py:294): Initializing unsupervised learning module
+2025-03-31 01:45:48 [INFO] ai_core.learning.unsupervised (unsupervised.py:34): Initialized unsupervised module with 10 clusters
+2025-03-31 01:45:48 [INFO] ai_core.chatbot.interface (interface.py:303): Initializing self-supervised learning module
+2025-03-31 01:45:48 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-31 01:45:50 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-31 01:45:50 [INFO] ai_core.chatbot.interface (interface.py:313): Initializing reinforcement learning module
+2025-03-31 01:45:50 [INFO] ai_core.chatbot.rl_trainer (rl_trainer.py:206): RL trainer initialized with cpu device
+2025-03-31 01:45:50 [INFO] ai_core.chatbot.interface (interface.py:357): Learning modules initialized
+2025-03-31 01:45:50 [INFO] ai_core.chatbot.interface (interface.py:464): Cleared session data for None
+2025-03-31 01:45:50 [INFO] ai_core.chatbot.interface (interface.py:442): Started new session: session_1743378350_5227
+2025-03-31 01:45:50 [INFO] ai_core.chatbot.interface (interface.py:464): Cleared session data for session_1743378350_5227
+2025-03-31 01:45:50 [WARNING] root (main.py:295): Could not import monitoring components: cannot import name 'DebugManager' from 'network.debug' (C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\network\debug.py)
+2025-03-31 01:45:50 [INFO] root (main.py:326): Started mock network monitoring
+2025-03-31 01:46:04 [INFO] ai_core.chatbot.interface (interface.py:873): Preprocessing message: 'c'
+2025-03-31 01:46:04 [WARNING] ai_core.chatbot.interface (interface.py:1006): Error in unsupervised processing: Boolean value of Tensor with more than one value is ambiguous
+2025-03-31 01:48:16 [INFO] ai_core.chatbot.interface (interface.py:627): Periodic training task cancelled
+2025-03-31 01:48:16 [INFO] ai_core.chatbot.interface (interface.py:511): Chatbot interface cleaned up successfully
+2025-03-31 01:48:16 [INFO] root (main.py:332): Mock network monitor shutdown requested
+2025-03-31 01:48:17 [ERROR] asyncio (base_events.py:1871): Task was destroyed but it is pending!
+task: <Task pending name='Task-2' coro=<ResourceManager._monitor_resources() running at C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\resource_management.py:104> wait_for=<Future pending cb=[Task.task_wakeup()]>>

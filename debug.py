@@ -11,6 +11,25 @@ def main():
     # Get the path to main.py relative to this script
     main_script = str(Path(__file__).parent / "main.py")
     
+    # Check if we should configure with default configs
+    if "--init-config" in sys.argv or any(arg.startswith("--config=") for arg in sys.argv):
+        try:
+            # Add proper path for importing
+            sys.path.insert(0, str(Path(__file__).parent))
+            
+            # Create default config files if needed
+            from tools.config_manager import ConfigManager
+            ConfigManager().create_default_configs(overwrite="--force-config" in sys.argv)
+            print("Default configurations created")
+            
+            # Remove flags that were handled
+            if "--init-config" in sys.argv:
+                sys.argv.remove("--init-config")
+            if "--force-config" in sys.argv:
+                sys.argv.remove("--force-config")
+        except Exception as e:
+            print(f"Failed to initialize configurations: {e}")
+    
     # Pass any command line arguments to the main script
     script_args = sys.argv[1:] if len(sys.argv) > 1 else None
     

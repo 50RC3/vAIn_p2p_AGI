@@ -1,12 +1,20 @@
 import torch
-from typing import Dict, Optional, List
-from models import ModelOutput, ModelState, get_resource_metrics
+import logging
+from typing import Dict, Optional, List, Any, Tuple
+from dataclasses import dataclass
+from models import ModelOutput, ModelState, get_resource_metrics, ModelRole
 from memory.memory_manager import MemoryManager
 from training.model_interface import ModelInterface
 from training.federated_client import FederatedClient
-import logging
 
 logger = logging.getLogger(__name__)
+
+@dataclass
+class CognitiveState:
+    """Represents the current cognitive state of the system"""
+    current_focus: torch.Tensor
+    memory_state: Dict[str, Any]
+    attention_patterns: Optional[torch.Tensor] = None
 
 class UnifiedModelSystem:
     def __init__(self, memory_manager: MemoryManager):
@@ -16,79 +24,45 @@ class UnifiedModelSystem:
         self.shared_memory = {}
         self._resource_allocations = {}
         self._active_tasks = set()
-
-    async def register_model(self, model_id: str, model: torch.nn.Module, role: str) -> bool:
+        self.model_roles: Dict[str, ModelRole] = {}
+        
+    async def register_model(self, model_id: str, model: torch.nn.Module, 
+                           role: ModelRole = ModelRole.GENERAL) -> bool:
+        """
+        Register a model with the unified system
+        
+        Args:
+            model_id: Unique identifier for the model
+            model: The PyTorch model to register
+            role: The role this model plays in the cognitive system
+            
+        Returns:
+            bool: True if registration was successful
+        """
         try:
-            # Register model with interface
-            interface = ModelInterface(model, interactive=True)
+            if model_id in self.models:
+                logger.warning(f"Model {model_id} already registered, replacing")
+                
+            # Store model
             self.models[model_id] = model
+            self.model_roles[model_id] = role
+            
+            # Create interface
+            from training.model_interface import ModelInterface
+            interface = ModelInterface(model, self.memory_manager)
             self.interfaces[model_id] = interface
-
-            # Set up memory sharing
-            if hasattr(model, 'memory_system'):
-                await self.memory_manager.register_memory_system(
-                    f"model_{model_id}", 
-                    model.memory_system
-                )
-
-            # Register role-specific handlers
-            self._register_role_handlers(model_id, role)
-
+            
+            logger.info(f"Registered model {model_id} with role {role.name}")
             return True
+            
         except Exception as e:
             logger.error(f"Failed to register model {model_id}: {e}")
             return False
-
+            
     async def coordinate_inference(self, input_data: torch.Tensor) -> ModelOutput:
-        """Coordinate inference across multiple models"""
-        memory_state = {}
-        current_output = input_data
-
-        try:
-            # Process through model pipeline
-            for model_id, model in self.models.items():
-                interface = self.interfaces.get(model_id)
-                if not interface:
-                    logger.warning(f"No interface found for model {model_id}")
-                    continue
-                
-                # Check if model needs resources before inference
-                self._resource_allocations.setdefault(model_id, {'active': True})
-                
-                # Add monitoring task to active tasks
-                task_id = f"inference_{model_id}_{time.time()}"
-                self._active_tasks.add(task_id)
-                
-                try:
-                    # Perform inference with resource awareness
-                    output = await interface.forward_interactive(current_output)
-                    
-                    # Update current output for next model in pipeline
-                    if isinstance(output, tuple):
-                        current_output = output[0]
-                        # Extract attention or memory information if available
-                        if len(output) > 1:
-                            memory_state[f"{model_id}_memory"] = output[1]
-                    else:
-                        current_output = output
-                    
-                    # Share memory state with other models
-                    if hasattr(model, 'memory_state'):
-                        await self._share_memory_state(model_id, model.memory_state)
-                        
-                finally:
-                    # Remove task from active tasks
-                    self._active_tasks.discard(task_id)
-
-            return ModelOutput(
-                output=current_output,
-                memory_state=memory_state
-            )
-
-        except Exception as e:
-            logger.error(f"Inference coordination failed: {e}")
-            raise
-
+        """Coordinate model inference with resource management"""
+        return await self.cognitive_step(input_data)
+        
     async def cognitive_step(self, input_data: torch.Tensor) -> ModelOutput:
         """Execute one step of cognitive processing"""
         try:
@@ -99,10 +73,35 @@ class UnifiedModelSystem:
                 attention_patterns=None
             )
 
+            # Check if we have models registered
+            if not self.models:
+                logger.warning("No models registered for cognitive processing")
+                return ModelOutput(
+                    output=input_data,
+                    attention=None,
+                    memory_state={},
+                    metadata={'status': 'no_models_registered'}
+                )
+
             # Process through model pipeline with cognitive tracking
-            for model_id, model in self.models.items():
+            # Order: MEMORY → PROCESSING → META
+            processing_order = {
+                ModelRole.MEMORY: 1,
+                ModelRole.PROCESSING: 2, 
+                ModelRole.META: 3,
+                ModelRole.GENERAL: 4
+            }
+            
+            # Sort models by role
+            sorted_models = sorted(
+                self.models.items(),
+                key=lambda x: processing_order.get(self.model_roles.get(x[0], ModelRole.GENERAL), 99)
+            )
+            
+            for model_id, model in sorted_models:
                 interface = self.interfaces.get(model_id)
                 if not interface:
+                    logger.warning(f"No interface for model {model_id}, skipping")
                     continue
                 
                 # Forward pass with resource management

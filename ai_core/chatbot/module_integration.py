@@ -11,6 +11,8 @@ from .mobile_interface import MobileChatInterface
 from .learning_coordinator import LearningCoordinator, LearningCoordinatorConfig
 from .rl_trainer import RLTrainer, RLConfig, TrainerState
 from ai_core.model_storage import ModelStorage
+from ai_core.resource_management import ResourceManager
+from ai_core.metrics_collector import MetricsCollector, MetricsConfig
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +25,11 @@ class ModuleIntegrationConfig:
     enable_distributed: bool = False
     checkpoint_dir: str = "./checkpoints"
     log_level: str = "INFO"
+    metrics_collection_interval: int = 30  # seconds
+    metrics_storage_path: str = "./logs/metrics"
+    max_startup_retries: int = 3
+    startup_retry_delay: float = 5.0  # seconds
+    shutdown_timeout: int = 30  # seconds
 
 class ModuleIntegration:
     """Integrates all chatbot modules for seamless operation"""
@@ -34,13 +41,17 @@ class ModuleIntegration:
         self.learning_coordinator: Optional[LearningCoordinator] = None
         self.rl_trainer: Optional[RLTrainer] = None
         self.model_storage: Optional[ModelStorage] = None
+        self.resource_manager: Optional[ResourceManager] = None
+        self.metrics_collector: Optional[MetricsCollector] = None
         self.resource_monitor_task = None
         self.is_initialized = False
         self.callbacks: Dict[str, Set[Callable]] = {
             'status_change': set(),
             'resource_warning': set(),
             'task_complete': set(),
-            'error': set()
+            'error': set(),
+            'metrics_alert': set(),
+            'initialization': set()
         }
         
         # Ensure checkpoint directory exists
@@ -75,33 +86,98 @@ class ModuleIntegration:
             root_logger.addHandler(error_handler)
     
     async def initialize(self, 
-                        model_storage: ModelStorage,
-                        learning_config: Optional[LearningCoordinatorConfig] = None,
-                        rl_config: Optional[RLConfig] = None) -> bool:
+                       model_storage: ModelStorage,
+                       learning_config: Optional[LearningCoordinatorConfig] = None,
+                       rl_config: Optional[RLConfig] = None,
+                       resource_manager: Optional[ResourceManager] = None) -> bool:
         """Initialize all modules in the proper order"""
         try:
             logger.info("Starting module integration initialization")
             self.model_storage = model_storage
             
+            # Notify initialization start
+            await self._notify_callbacks('initialization', {
+                'status': 'starting',
+                'timestamp': time.time()
+            })
+            
+            # Initialize metrics collector first
+            metrics_config = MetricsConfig(
+                collection_interval=self.config.metrics_collection_interval,
+                storage_path=self.config.metrics_storage_path
+            )
+            self.metrics_collector = MetricsCollector(metrics_config)
+            
+            # Register metrics alert callback
+            self.metrics_collector.register_callback(
+                "alert", 
+                lambda data: asyncio.create_task(self._handle_metrics_alert(data))
+            )
+            
+            # Start metrics collection
+            await self.metrics_collector.start()
+            
+            # Initialize resource manager if provided
+            self.resource_manager = resource_manager
+            if not self.resource_manager:
+                logger.info("Resource manager not provided, creating a new instance")
+                self.resource_manager = ResourceManager()
+                await self.resource_manager.initialize(metrics_collector=self.metrics_collector)
+            
             # Initialize learning coordinator first
             if learning_config:
                 logger.info("Initializing learning coordinator")
-                self.learning_coordinator = LearningCoordinator(learning_config)
+                retries = 0
+                while retries < self.config.max_startup_retries:
+                    try:
+                        self.learning_coordinator = LearningCoordinator(learning_config)
+                        break
+                    except Exception as e:
+                        retries += 1
+                        logger.warning(f"Failed to initialize learning coordinator (attempt {retries}/{self.config.max_startup_retries}): {e}")
+                        if retries >= self.config.max_startup_retries:
+                            logger.error("Maximum retries reached for learning coordinator initialization")
+                            break
+                        await asyncio.sleep(self.config.startup_retry_delay)
             
             # Initialize RL trainer if config provided
-            if rl_config:
-                # Placeholder - would create model and initialize RL trainer
+            if rl_config and self.learning_coordinator:
                 logger.info("Initializing RL trainer")
-                # self.rl_trainer = RLTrainer(model, rl_config)
-                
-                # Register RL trainer with learning coordinator
-                if self.learning_coordinator:
-                    self.learning_coordinator.register_rl_trainer(self.rl_trainer)
+                retries = 0
+                while retries < self.config.max_startup_retries:
+                    try:
+                        # Placeholder - would create model and initialize RL trainer
+                        # self.rl_trainer = RLTrainer(model, rl_config)
+                        
+                        # Register RL trainer with learning coordinator
+                        if self.learning_coordinator and self.rl_trainer:
+                            self.learning_coordinator.register_rl_trainer(self.rl_trainer)
+                        break
+                    except Exception as e:
+                        retries += 1
+                        logger.warning(f"Failed to initialize RL trainer (attempt {retries}/{self.config.max_startup_retries}): {e}")
+                        if retries >= self.config.max_startup_retries:
+                            logger.error("Maximum retries reached for RL trainer initialization")
+                            break
+                        await asyncio.sleep(self.config.startup_retry_delay)
             
             # Start resource monitoring
             self._start_resource_monitoring()
             
             self.is_initialized = True
+            
+            # Notify initialization complete
+            await self._notify_callbacks('initialization', {
+                'status': 'complete',
+                'timestamp': time.time(),
+                'modules': {
+                    'metrics_collector': self.metrics_collector is not None,
+                    'resource_manager': self.resource_manager is not None,
+                    'learning_coordinator': self.learning_coordinator is not None,
+                    'rl_trainer': self.rl_trainer is not None
+                }
+            })
+            
             logger.info("Module integration initialization complete")
             return True
             
@@ -112,8 +188,36 @@ class ModuleIntegration:
                 'method': 'initialize',
                 'error': str(e)
             })
+            
+            # Try to clean up any partially initialized components
+            await self._cleanup_failed_initialization()
+            
             return False
     
+    async def _cleanup_failed_initialization(self) -> None:
+        """Clean up after a failed initialization"""
+        try:
+            logger.info("Cleaning up after failed initialization")
+            
+            # Stop metrics collector if it was started
+            if self.metrics_collector:
+                await self.metrics_collector.stop()
+            
+            # Shut down resource manager if it was initialized by us
+            if self.resource_manager and not self.resource_manager.is_initialized:
+                await self.resource_manager.shutdown()
+            
+            # Cancel any active tasks
+            if self.resource_monitor_task:
+                self.resource_monitor_task.cancel()
+                try:
+                    await self.resource_monitor_task
+                except asyncio.CancelledError:
+                    pass
+        
+        except Exception as e:
+            logger.error(f"Error during initialization cleanup: {e}")
+
     def register_chatbot_interface(self, 
                                   interface_id: str,
                                   interface: ChatbotInterface) -> None:
@@ -222,6 +326,12 @@ class ModuleIntegration:
             # Log performance metrics
             logger.debug(f"Message processing time: {processing_time:.3f}s on interface {interface_id}")
             
+            # Record processing metrics if metrics collector is available
+            if self.metrics_collector:
+                asyncio.create_task(self._record_processing_metrics(
+                    interface_id, user_id, len(message), processing_time
+                ))
+            
             # Notify task completion
             await self._notify_callbacks('task_complete', {
                 'interface_id': interface_id,
@@ -255,6 +365,31 @@ class ModuleIntegration:
                     "text": "Sorry, there was an error processing your message.",
                     "error": str(e)
                 }
+    
+    async def _record_processing_metrics(self, interface_id: str, user_id: str, 
+                                       message_length: int, processing_time: float) -> None:
+        """Record metrics for message processing"""
+        try:
+            if self.metrics_collector:
+                timestamp = time.time()
+                
+                # Record processing time
+                await self.metrics_collector._add_metric_point(
+                    f"processing_time_{interface_id}",
+                    processing_time,
+                    timestamp,
+                    {"user_id": user_id, "message_length": message_length}
+                )
+                
+                # Record message length
+                await self.metrics_collector._add_metric_point(
+                    f"message_length_{interface_id}",
+                    float(message_length),
+                    timestamp,
+                    {"user_id": user_id}
+                )
+        except Exception as e:
+            logger.warning(f"Failed to record processing metrics: {e}")
     
     async def _process_for_learning(self, message: str) -> None:
         """Process message for continuous learning"""
@@ -313,22 +448,41 @@ class ModuleIntegration:
             if torch.cuda.is_available():
                 for i in range(torch.cuda.device_count()):
                     try:
-                        gpu_memory = torch.cuda.memory_allocated(i) / torch.cuda.max_memory_allocated(i) * 100
-                        if gpu_memory > self.config.memory_threshold:
-                            logger.warning(f"GPU {i} memory usage high: {gpu_memory:.1f}%")
+                        # Calculate percentage of allocated memory relative to total memory
+                        allocated = torch.cuda.memory_allocated(i)
+                        total = torch.cuda.get_device_properties(i).total_memory
+                        gpu_percent = (allocated / total) * 100
+                        
+                        if gpu_percent > self.config.memory_threshold:
+                            logger.warning(f"GPU {i} memory usage high: {gpu_percent:.1f}%")
                             await self._notify_callbacks('resource_warning', {
                                 'resource': f'gpu_{i}',
-                                'usage': gpu_memory,
+                                'usage': gpu_percent,
                                 'threshold': self.config.memory_threshold
                             })
                             torch.cuda.empty_cache()
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.error(f"Error checking GPU {i} memory: {e}")
                 
         except ImportError:
             logger.warning("psutil not available, skipping resource check")
         except Exception as e:
             logger.error(f"Error checking resources: {e}")
+    
+    async def _handle_metrics_alert(self, alert_data: Dict[str, Any]) -> None:
+        """Handle alerts from metrics collector"""
+        try:
+            logger.warning(f"Metrics alert received: {alert_data}")
+            
+            # Take action based on alert type
+            if alert_data.get("metric") == "memory_percent" or "gpu" in alert_data.get("metric", ""):
+                # Clean up resources
+                await self._cleanup_resources()
+            
+            # Forward alert to callbacks
+            await self._notify_callbacks("metrics_alert", alert_data)
+        except Exception as e:
+            logger.error(f"Error handling metrics alert: {e}")
     
     async def _cleanup_resources(self) -> None:
         """Clean up resources when memory usage is high"""
@@ -375,31 +529,116 @@ class ModuleIntegration:
             logger.error(f"Error getting learning stats: {e}")
             return {'error': str(e)}
     
+    async def get_system_status(self) -> Dict[str, Any]:
+        """Get overall system status"""
+        status = {
+            "timestamp": time.time(),
+            "initialized": self.is_initialized,
+            "interfaces": list(self.chatbot_interfaces.keys()),
+            "learning_coordinator": self.learning_coordinator is not None,
+            "rl_trainer": self.rl_trainer is not None
+        }
+        
+        # Add metrics if available
+        if self.metrics_collector:
+            status["metrics"] = await self.metrics_collector.get_current_metrics()
+        
+        # Add resource manager status
+        if self.resource_manager:
+            status["registered_modules"] = len(self.resource_manager.registered_modules)
+            
+            # Add status of registered modules
+            modules_status = {}
+            for module_id, module_info in self.resource_manager.registered_modules.items():
+                modules_status[module_id] = {
+                    "status": module_info["status"],
+                    "importance": module_info["importance"],
+                    "last_active": time.time() - module_info["last_active"]  # seconds since last active
+                }
+            status["modules"] = modules_status
+            
+        return status
+    
     async def shutdown(self) -> None:
         """Gracefully shut down all modules"""
         logger.info("Shutting down module integration")
+        
+        shutdown_success = True
         
         # Cancel resource monitoring
         if self.resource_monitor_task:
             self.resource_monitor_task.cancel()
             try:
-                await self.resource_monitor_task
-            except asyncio.CancelledError:
+                await asyncio.wait_for(self.resource_monitor_task, timeout=2.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
         
-        # Clean up learning coordinator
+        # Clean up learning coordinator (with timeout)
         if self.learning_coordinator:
-            await self.learning_coordinator.cleanup()
+            try:
+                await asyncio.wait_for(
+                    self.learning_coordinator.cleanup(),
+                    timeout=self.config.shutdown_timeout
+                )
+            except asyncio.TimeoutError:
+                logger.error("Learning coordinator cleanup timed out")
+                shutdown_success = False
+            except Exception as e:
+                logger.error(f"Error shutting down learning coordinator: {e}")
+                shutdown_success = False
         
-        # Clean up interfaces
+        # Clean up interfaces (with timeout)
+        interface_tasks = []
         for interface_id, interface in self.chatbot_interfaces.items():
             try:
                 if hasattr(interface, 'clear_session'):
-                    await interface.clear_session()
+                    interface_tasks.append(interface.clear_session())
             except Exception as e:
-                logger.error(f"Error clearing session for interface {interface_id}: {e}")
+                logger.error(f"Error preparing interface {interface_id} for shutdown: {e}")
+        
+        if interface_tasks:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*interface_tasks, return_exceptions=True),
+                    timeout=self.config.shutdown_timeout
+                )
+            except asyncio.TimeoutError:
+                logger.error("Interface cleanup timed out")
+                shutdown_success = False
+        
+        # Clean up metrics collector (with timeout)
+        if self.metrics_collector:
+            try:
+                await asyncio.wait_for(
+                    self.metrics_collector.stop(),
+                    timeout=self.config.shutdown_timeout
+                )
+            except asyncio.TimeoutError:
+                logger.error("Metrics collector shutdown timed out")
+                shutdown_success = False
+            except Exception as e:
+                logger.error(f"Error shutting down metrics collector: {e}")
+                shutdown_success = False
         
         # Final resource cleanup
-        await self._cleanup_resources()
+        try:
+            await self._cleanup_resources()
+        except Exception as e:
+            logger.error(f"Error cleaning up resources: {e}")
+            shutdown_success = False
         
-        logger.info("Module integration shutdown complete")
+        # Shutdown resource manager (with timeout)
+        if self.resource_manager:
+            try:
+                await asyncio.wait_for(
+                    self.resource_manager.shutdown(),
+                    timeout=self.config.shutdown_timeout
+                )
+            except asyncio.TimeoutError:
+                logger.error("Resource manager shutdown timed out")
+                shutdown_success = False
+            except Exception as e:
+                logger.error(f"Error shutting down resource manager: {e}")
+                shutdown_success = False
+        
+        logger.info(f"Module integration shutdown {'completed successfully' if shutdown_success else 'completed with errors'}")

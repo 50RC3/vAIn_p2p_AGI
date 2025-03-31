@@ -11,6 +11,7 @@ import torch
 from ai_core.learning.unsupervised import UnsupervisedLearningModule
 from ai_core.learning.self_supervised import SelfSupervisedLearning
 from .rl_trainer import RLTrainer, RLConfig
+from ai_core.evolution.cognitive_evolution import CognitiveEvolution, EvolutionConfig
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ class LearningCoordinatorConfig:
     enable_self_supervised: bool = True
     enable_unsupervised: bool = True
     enable_reinforcement: bool = True
+    enable_cognitive_evolution: bool = True
     model_path: str = "./models"
     stats_save_interval: int = 100
     min_sample_length: int = 5
@@ -47,6 +49,13 @@ class LearningCoordinator:
         self.last_update = 0
         self.metrics_history = []
         
+        # Initialize cognitive evolution system
+        self.config = getattr(self.interface, 'learning_config', LearningCoordinatorConfig())
+        evolution_config = EvolutionConfig(
+            save_path=os.path.join(self.config.model_path, "evolution")
+        )
+        self.cognitive_evolution = CognitiveEvolution(evolution_config) if self.config.enable_cognitive_evolution else None
+
     async def coordinate_training_cycle(self) -> Dict[str, Any]:
         """Run a coordinated training cycle across all learning systems"""
         async with self.processing_lock:
@@ -74,6 +83,11 @@ class LearningCoordinator:
                 # 4. Apply cross-learning to share insights between systems
                 await self.interface._apply_cross_learning()
                 
+                # 5. Update cognitive evolution metrics if enabled
+                if self.cognitive_evolution:
+                    evolution_metrics = await self.cognitive_evolution.update_metrics(metrics)
+                    metrics["evolution"] = evolution_metrics.to_dict()
+                
                 # Track metrics history
                 self.metrics_history.append(metrics)
                 if len(self.metrics_history) > 100:
@@ -84,7 +98,7 @@ class LearningCoordinator:
             except Exception as e:
                 logger.error(f"Coordinated training cycle failed: {e}")
                 return {"error": str(e)}
-    
+
     async def _update_clusters(self) -> None:
         """Update unsupervised clustering with recent data"""
         if not self.interface.unsupervised_module or len(self.interface.history) < 3:
@@ -95,7 +109,7 @@ class LearningCoordinator:
             self.interface.unsupervised_module.add_to_buffer(msg)
             
         await self.interface.unsupervised_module.update_clusters()
-    
+
     async def _update_self_supervised(self) -> Dict[str, float]:
         """Update self-supervised learning with recent examples"""
         metrics = {}
@@ -118,7 +132,7 @@ class LearningCoordinator:
                     
         metrics["avg_loss"] = total_loss / max(1, len(examples))
         return metrics
-        
+
     async def _update_reinforcement(self) -> Dict[str, float]:
         """Update reinforcement learning with recent feedback"""
         if not self.interface.rl_trainer:
@@ -131,3 +145,15 @@ class LearningCoordinator:
         await self.interface.rl_trainer.update()
         
         return stats
+    
+    def get_evolution_metrics(self) -> Dict[str, Any]:
+        """Get current cognitive evolution metrics"""
+        if self.cognitive_evolution:
+            return self.cognitive_evolution.get_current_metrics().to_dict()
+        return {}
+    
+    def get_evolution_history(self) -> List[Dict[str, Any]]:
+        """Get cognitive evolution history"""
+        if self.cognitive_evolution:
+            return self.cognitive_evolution.get_evolution_history()
+        return []

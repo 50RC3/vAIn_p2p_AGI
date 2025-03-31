@@ -222,6 +222,14 @@ LOGS_DIR = BASE_DIR / "logs"
 MODELS_DIR = BASE_DIR / "models"
 CACHE_DIR = BASE_DIR / "cache"
 SESSION_SAVE_PATH = BASE_DIR / "sessions"
+MODULE_REGISTRY_PATH = BASE_DIR / "config" / "modules.json"
+
+# Registry paths
+AI_CORE_DIR = BASE_DIR / "ai_core"
+NETWORK_DIR = BASE_DIR / "network"
+TRAINING_DIR = BASE_DIR / "training"
+UTILS_DIR = BASE_DIR / "utils"
+SECURITY_DIR = BASE_DIR / "security"
 
 # Ensure critical directories exist
 for directory in [TEMP_DIR, DATA_DIR, CONFIG_DIR, LOGS_DIR, MODELS_DIR, CACHE_DIR, SESSION_SAVE_PATH]:
@@ -234,6 +242,7 @@ FEATURES = {
     "debug_logging": False,
     "use_encryption": True,
     "enable_monitoring": True,
+    "auto_dependency_check": True,  # New flag to control automatic dependency checking
 }
 
 # Default operation modes

@@ -164,20 +164,28 @@ class InteractiveSession:
 
     async def initialize(self) -> None:
         """Initialize the interactive session."""
-        self._setup_handlers()
-        
-        # Set up monitoring if progress tracking is enabled
-        if hasattr(self, 'config') and getattr(self, 'config', None) and getattr(self.config, 'progress_tracking', False):
-            self._start_resource_monitoring()
-        
-        # Attempt to restore previous session if available
-        if self._restore_session_func is not None:
-            try:
-                self._restore_session_func()
-                logger.info(f"Restored session {self.session_id}")
-            except Exception as e:
-                logger.warning("Failed to restore session: %s", e)
-    
+        try:
+            self._setup_handlers()
+            
+            # Set up monitoring if progress tracking is enabled
+            if hasattr(self, 'config') and getattr(self, 'config', None) and getattr(self.config, 'progress_tracking', False):
+                self._start_resource_monitoring()
+            
+            # Attempt to restore previous session if available
+            if self._restore_session_func is not None:
+                try:
+                    self._restore_session_func()
+                    logger.info(f"Restored session {self.session_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to restore session: {str(e)}")
+            
+            # Ensure session directory exists
+            os.makedirs(self.session_path, exist_ok=True)
+            logger.info(f"Interactive session {self.session_id} initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize interactive session: {str(e)}")
+            raise RuntimeError(f"Session initialization failed: {str(e)}") from e
+
     def _setup_handlers(self) -> None:
         """Set up signal handlers for graceful termination."""
         try:
@@ -225,30 +233,50 @@ class InteractiveSession:
     async def shutdown(self) -> None:
         """Shutdown the interactive session."""
         try:
+            logger.info(f"Shutting down interactive session {self.session_id}")
+            
             # Cancel monitoring task
             if self._monitoring_task and not self._monitoring_task.done():
                 self._monitoring_task.cancel()
                 try:
-                    await self._monitoring_task
-                except asyncio.CancelledError:
+                    await asyncio.wait_for(self._monitoring_task, timeout=2.0)
+                except (asyncio.CancelledError, asyncio.TimeoutError):
                     pass
             
             # Run cleanup operations
             self._cleanup()
             
-            # Cancel any remaining tasks
-            for task in self._active_tasks:
-                if not task.done():
-                    task.cancel()
+            # Cancel any remaining tasks with a timeout
+            if self._active_tasks:
+                for task in self._active_tasks:
+                    if not task.done():
+                        task.cancel()
+                
+                # Wait for tasks to complete with timeout
+                try:
+                    await asyncio.wait_for(
+                        asyncio.gather(*self._active_tasks, return_exceptions=True),
+                        timeout=self.config.cleanup_timeout
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning("Some tasks did not complete within timeout during shutdown")
             
             # Wait for all shutdown tasks to complete
             if self._shutdown_tasks:
-                await asyncio.gather(*self._shutdown_tasks, return_exceptions=True)
-                
-            logger.info("Session shutdown complete")
+                try:
+                    await asyncio.wait_for(
+                        asyncio.gather(*self._shutdown_tasks, return_exceptions=True),
+                        timeout=self.config.cleanup_timeout
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning("Some shutdown tasks did not complete within timeout")
+            
+            logger.info(f"Session {self.session_id} shutdown complete")
         except Exception as e:
-            logger.warning(f"Error during shutdown: {e}")
-    
+            logger.error(f"Error during session shutdown: {str(e)}")
+            # Still try to restore handlers even if other shutdown steps fail
+            self._restore_handlers()
+
     async def input(self, prompt: str, timeout: Optional[int] = None) -> str:
         """Get input from the user with optional timeout."""
         timeout = timeout or INTERACTION_TIMEOUT

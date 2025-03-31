@@ -35,6 +35,13 @@ COMMAND_SHORTCUTS = {
     "m0": "python -m ai_core.tools.model_status",
     "m1": "python -m training.train --local",
     
+    # Configuration commands
+    "c0": "python -m tools.config_manager list",
+    "c1": "python -m tools.config_manager show",
+    "c2": "python -m tools.config_manager update",
+    "c3": "python -m tools.config_manager update-all",
+    "c4": "python -m tools.config_manager validate",
+    
     # Utility commands
     "u0": "python -m tools.system_check",
     "u1": "python -m tools.benchmark",
@@ -76,6 +83,14 @@ def list_commands():
     print("\n🧠 Model Commands:")
     print(f"{'m0':<10} {'ai_core.tools.model_status':<40} {'Show model status'}")
     print(f"{'m1':<10} {'training.train --local':<40} {'Train model locally'}")
+    
+    # Configuration commands
+    print("\n⚙️ Configuration Commands:")
+    print(f"{'c0':<10} {'tools.config_manager list':<40} {'List all configs'}")
+    print(f"{'c1':<10} {'tools.config_manager show':<40} {'Show config details'}")
+    print(f"{'c2':<10} {'tools.config_manager update':<40} {'Update a config'}")
+    print(f"{'c3':<10} {'tools.config_manager update-all':<40} {'Update all configs'}")
+    print(f"{'c4':<10} {'tools.config_manager validate':<40} {'Validate configs'}")
     
     # Utility commands
     print("\n🔧 Utility Commands:")

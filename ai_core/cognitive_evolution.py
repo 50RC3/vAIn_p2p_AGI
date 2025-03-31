@@ -1,11 +1,23 @@
 import torch
+import time
+import asyncio
 from typing import Dict, List, Optional, Any
+from dataclasses import dataclass
 from models import ModelOutput, ModelRole, get_resource_metrics
 from memory.memory_manager import MemoryManager
 from .unified_model_system import UnifiedModelSystem
+from models.hybrid_memory_system import HybridMemorySystem
 import logging
 
 logger = logging.getLogger(__name__)
+
+@dataclass
+class CognitiveState:
+    """Represents the current cognitive state of the system"""
+    current_focus: torch.Tensor
+    memory_state: Dict[str, Any]
+    attention_patterns: Optional[torch.Tensor] = None
+
 
 class CognitiveEvolution:
     def __init__(self, unified_system: UnifiedModelSystem, memory_manager: MemoryManager):
@@ -14,40 +26,86 @@ class CognitiveEvolution:
         self.cognitive_states = {}
         self.evolution_history = []
         self._active_learning = False
+        self._initialized = False
         
     async def initialize_cognitive_network(self):
         """Initialize the cognitive processing network"""
         try:
-            # Set up cognitive pipeline
+            if self._initialized:
+                logger.info("Cognitive network already initialized")
+                return True
+                
+            logger.info("Initializing cognitive processing network")
+            
+            # Register models with unified system
+            # First, register memory system
+            memory_model = HybridMemorySystem(
+                input_size=512,
+                hidden_size=256,
+                memory_size=128,
+                word_size=64,
+                num_heads=4
+            )
             await self.unified_system.register_model(
                 "memory_encoder", 
-                HybridMemorySystem(...),
+                memory_model,
                 ModelRole.MEMORY
             )
             
+            # Then register cognitive processor (transformer)
+            # Import locally to avoid circular imports
+            from models.transformers import vAInTransformer
+            processor = vAInTransformer(
+                dim=512,
+                depth=6,
+                heads=8,
+                dim_head=64
+            )
             await self.unified_system.register_model(
                 "cognitive_processor",
-                vAInTransformer(...), 
+                processor, 
                 ModelRole.PROCESSING
             )
             
+            # Finally register meta-learning component
+            # Import locally to avoid circular imports
+            from training.meta_reptile import MetaReptile
+            meta_learner = MetaReptile(
+                model=processor,
+                inner_lr=0.03,
+                outer_lr=0.1
+            )
             await self.unified_system.register_model(
                 "meta_learner",
-                ReptileModel(...),
+                meta_learner,
                 ModelRole.META
             )
             
+            # Initialize cognitive states tracking
+            self.cognitive_states = {}
+            self.evolution_history = []
+            
             self._active_learning = True
+            self._initialized = True
+            
+            logger.info("Cognitive processing network initialized successfully")
+            return True
             
         except Exception as e:
             logger.error(f"Failed to initialize cognitive network: {e}")
-            raise
-
+            self._active_learning = False
+            self._initialized = False
+            return False
+            
     async def cognitive_cycle(self, input_data: torch.Tensor) -> ModelOutput:
         """Execute one cognitive processing cycle"""
         try:
+            # Ensure initialization
+            if not self._initialized:
+                await self.initialize_cognitive_network()
+                
             # Process through cognitive pipeline
-            memory_output = await self.unified_system.coordinate_inference(input_data)
+            memory_output = await self.unified_system.cognitive_step(input_data)
             
             # Update cognitive state
             self.cognitive_states[len(self.evolution_history)] = {

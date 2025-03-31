@@ -1,0 +1,19 @@
+{
+  "modules": {
+    "hybrid_memory": {
+      "class": "HybridMemorySystem",
+      "module": "models.hybrid_memory_system",
+      "config": {
+        "resource_requirements": {
+          "memory": "high",
+          "cpu": "medium",
+          "gpu": "high",
+          "importance": "high"
+        }
+      },
+      "status": "registered",
+      "registered_time": 1743378329.0600111
+    }
+  },
+  "last_updated": 1743378329.060595
+}

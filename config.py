@@ -108,17 +108,30 @@ class Config:
     
     async def _update_config_interactive(self) -> bool:
         """Local implementation of interactive config update"""
-        print("\nUpdate configuration? (y/n): ")
-        response = input()
-        if response.lower() != 'y':
-            return False
+        try:
+            print("\nUpdate configuration? (y/n): ")
+            response = input()
+            if response.lower() != 'y':
+                return False
+                
+            # Update basic parameters
+            self.batch_size = int(input(f"Batch size [{self.batch_size}]: ") or self.batch_size)
+            self.learning_rate = float(input(f"Learning rate [{self.learning_rate}]: ") or self.learning_rate)
+            self.num_epochs = int(input(f"Epochs [{self.num_epochs}]: ") or self.num_epochs)
             
-        # Update basic parameters
-        self.batch_size = int(input(f"Batch size [{self.batch_size}]: ") or self.batch_size)
-        self.learning_rate = float(input(f"Learning rate [{self.learning_rate}]: ") or self.learning_rate)
-        self.num_epochs = int(input(f"Epochs [{self.num_epochs}]: ") or self.num_epochs)
-        
-        return True
+            # Validate after updates
+            if not self.validate_config():
+                logger.error("Configuration validation failed")
+                return False
+                
+            logger.info("Configuration updated successfully")
+            return True
+        except ValueError as e:
+            logger.error(f"Invalid input: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Error during configuration update: {e}")
+            return False
             
     def validate_config(self) -> bool:
         """Enhanced configuration validation with bounds checking"""
@@ -129,6 +142,11 @@ class Config:
             
         if not (0 < self.learning_rate < 1):
             logger.error("Learning rate must be between 0 and 1")
+            return False
+            
+        # Add validation for RL parameters
+        if self.rl['gamma'] <= 0 or self.rl['gamma'] >= 1:
+            logger.error("RL gamma must be between 0 and 1 (exclusive)")
             return False
             
         return True
