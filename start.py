@@ -38,15 +38,116 @@ from core.constants import FEATURES, BASE_DIR
 from core.interactive_utils import InteractionLevel
 
 
-async def check_system_dependencies(args):
-    """Check and install system dependencies if needed"""
-    logger.info("Checking system dependencies...")
-    
-    success, missing = check_dependencies(required_only=args.minimal)
-    
-    if success:
-        logger.info("✓ All required dependencies are installed.")
+async def validate_and_initialize(args):
+    """
+    Validate configuration and initialize dependent subsystems.
+
+    Args:
+        args: Parsed command-line arguments.
+
+    Returns:
+        bool: True if all validations and initializations succeed, False otherwise.
+    """
+    logger.info("Validating configuration and initializing subsystems...")
+
+    try:
+        # Load configuration
+        from config import get_config
+        config = get_config(interactive=not args.non_interactive)
+
+        # Validate configuration
+        if not args.skip_config_validation:
+            valid = config.validate()
+            if not valid:
+                logger.error("Configuration validation failed. Please review your settings.")
+                if args.strict:
+                    return False
+            else:
+                logger.info("✓ Configuration validation succeeded.")
+
+        # Combine memory and model subsystem initialization
+        memory_and_model_init_results = await asyncio.gather(
+            init_memory_system(args),
+            init_model_system(args),
+            return_exceptions=True
+        )
+
+        for result, subsystem in zip(memory_and_model_init_results, ["Memory", "Model"]):
+            if isinstance(result, Exception):
+                logger.error(f"{subsystem} subsystem initialization failed: {result}")
+                if args.strict:
+                    return False
+            elif result is False:
+                logger.error(f"{subsystem} subsystem initialization returned False.")
+                if args.strict:
+                    return False
+            else:
+                logger.info(f"✓ {subsystem} subsystem initialized successfully.")
+
         return True
+
+    except Exception as e:
+        logger.error(f"Error during validation and initialization: {e}", exc_info=True)
+        return False
+
+
+async def startup_sequence(args):
+    """
+    Execute full system startup sequence.
+
+    Args:
+        args: Parsed command-line arguments.
+
+    Returns:
+        bool: True if startup sequence succeeds, False otherwise.
+    """
+    start_time = time.time()
+    logger.info("Starting vAIn P2P AGI System...")
+
+    # Create necessary directories
+    os.makedirs(BASE_DIR / "logs", exist_ok=True)
+    os.makedirs(BASE_DIR / "config", exist_ok=True)
+
+    # Check if config directory is empty and create default configs if needed
+    config_dir = BASE_DIR / "config"
+    if not list(config_dir.glob("*.json")) or args.init_config:
+        logger.info("Creating default configurations...")
+        try:
+            from tools.config_manager import ConfigManager
+            ConfigManager().create_default_configs()
+        except ImportError:
+            logger.warning("ConfigManager not found, skipping default config creation.")
+        except Exception as e:
+            logger.error(f"Error creating default configurations: {e}")
+
+    # Check dependencies first
+    if not await check_system_dependencies(args):
+        return False
+
+    # Validate configuration and initialize subsystems
+    if not await validate_and_initialize(args):
+        return False
+
+    # Start network if enabled
+    network = await start_network_services(args)
+    if network is False:  # Strict failure
+        return False
+
+    # Start UI
+    ui = await start_ui(args)
+
+    # Print startup complete message
+    elapsed = time.time() - start_time
+    logger.info(f"Startup completed in {elapsed:.2f} seconds")
+
+    # Launch interactive console if available and requested
+    if ui and isinstance(ui, object) and hasattr(ui, 'start'):
+        try:
+            await ui.start()
+        except Exception as e:
+            logger.error(f"Error in UI: {e}")
+
+    return True
         
     logger.warning(f"Missing dependencies: {', '.join(missing)}")
     
