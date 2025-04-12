@@ -5,11 +5,15 @@ import torch
 from typing import Dict, Optional, Any
 from pathlib import Path
 import json
+import time
+import psutil
 from dataclasses import dataclass
 
 from core.interactive_utils import InteractiveSession, InteractiveConfig, InteractionLevel
 from network.caching import CacheManager, CacheLevel, CachePolicy
 from ai_core.model_storage import ModelStorage
+from core.constants import INTERACTION_TIMEOUTS
+from core.system_coordinator import get_coordinator
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +50,17 @@ class MemoryManager:
         })
         self._cleanup_lock = asyncio.Lock()
         self._is_cleanup_pending = False
+        
+        # Get system coordinator for cross-module coordination
+        try:
+            self.system_coordinator = get_coordinator()
+            if self.system_coordinator:
+                # Register listeners for memory-related events
+                self.system_coordinator.register_event_listener("high_memory", self._handle_high_memory_event)
+                self.system_coordinator.register_event_listener("critical_memory", self._handle_critical_memory_event)
+        except Exception as e:
+            logger.warning(f"Failed to initialize system coordinator integration: {e}")
+            self.system_coordinator = None
     
     async def register_memory_system(self, name: str, system: Any) -> bool:
         """Register a memory system with validation"""
@@ -113,15 +128,31 @@ class MemoryManager:
         status = self.get_memory_status()
         
         if status.used / status.total > 0.9:
-            if not await self.session.get_confirmation(
-                "WARNING: High memory usage (>90%). Continue caching? (y/n): "
-            ):
-                return False
+            if self.session:
+                if not await self.session.get_confirmation(
+                    "WARNING: High memory usage (>90%). Continue caching? (y/n): "
+                ):
+                    return False
                 
             await self._force_cleanup()
             
+            # Notify system coordinator about high memory usage
+            if self.system_coordinator:
+                self.system_coordinator.dispatch_event("high_memory", {
+                    "usage": status.used / status.total,
+                    "source": "memory_manager"
+                })
+            
         if psutil.virtual_memory().percent > 95:
             logger.error("System memory critically low")
+            
+            # Notify system coordinator about critical memory
+            if self.system_coordinator:
+                self.system_coordinator.dispatch_event("critical_memory", {
+                    "usage": psutil.virtual_memory().percent / 100,
+                    "source": "memory_manager"
+                })
+                
             return False
             
         return True
@@ -248,11 +279,37 @@ class MemoryManager:
         return sum(t.element_size() * t.nelement() for t in self.tensor_cache.values())
 
     def get_memory_status(self) -> MemoryStatus:
-        torch.cuda.empty_cache()
+        """Get current memory status"""
+        if hasattr(torch.cuda, 'empty_cache'):
+            torch.cuda.empty_cache()
+            
+        total = 0
+        used = 0
+        free = 0
+        
+        try:
+            if torch.cuda.is_available():
+                device = torch.cuda.current_device()
+                total = torch.cuda.get_device_properties(device).total_memory
+                used = torch.cuda.memory_allocated(device)
+                free = torch.cuda.memory_reserved(device)
+            else:
+                # Fallback to system memory
+                vm = psutil.virtual_memory()
+                total = vm.total
+                used = vm.used
+                free = vm.free
+        except Exception as e:
+            logger.error(f"Error getting memory status: {e}")
+            # Provide defaults
+            total = 1
+            used = 0
+            free = 1
+            
         return MemoryStatus(
-            total=torch.cuda.get_device_properties(0).total_memory,
-            used=torch.cuda.memory_allocated(),
-            free=torch.cuda.memory_reserved(),
+            total=total,
+            used=used,
+            free=free,
             cached_tensors=len(self.tensor_cache)
         )
 
@@ -298,6 +355,13 @@ class MemoryManager:
                     "timestamp": time.time(),
                     "size": state.get("size", 0)
                 }
+                
+                # Notify system coordinator about state changes
+                if self.system_coordinator:
+                    self.system_coordinator.dispatch_event("memory_state_updated", {
+                        "model_id": model_id,
+                        "timestamp": time.time()
+                    })
                 
             # Notify component coordinator if available
             if hasattr(self, '_coordinator'):
@@ -394,3 +458,23 @@ class MemoryManager:
                 await self._cleanup_storage()
         else:
             await self._cleanup_storage()
+            
+        # Notify system coordinator
+        if self.system_coordinator:
+            self.system_coordinator.dispatch_event("memory_cleanup", {
+                "timestamp": time.time(),
+                "source": "memory_manager"
+            })
+
+    async def _handle_high_memory_event(self, data: Dict[str, Any]) -> None:
+        """Handle high memory event from system coordinator."""
+        if data.get("source") != "memory_manager":  # Avoid feedback loops
+            logger.warning(f"High memory usage detected by {data.get('source', 'unknown')}: {data.get('usage', 0):.1%}")
+            if data.get("usage", 0) > 0.85:
+                await self._evict_cache_interactive()
+
+    async def _handle_critical_memory_event(self, data: Dict[str, Any]) -> None:
+        """Handle critical memory event from system coordinator."""
+        if data.get("source") != "memory_manager":  # Avoid feedback loops
+            logger.error(f"Critical memory usage detected by {data.get('source', 'unknown')}: {data.get('usage', 0):.1%}")
+            await self._force_cleanup()

@@ -8,6 +8,7 @@ import time
 
 from training.compression import AdaptiveCompression
 from core.cache import CacheManager
+from core.system_coordinator import get_coordinator
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,123 @@ class MobileNode:
     def _start_sensor_polling(self, sensor_type: str):
         """Start polling sensor data"""
         pass
+
+class ResourceMonitor:
+    """Monitor available resources on the mobile device."""
+    
+    def __init__(self):
+        self.memory_monitor = None
+        self.cpu_threshold = 0.8
+        self.memory_threshold = 0.7
+        self.battery_threshold = 0.2
+        self.last_check = 0
+        self.check_interval = 60  # seconds
+        self.logger = logging.getLogger('ResourceMonitor')
+        self.callbacks = {}
+        self.system_coordinator = get_coordinator()
+        
+    async def initialize(self, context=None):
+        """Initialize resource monitoring."""
+        self.context = context
+        
+        # Set up memory monitoring
+        try:
+            from ..memory_monitor import MemoryMonitor
+            self.memory_monitor = MemoryMonitor(threshold=self.memory_threshold, check_interval=30)
+            await self.memory_monitor.start_monitoring(callback=self._on_high_memory_usage)
+            self.logger.info("Memory monitoring started")
+            
+            # Register with system coordinator
+            if self.system_coordinator:
+                self.system_coordinator.register_component("mobile_resource_monitor", self)
+                self.system_coordinator.register_event_listener("critical_memory", self._handle_critical_memory)
+                self.system_coordinator.register_event_listener("critical_cpu", self._handle_critical_cpu)
+                
+            return True
+        except ImportError:
+            self.logger.warning("MemoryMonitor not available, resource monitoring will be limited")
+            return False
+            
+    async def _on_high_memory_usage(self, usage):
+        """Handle high memory usage alerts."""
+        self.logger.warning(f"High memory usage detected: {usage:.1%}")
+        if "memory_warning" in self.callbacks:
+            await self.callbacks["memory_warning"](usage)
+            
+        # Send event to system coordinator
+        if self.system_coordinator:
+            self.system_coordinator.dispatch_event("high_memory", {"usage": usage, "source": "mobile"})
+    
+    async def _handle_critical_memory(self, data):
+        """Handle critical memory events from system coordinator."""
+        self.logger.warning(f"Critical memory event received: {data}")
+        await self._reduce_resource_usage("memory")
+    
+    async def _handle_critical_cpu(self, data):
+        """Handle critical CPU events from system coordinator."""
+        self.logger.warning(f"Critical CPU event received: {data}")
+        await self._reduce_resource_usage("cpu")
+    
+    async def _reduce_resource_usage(self, resource_type):
+        """Reduce resource usage based on resource type."""
+        if resource_type == "memory":
+            # Clear caches
+            if hasattr(self, "cache_manager"):
+                await self.cache_manager.clear()
+                
+            # Stop non-essential operations
+            if "resource_action" in self.callbacks:
+                await self.callbacks["resource_action"]({
+                    "action": "reduce",
+                    "resource": resource_type
+                })
+            
+    async def get_resource_state(self):
+        """Get current resource state."""
+        try:
+            import psutil
+            
+            # Only check every check_interval seconds
+            current_time = time.time()
+            if current_time - self.last_check < self.check_interval:
+                return self._last_state
+                
+            self.last_check = current_time
+            
+            mem = psutil.virtual_memory()
+            cpu = psutil.cpu_percent() / 100
+            
+            self._last_state = {
+                "memory_available": mem.available,
+                "memory_percent": mem.percent / 100,
+                "cpu_percent": cpu,
+                "battery": await self._get_battery_level(),
+                "timestamp": current_time
+            }
+            
+            return self._last_state
+        except Exception as e:
+            self.logger.error(f"Failed to get resource state: {e}")
+            return {
+                "memory_percent": 0,
+                "cpu_percent": 0,
+                "battery": 1.0,
+                "error": str(e)
+            }
+            
+    def register_callback(self, event_type, callback):
+        """Register callback for resource events."""
+        self.callbacks[event_type] = callback
+        
+    async def cleanup(self):
+        """Clean up resources."""
+        if self.memory_monitor:
+            self.memory_monitor.stop()
+            
+        # Unregister from system coordinator
+        if self.system_coordinator and hasattr(self.system_coordinator, "components"):
+            if "mobile_resource_monitor" in self.system_coordinator.components:
+                self.system_coordinator.components.pop("mobile_resource_monitor")
 
 class EdgeNode:
     """Edge node implementation with adaptive compression and caching."""

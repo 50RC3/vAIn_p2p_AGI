@@ -3,17 +3,18 @@
 Production entry point for vAIn P2P AGI system.
 This script initializes all components and ensures proper coordination.
 """
+import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 import asyncio
 import logging
-import os
-import sys
 import signal
 import argparse
+import traceback
 from typing import Dict, Any, Optional
 import json
 import time
-import traceback
 
 # Configure logging first
 from utils.logger_init import init_logger

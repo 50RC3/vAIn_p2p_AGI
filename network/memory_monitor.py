@@ -46,3 +46,4 @@ class MemoryMonitor:
         self._interrupt_requested = True
         if self._monitor_task:
             self._monitor_task.cancel()
+            self.logger.info("Memory monitoring stopped")

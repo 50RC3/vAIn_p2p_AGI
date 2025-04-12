@@ -1,6 +1,8 @@
 from typing import Dict, Optional
 from dataclasses import dataclass
 from datetime import datetime
+import uuid
+from exceptions import NetworkError  # Import the NetworkError exception
 
 @dataclass
 class OfflineMessage:

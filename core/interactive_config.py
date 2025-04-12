@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 import os
 
-class InteractionLevel(Enum:
+class InteractionLevel(Enum):  # Fixed syntax error, was missing closing parenthesis
     NONE = "none"
     MINIMAL = "minimal" 
     NORMAL = "normal"

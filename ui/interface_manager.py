@@ -5,6 +5,7 @@ import logging
 from typing import Dict, List, Any, Optional
 import threading
 import time
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ class UserInterfaceManager:
         self.system = None
         self._running = False
         self._event_thread = None
+        self.component_integration = None
         
     def register_interface(self, interface):
         """Register a UI implementation with the manager."""
@@ -41,15 +43,40 @@ class UserInterfaceManager:
         
         # Connect the system to all interfaces
         for interface_name, interface in self.interfaces.items():
-            interface.connect_system(system)
+            if hasattr(interface, 'connect_system'):
+                interface.connect_system(system)
             logger.debug(f"Connected system to interface: {interface_name}")
+    
+    def connect_integration(self, integration):
+        """Connect component integration to UI manager."""
+        self.component_integration = integration
+        logger.info("Connected component integration to UI manager")
+    
+    async def start_async(self):
+        """Start all registered interfaces asynchronously."""
+        for name, interface in self.interfaces.items():
+            try:
+                if hasattr(interface, 'start'):
+                    if asyncio.iscoroutinefunction(interface.start):
+                        # Create task for async start methods
+                        await interface.start()
+                    else:
+                        interface.start()
+                    logger.info(f"Started interface: {name}")
+            except Exception as e:
+                logger.error(f"Failed to start interface {name}: {e}")
     
     def start(self):
         """Start all registered interfaces."""
         for name, interface in self.interfaces.items():
             try:
-                interface.start()
-                logger.info(f"Started interface: {name}")
+                if hasattr(interface, 'start'):
+                    if asyncio.iscoroutinefunction(interface.start):
+                        # Create task for async start methods
+                        asyncio.create_task(interface.start())
+                    else:
+                        interface.start()
+                    logger.info(f"Started interface: {name}")
             except Exception as e:
                 logger.error(f"Failed to start interface {name}: {e}")
     
@@ -81,16 +108,37 @@ class UserInterfaceManager:
                     interface.process_events()
             time.sleep(0.05)
     
-    def shutdown(self):
+    async def shutdown(self):
         """Shut down all interfaces."""
         self._running = False
         
         if self._event_thread and self._event_thread.is_alive():
             self._event_thread.join(timeout=2.0)
         
+        # Shutdown interfaces asynchronously
         for name, interface in self.interfaces.items():
             try:
-                interface.shutdown()
-                logger.info(f"Shutdown interface: {name}")
+                if hasattr(interface, 'shutdown'):
+                    if asyncio.iscoroutinefunction(interface.shutdown):
+                        await interface.shutdown()
+                    else:
+                        interface.shutdown()
+                    logger.info(f"Shutdown interface: {name}")
+                elif hasattr(interface, 'stop'):
+                    if asyncio.iscoroutinefunction(interface.stop):
+                        await interface.stop()
+                    else:
+                        interface.stop()
+                    logger.info(f"Stopped interface: {name}")
+                elif hasattr(interface, 'close'):
+                    if asyncio.iscoroutinefunction(interface.close):
+                        await interface.close()
+                    else:
+                        interface.close()
+                    logger.info(f"Closed interface: {name}")
             except Exception as e:
                 logger.error(f"Error shutting down interface {name}: {e}")
+                
+        # Disconnect from component integration
+        self.component_integration = None
+        self.system = None

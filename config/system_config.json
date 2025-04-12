@@ -1,0 +1,69 @@
+{
+  "enable_p2p": true,
+  "network": {
+    "host": "localhost",
+    "port": 8000,
+    "discovery_port": 8001,
+    "bootstrap_nodes": []
+  },
+  "debug_mode": true,
+  "max_cycles": 10,
+  "cycle_delay": 1,
+  "resource_monitor_enabled": true,
+  "cross_module_events_enabled": true,
+  "logging": {
+    "level": "INFO",
+    "file": "logs/vain_p2p.log",
+    "max_size": 10485760,
+    "backup_count": 5
+  },
+  "modules": {
+    "memory_manager": {
+      "max_cache_size": 1073741824,
+      "interactive": true
+    },
+    "resource_monitor": {
+      "check_interval": 30,
+      "cpu_warning_threshold": 80.0,
+      "memory_warning_threshold": 75.0,
+      "disk_warning_threshold": 90.0
+    },
+    "p2p_network": {
+      "connection_timeout": 10,
+      "max_peers": 50,
+      "peer_discovery_interval": 300
+    },
+    "federated_learning": {
+      "min_clients": 3,
+      "aggregation_rounds": 5,
+      "local_epochs": 2
+    },
+    "cognitive_evolution": {
+      "save_path": "data/evolution",
+      "update_interval": 100,
+      "max_history_size": 1000
+    },
+    "reputation_system": {
+      "initial_reputation": 0.5,
+      "reputation_decay": 0.01,
+      "min_rep_for_participation": 0.3
+    },
+    "model_coordinator": {
+      "aggregation_method": "fedavg",
+      "min_updates_required": 3,
+      "max_update_staleness": 600
+    }
+  },
+  "system_coordinator": {
+    "status_check_interval": 60,
+    "log_directory": "logs",
+    "status_directory": "status"
+  },
+  "neurotransmitter": {
+    "initial_levels": {
+      "dopamine": 0.5,
+      "serotonin": 0.5, 
+      "acetylcholine": 0.5
+    }
+  }
+}

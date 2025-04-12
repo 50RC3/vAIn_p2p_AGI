@@ -2,8 +2,10 @@
 """
 Debug entry point for the vAIn_p2p_AGI project
 """
-import sys
 import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+
 from pathlib import Path
 from utils.debug_launcher import launch_with_debugpy
 
