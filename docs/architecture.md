@@ -159,3 +159,64 @@ Safety features status:
 - TODO: Automated recovery
 
 Note: This is my active development project. Features marked with ✓ are implemented and tested, though many need further optimization. Others are in various stages of development.
+
+# Architecture Diagram: P2P Decentralized AGI Framework
+
+```mermaid
+graph TD
+    %% P2P Layer
+    subgraph P2P_Network ["P2P Network"]
+        A[Node 1] -->|DHT Discovery| B[Node 2]
+        A -->|Model Updates| C[Node 3]
+        B -->|Secure Communication| C
+    end
+
+    %% Reputation System
+    subgraph Reputation_System ["Reputation System"]
+        D[Performance Scoring]
+        E[Stake Evaluation]
+        F[Reputation Tiers]
+        A --> D
+        B --> E
+        D --> F
+        E --> F
+    end
+
+    %% Federated Learning
+    subgraph Federated_Learning ["Federated Learning"]
+        G[Local Training]
+        H[Model Aggregation]
+        I[Validation]
+        A --> G
+        B --> G
+        G --> H
+        H --> I
+    end
+
+    %% Blockchain Layer
+    subgraph Blockchain ["Blockchain Integration"]
+        J[Tokenomics]
+        K[Smart Contracts]
+        L[Reputation Data]
+        F --> J
+        H --> K
+        F --> L
+        J --> K
+    end
+
+    %% Multi-Agent System
+    subgraph Multi_Agent_System ["Multi-Agent System"]
+        M[Consensus Mechanism]
+        N[Validation Agent]
+        O[AI Model Aggregator]
+        H --> M
+        M --> N
+        N --> O
+    end
+
+    %% Connections between layers
+    P2P_Network --> Reputation_System
+    Reputation_System --> Federated_Learning
+    Federated_Learning --> Multi_Agent_System
+    Multi_Agent_System --> Blockchain
+```
