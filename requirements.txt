@@ -49,8 +49,7 @@ websockets>=10.0
 tabulate>=0.8.9
 
 # Storage
-ipfshttpclient>=0.8.0
-
+ipfshttpclient==0.8.0a2
 # Utilities
 ratelimit>=2.2.1
 
@@ -59,7 +58,7 @@ matplotlib>=3.4.0
 
 # Optional: GPU support
 # torch with CUDA - uncomment if needed
-# torch==1.9.0+cu111
+torch==1.9.0+cu111
 
 # NLP Components
 spacy>=3.5.0
