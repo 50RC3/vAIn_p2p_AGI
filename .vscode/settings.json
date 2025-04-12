@@ -33,5 +33,12 @@
             },
             "connectionType": "socket"
         }
-    ]
+    ],
+    "python.testing.pytestArgs": [
+        "tests"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "inlineChat.lineEmptyHint": true,
+    "accessibility.voice.keywordActivation": "chatInView"
 }

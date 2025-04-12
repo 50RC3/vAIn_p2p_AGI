@@ -8,6 +8,17 @@ import string
 logger = logging.getLogger(__name__)
 
 try:
+    import spacy
+    SPACY_AVAILABLE = True
+except ImportError:
+    SPACY_AVAILABLE = False
+    import nltk
+    nltk.download('punkt', quiet=True)
+    nltk.download('averaged_perceptron_tagger', quiet=True)
+    nltk.download('maxent_ne_chunker', quiet=True)
+    nltk.download('words', quiet=True)
+
+try:
     import nltk
     from nltk.tokenize import word_tokenize, sent_tokenize
     from nltk.corpus import stopwords, wordnet
@@ -442,3 +453,16 @@ def determine_intent(text: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error determining intent: {str(e)}")
         return {"intent": "unknown", "error": str(e)}
+
+def process_text(text):
+    if SPACY_AVAILABLE:
+        # spaCy implementation
+        nlp = spacy.load("en_core_web_sm")
+        doc = nlp(text)
+        # process with spaCy
+    else:
+        # NLTK fallback implementation
+        from nltk import word_tokenize, pos_tag, ne_chunk
+        tokens = word_tokenize(text)
+        tagged = pos_tag(tokens)
+        # process with NLTK
