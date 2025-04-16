@@ -1,0 +1,12 @@
+Collecting pytest-cov
+  Downloading pytest_cov-6.1.1-py3-none-any.whl.metadata (28 kB)
+Requirement already satisfied: pytest>=4.6 in /usr/local/python/3.12.1/lib/python3.12/site-packages (from pytest-cov) (8.3.5)
+Collecting coverage>=7.5 (from coverage[toml]>=7.5->pytest-cov)
+  Downloading coverage-7.8.0-cp312-cp312-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (8.5 kB)
+Requirement already satisfied: iniconfig in /usr/local/python/3.12.1/lib/python3.12/site-packages (from pytest>=4.6->pytest-cov) (2.1.0)
+Requirement already satisfied: packaging in /home/codespace/.local/lib/python3.12/site-packages (from pytest>=4.6->pytest-cov) (24.2)
+Requirement already satisfied: pluggy<2,>=1.5 in /usr/local/python/3.12.1/lib/python3.12/site-packages (from pytest>=4.6->pytest-cov) (1.5.0)
+Downloading pytest_cov-6.1.1-py3-none-any.whl (23 kB)
+Downloading coverage-7.8.0-cp312-cp312-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl (245 kB)
+Installing collected packages: coverage, pytest-cov
+Successfully installed coverage-7.8.0 pytest-cov-6.1.1

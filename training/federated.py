@@ -221,7 +221,7 @@ class FederatedLearning:
         self.byzantine_threshold = new_threshold
         self.krum_neighbors = max(2, int(len(self.clients) * (1 - self.byzantine_threshold)))
 
-    def _compress_update(self, model_update: Dict[str, torch.Tensor]) -> Tuple[Dict, Dict]:
+    def _compress_update(self, model_update: Dict[str, torch.Tensor>) -> Tuple[Dict, Dict]:
         compressed = {}
         errors = {}
         for key, tensor in model_update.items():

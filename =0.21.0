@@ -1,0 +1,9 @@
+Collecting pytest-asyncio
+  Downloading pytest_asyncio-0.26.0-py3-none-any.whl.metadata (4.0 kB)
+Requirement already satisfied: pytest<9,>=8.2 in /usr/local/python/3.12.1/lib/python3.12/site-packages (from pytest-asyncio) (8.3.5)
+Requirement already satisfied: iniconfig in /usr/local/python/3.12.1/lib/python3.12/site-packages (from pytest<9,>=8.2->pytest-asyncio) (2.1.0)
+Requirement already satisfied: packaging in /home/codespace/.local/lib/python3.12/site-packages (from pytest<9,>=8.2->pytest-asyncio) (24.2)
+Requirement already satisfied: pluggy<2,>=1.5 in /usr/local/python/3.12.1/lib/python3.12/site-packages (from pytest<9,>=8.2->pytest-asyncio) (1.5.0)
+Downloading pytest_asyncio-0.26.0-py3-none-any.whl (19 kB)
+Installing collected packages: pytest-asyncio
+Successfully installed pytest-asyncio-0.26.0

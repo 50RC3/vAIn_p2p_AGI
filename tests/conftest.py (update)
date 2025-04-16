@@ -1,0 +1,18 @@
+tests/conftest.py
+import pytest
+
+@pytest.fixture(scope='session', autouse=True)
+def setup_environment():
+    pass
+
+pytest.ini
+[pytest]
+testpaths = tests
+
+requirements-dev.txt
+tqdm
+web3
+
+tests/test_basic.py
+def test_hello_world():
+    assert True
