@@ -1,0 +1,7 @@
+2025-04-16 12:18:36,417 - __main__ - ERROR - Unexpected error setting up session: 'default'
+2025-04-16 12:19:07,179 - __main__ - ERROR - Unexpected error setting up session: 'default'
+2025-04-16 12:19:07,179 - __main__ - ERROR - Task '-cleanup' not found
+2025-04-16 12:19:07,180 - __main__ - INFO - Execution report saved: 1 tasks, 0.0% success rate
+2025-04-16 12:19:24,508 - __main__ - ERROR - Unexpected error setting up session: 'default'
+2025-04-16 12:19:24,509 - __main__ - ERROR - Task '-ml_pipeline' not found
+2025-04-16 12:19:24,509 - __main__ - INFO - Execution report saved: 1 tasks, 0.0% success rate

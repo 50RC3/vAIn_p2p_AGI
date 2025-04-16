@@ -19,6 +19,9 @@ fastapi>=0.95.0
 pydantic>=2.0.0
 uvicorn>=0.22.0
 gunicorn>=20.1.0
+Flask>=2.0.0  # Added for web/server.py
+Flask-SocketIO>=5.0.0  # Added for web/server.py
+gevent>=22.10.2  # Required for Flask-SocketIO async mode
 
 # System utilities
 tqdm>=4.61.0

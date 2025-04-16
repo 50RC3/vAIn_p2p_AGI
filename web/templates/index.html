@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>vAIn Chat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>vAIn Chat</h1>
+        <div class="status-indicator">
+            <span id="connection-status" class="online">Online</span>
+        </div>
+        
+        <div class="card">
+            <h2>Available Rooms</h2>
+            <div id="rooms-list" class="rooms-list">
+                <p>Loading rooms...</p>
+            </div>
+            
+            <div class="create-room">
+                <h3>Create New Room</h3>
+                <div class="form-group">
+                    <input type="text" id="room-name" placeholder="Room name">
+                    <input type="text" id="username" placeholder="Your username">
+                    <button id="create-room-btn">Create Room</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/index.js') }}"></script>
+</body>
+</html>

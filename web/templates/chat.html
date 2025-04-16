@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ room_name }} - vAIn Chat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="room-header">
+            <h1>{{ room_name }}</h1>
+            <div class="status-indicator">
+                <span id="connection-status" class="online">Online</span>
+                <span id="user-count">Users: 0</span>
+            </div>
+            <a href="/" class="back-btn">Back to Rooms</a>
+        </div>
+        
+        <div class="chat-container">
+            <div id="messages" class="messages">
+                <div class="loading-message">Loading messages...</div>
+            </div>
+            
+            <div class="message-form">
+                <form id="message-form">
+                    <div class="input-group">
+                        <input type="text" id="message-input" placeholder="Type your message..." autocomplete="off">
+                        <button type="submit" id="send-btn">Send</button>
+                    </div>
+                    <div id="offline-indicator" class="offline-indicator hidden">
+                        <span class="offline-text">You're offline. Messages will be sent when you reconnect.</span>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.min.js"></script>
+    <script>
+        // Pass room info to JavaScript
+        const ROOM_ID = "{{ room_id }}";
+    </script>
+    <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+</body>
+</html>
