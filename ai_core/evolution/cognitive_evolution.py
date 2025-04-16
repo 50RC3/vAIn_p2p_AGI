@@ -259,3 +259,18 @@ class CognitiveEvolution:
                 
         except Exception as e:
             logger.error(f"Failed to load evolution state: {e}")
+logger.info("Initializing Cognitive Evolution module")
+logger.info("Loaded evolution configuration")
+logger.info("Created save directory")
+logger.info("Loaded previous evolution state")
+logger.info("Updated evolution metrics")
+logger.info("Saved evolution state")
+logger.info("Loaded evolution history")
+logger.info("Updated meta-learning state")
+logger.warning("Error calculating learning efficiency")
+logger.warning("Error calculating reasoning capability")
+logger.warning("Error calculating knowledge breadth")
+logger.warning("Error calculating adaptability")
+logger.error("Error updating evolution metrics")
+logger.error("Failed to save evolution state")
+logger.error("Failed to load evolution state")

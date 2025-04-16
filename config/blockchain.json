@@ -1,0 +1,9 @@
+{
+  "network": "development",
+  "gas_limit": 6000000,
+  "gas_price_gwei": 50,
+  "private_key": "",
+  "infura_project_id": "",
+  "retry_attempts": 3,
+  "retry_delay": 5
+}

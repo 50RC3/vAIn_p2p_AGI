@@ -3,11 +3,9 @@ import asyncio
 import hashlib
 import logging
 import random
-import re 
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from functools import lru_cache
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, TypeVar, Protocol
 
 # Third-party imports
@@ -26,10 +24,14 @@ except ImportError:
         from .input_processor import InputProcessor
     except ImportError:
         try:
-            # Try with project prefix
+            # Try with project prefix - use a better path resolution
             import sys
-            sys.path.append('.')  # Add current directory to path
-            from vAIn_p2p_AGI.ai_core.chatbot.input_processor import InputProcessor
+            import os
+            # Add parent directories to path to find the module
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+            sys.path.append(parent_dir)
+            from ai_core.chatbot.input_processor import InputProcessor
         except ImportError:
             # If all imports fail, create a simple placeholder InputProcessor
             class InputProcessor:
@@ -77,10 +79,14 @@ try:
             from ai_core.chatbot.rl_trainer import RLTrainer, RLConfig, TrainerState
         except ImportError:
             try:
-                # Try with project prefix
+                # Try with project prefix - use a better path resolution approach
                 import sys
-                sys.path.append('.')  # Add current directory to path
-                from vAIn_p2p_AGI.ai_core.chatbot.rl_trainer import RLTrainer, RLConfig, TrainerState
+                import os
+                # Add project root directory to path
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+                sys.path.append(project_root)
+                from ai_core.chatbot.rl_trainer import RLTrainer, RLConfig, TrainerState
             except ImportError:
                 # Create placeholders if imports fail
                 class RLConfig:
@@ -1002,7 +1008,7 @@ class ChatbotInterface:
             
             return cluster
             
-        except Exception as e:
+        except (ValueError, TypeError, AttributeError, RuntimeError, KeyError) as e:
             logger.warning(f"Error in unsupervised processing: {e}")
             return None
             

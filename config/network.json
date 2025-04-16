@@ -1,0 +1,7 @@
+{
+  "node_env": "development",
+  "port": 8000,
+  "database_url": "sqlite:///db.sqlite3",
+  "max_connections": 10,
+  "peer_timeout": 30
+}

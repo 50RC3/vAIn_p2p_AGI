@@ -1,303 +1,290 @@
-import torch
-from typing import Dict, Tuple, Optional, Any, List
-from torch import nn
-import numpy as np
-import logging
-import warnings
-from dataclasses import dataclass
-import json
-import os
+"""
+Module for compression techniques used in federated learning.
+"""
 import asyncio
-from .feature_optimization import FeatureOptimizer
+import logging
+import time
+from typing import Dict, Any, Tuple, List, Optional, Union
+
+import numpy as np
+import torch
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class CompressionStats:
-    """Track compression performance metrics"""
-    original_size: int
-    compressed_size: int
-    compression_ratio: float
-    bandwidth_saved: float
-    accuracy_impact: float
-
 class CompressionError(Exception):
-    """Custom exception for compression-related errors"""
+    """Exception raised for errors in the compression module."""
     pass
 
+class CompressionStats:
+    """Statistics for compression operations"""
+    def __init__(self):
+        self.compression_ratios = []
+        self.bandwidth_saved = []
+        self.quality_scores = []
+        self.compression_times = []
+        self.decompression_times = []
+        
+    def update(self, ratio: float = 0.0, bandwidth_saved: float = 0.0, quality: float = 1.0,
+               comp_time: float = 0.0, decomp_time: float = 0.0):
+        """Update compression statistics"""
+        self.compression_ratios.append(ratio)
+        self.bandwidth_saved.append(bandwidth_saved)
+        self.quality_scores.append(quality)
+        self.compression_times.append(comp_time)
+        self.decompression_times.append(decomp_time)
+    
+    def get_average_stats(self) -> Dict[str, float]:
+        """Get average statistics"""
+        return {
+            "avg_compression_ratio": np.mean(self.compression_ratios) if self.compression_ratios else 0.0,
+            "avg_bandwidth_saved": np.mean(self.bandwidth_saved) if self.bandwidth_saved else 0.0,
+            "avg_quality_score": np.mean(self.quality_scores) if self.quality_scores else 0.0,
+            "avg_compression_time": np.mean(self.compression_times) if self.compression_times else 0.0,
+            "avg_decompression_time": np.mean(self.decompression_times) if self.decompression_times else 0.0,
+        }
+
 class AdaptiveCompression:
-    def __init__(self, 
-                 base_compression_rate: float = 0.1,
-                 min_rate: float = 0.01, 
-                 max_rate: float = 0.3,
-                 eps: float = 1e-8,
-                 stats_history_size: int = 1000):
-        self._validate_init_params(base_compression_rate, min_rate, max_rate)
-        self.base_rate = base_compression_rate
+    """
+    Adaptive compression for model updates based on network conditions.
+    Dynamically adjusts compression ratio based on quality requirements.
+    """
+    
+    def __init__(self, base_rate: float = 0.1, min_rate: float = 0.01, 
+                 max_rate: float = 0.5, quality_threshold: float = 0.9):
+        """
+        Initialize the adaptive compression.
+        
+        Args:
+            base_rate: Starting compression rate (fraction of data to keep)
+            min_rate: Minimum compression rate
+            max_rate: Maximum compression rate
+            quality_threshold: Minimum quality score to maintain (0-1)
+        """
+        self.base_rate = base_rate
         self.min_rate = min_rate
         self.max_rate = max_rate
-        self.network_quality = 1.0  # 1.0 = good, 0.0 = poor
-        self.decay_factor = 0.95
-        self.reward_history = []
-        self.learning_rate = 0.01
-        self.exploration_rate = 0.1
-        self.eps = eps
-        self.stats_history: List[CompressionStats] = []
-        self.stats_history_size = stats_history_size
-        self._initialize_monitoring()
+        self.quality_threshold = quality_threshold
+        self.current_rate = base_rate
+        self.stats = CompressionStats()
+        self.last_quality = 1.0
+        self.learning_rate = 0.1  # Learning rate for adaptation
+        self.history = []  # Compression history
         
-        # Add domain-aware compression tracking
-        self.domain_compression_rates = {}
-        self.cross_domain_stats = {}
-
-        self.batch_config = {
-            'target_latency': 0.05,  # 50ms target
-            'min_size': 1024,        # Minimum batch 1KB
-            'max_size': 1024*1024,   # Maximum batch 1MB
-            'parallel_limit': 4       # Max parallel compression tasks
-        }
-        self.compression_queue = asyncio.Queue()
-        self.feature_optimizer = FeatureOptimizer()
-
-    def _validate_init_params(self, base_rate: float, min_rate: float, max_rate: float) -> None:
-        """Validate initialization parameters"""
-        if not (0 < min_rate <= base_rate <= max_rate < 1):
-            raise ValueError(f"Invalid rates: min={min_rate}, base={base_rate}, max={max_rate}")
-
-    def _initialize_monitoring(self) -> None:
-        """Initialize performance monitoring"""
-        self.total_compressed = 0
-        self.total_original = 0
-        self.compression_time = 0.0
-        self._load_state()
-
-    def compress_model_updates(self, model_update: Dict[str, torch.Tensor]) -> Tuple[Dict, float]:
-        """Compress model updates with advanced optimization"""
+    async def compress_model_updates(self, updates: Dict[str, Any]) -> Tuple[Dict[str, Any], float]:
+        """
+        Compress model updates adaptively.
+        
+        Args:
+            updates: Dictionary of model updates to compress
+            
+        Returns:
+            Tuple of (compressed_updates, compression_ratio)
+        """
+        start_time = time.time()
+        
         try:
-            self._validate_model_updates(model_update)
-            start_time = torch.cuda.Event(enable_timing=True)
-            end_time = torch.cuda.Event(enable_timing=True)
+            # Adjust compression rate based on previous quality
+            self._adjust_compression_rate()
             
-            start_time.record()
+            # Do actual compression with the current rate
+            compressed = self._compress_gradients(updates, self.current_rate)
             
-            # Optimize features and compress data
-            optimized_update, selected_features = self.feature_optimizer.select_features(model_update)
+            # Calculate compression ratio (compressed size / original size)
+            # This is approximate since we don't have the exact byte sizes
+            original_size = sum(tensor.numel() * tensor.element_size() 
+                              for tensor in updates.values() if isinstance(tensor, torch.Tensor))
             
-            # Apply quantization to compressed updates
-            compressed = {}
-            original_size = 0
+            # Estimate compressed size based on kept values
             compressed_size = 0
+            for name, item in compressed.items():
+                if isinstance(item, dict) and 'indices' in item:
+                    compressed_size += len(item['indices']) * 8  # Assuming 8 bytes per index/value pair
             
-            for name, tensor in optimized_update.items():
-                original_size += tensor.numel() * tensor.element_size()
-                
-                if name in selected_features:
-                    # Quantize to 8-bit precision
-                    scale = tensor.abs().max() / 127
-                    quantized = torch.quantize_per_tensor(
-                        tensor.float(), scale=scale, zero_point=0, dtype=torch.qint8
-                    )
-                    
-                    compressed[name] = {
-                        'values': quantized.dequantize(),
-                        'scale': scale,
-                        'shape': tensor.shape,
-                    }
-                    compressed_size += compressed[name]['values'].numel()
-
-            end_time.record()
-            torch.cuda.synchronize()
-            self.compression_time += start_time.elapsed_time(end_time)
+            compression_ratio = compressed_size / max(1, original_size)
+            bandwidth_saved = 1.0 - compression_ratio
             
-            # Update statistics
-            stats = CompressionStats(
-                original_size=original_size,
-                compressed_size=compressed_size,
-                compression_ratio=compressed_size/original_size,
-                bandwidth_saved=(original_size-compressed_size)/original_size,
-                accuracy_impact=0.0  # Will be updated later with update_reward
+            # Update stats
+            comp_time = time.time() - start_time
+            self.stats.update(
+                ratio=compression_ratio,
+                bandwidth_saved=bandwidth_saved,
+                comp_time=comp_time
             )
-            self._update_stats(stats)
-            self._update_domain_stats(domain_type, stats)
-            self._save_state()
             
-            return compressed, compression_rate
+            self.history.append({
+                'timestamp': time.time(),
+                'rate': self.current_rate,
+                'ratio': compression_ratio,
+                'bandwidth_saved': bandwidth_saved
+            })
+            
+            if len(self.history) > 100:
+                self.history = self.history[-100:]  # Keep last 100 entries
+                
+            return compressed, compression_ratio
             
         except Exception as e:
             logger.error(f"Compression failed: {str(e)}")
-            raise CompressionError(f"Compression failed: {str(e)}")
-
-    def _validate_model_updates(self, updates: Dict[str, torch.Tensor]) -> None:
-        """Validate model updates before compression"""
-        if not updates:
-            raise CompressionError("Empty model updates")
-        for name, tensor in updates.items():
-            if torch.isnan(tensor).any():
-                raise CompressionError(f"NaN values in {name}")
-            if torch.isinf(tensor).any():
-                raise CompressionError(f"Inf values in {name}")
-
-    def decompress_model_updates(self, compressed: Dict) -> Dict[str, torch.Tensor]:
-        """Decompress updates with validation"""
+            raise CompressionError(f"Failed to compress model updates: {str(e)}") from e
+    
+        """
+        Decompress model updates received from peers.
+        This asynchronous method takes compressed model updates and restores them to their
+        original format. It measures decompression time and updates internal statistics.
+        
+        Args:
+            compressed (Dict[str, Any]): Dictionary containing compressed model updates.
+        
+        Returns:
+            Dict[str, Any]: Decompressed model updates in their original format.
+            
+        Raises:
+            CompressionError: If the decompression process fails for any reason.
+            
+        Notes:
+            - Updates internal statistics with decompression time
+            - Uses the internal _decompress_gradients implementation for the actual decompression
+        """
+        start_time = time.time()
+        
         try:
-            decompressed = {}
-            for name, data in compressed.items():
-                tensor = torch.tensor(data['values'])
-                mask = torch.tensor(data['mask'], dtype=torch.bool)
-                full_tensor = torch.zeros_like(data['shape'])
-                full_tensor[mask] = tensor
-                decompressed[name] = full_tensor
+            # Decompress the updates
+            decompressed = self._decompress_gradients(compressed)
+            
+            # Update stats
+            decomp_time = time.time() - start_time
+            self.stats.update(
+                decomp_time=decomp_time
+            )
+            
             return decompressed
+            
         except Exception as e:
             logger.error(f"Decompression failed: {str(e)}")
-            raise CompressionError(f"Decompression failed: {str(e)}")
-
-    def _update_stats(self, stats: CompressionStats) -> None:
-        """Update compression statistics"""
-        self.stats_history.append(stats)
-        if len(self.stats_history) > self.stats_history_size:
-            self.stats_history.pop(0)
-        self.total_compressed += stats.compressed_size
-        self.total_original += stats.original_size
-
-    def _save_state(self) -> None:
-        """Persist compression state"""
-        state = {
-            'base_rate': self.base_rate,
-            'network_quality': self.network_quality,
-            'reward_history': self.reward_history[-100:],
-            'total_compressed': self.total_compressed,
-            'total_original': self.total_original
-        }
-        try:
-            with open('compression_state.json', 'w') as f:
-                json.dump(state, f)
-        except Exception as e:
-            logger.warning(f"Failed to save compression state: {e}")
-
-    def _load_state(self) -> None:
-        """Load persisted compression state"""
-        try:
-            if os.path.exists('compression_state.json'):
-                with open('compression_state.json', 'r') as f:
-                    state = json.load(f)
-                self.base_rate = state['base_rate']
-                self.network_quality = state['network_quality']
-                self.reward_history = state['reward_history']
-                self.total_compressed = state['total_compressed']
-                self.total_original = state['total_original']
-        except Exception as e:
-            logger.warning(f"Failed to load compression state: {e}")
-
-    def _calculate_compression_rate(self) -> float:
-        """Calculate adaptive compression rate"""
-        if not self.reward_history:
-            return self.base_rate
-        recent_rewards = self.reward_history[-10:]
-        avg_reward = sum(recent_rewards) / len(recent_rewards)
-        return max(self.min_rate, 
-                  min(self.max_rate,
-                      self.base_rate * (1 - avg_reward)))
-
-    def _get_rl_rate(self) -> float:
-        """Use reinforcement learning to optimize base rate"""
-        if np.random.random() < self.exploration_rate:
-            return np.random.uniform(self.min_rate, self.max_rate)
-        
-        if not self.reward_history:
-            return self.base_rate
-            
-        # Update base rate based on rewards
-        reward_avg = np.mean(self.reward_history[-10:])
-        if reward_avg > 0:
-            self.base_rate += self.learning_rate
+            raise CompressionError(f"Failed to decompress model updates: {str(e)}") from e
+    
+    def _adjust_compression_rate(self) -> None:
+        """Adjust compression rate based on quality feedback"""
+        # If quality is below threshold, reduce compression (increase rate)
+        if self.last_quality < self.quality_threshold:
+            new_rate = min(self.max_rate, self.current_rate + self.learning_rate)
+            logger.debug(f"Quality below threshold ({self.last_quality:.2f} < {self.quality_threshold:.2f}). "
+                        f"Adjusting compression rate: {self.current_rate:.2f} -> {new_rate:.2f}")
+            self.current_rate = new_rate
         else:
-            self.base_rate -= self.learning_rate
+            # Otherwise, try to increase compression (decrease rate)
+            new_rate = max(self.min_rate, self.current_rate - 0.5 * self.learning_rate)
+            self.current_rate = new_rate
+    
+    def update_quality_feedback(self, quality_score: float) -> None:
+        """
+        Update compression quality feedback.
+        
+        Args:
+            quality_score: Quality score of the last compression (0-1)
+        """
+        self.last_quality = max(0.0, min(1.0, quality_score))
+        self.stats.quality_scores.append(self.last_quality)
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get compression statistics"""
+        return {
+            "current_rate": self.current_rate,
+            "min_rate": self.min_rate,
+            "max_rate": self.max_rate,
+            "quality_threshold": self.quality_threshold,
+            "last_quality": self.last_quality,
+            **self.stats.get_average_stats(),
+            "history": self.history[-10:]  # Last 10 entries
+        }
+        
+    async def cleanup(self) -> None:
+        """Clean up resources used by the compressor"""
+        self.history.clear()
+        self.stats = CompressionStats()
+        
+    def _compress_gradients(self, gradients: Dict[str, torch.Tensor], compression_ratio: float = 0.1) -> Dict[str, Any]:
+        """
+        Compress neural network gradients to reduce communication overhead.
+        
+        Args:
+            gradients: Dictionary mapping parameter names to gradient tensors
+            compression_ratio: The ratio of values to keep (between 0 and 1)
             
-        return self.base_rate
-
-    def update_reward(self, accuracy_delta: float, bandwidth_usage: float):
-        """Update RL rewards based on performance metrics"""
-        reward = accuracy_delta - 0.5 * (bandwidth_usage / self.network_quality)
-        self.reward_history.append(reward)
-        if len(self.reward_history) > 100:
-            self.reward_history.pop(0)
-
-    def _get_domain_compression_rate(self, domain_type: str) -> float:
-        """Get optimal compression rate for domain"""
-        if domain_type not in self.domain_compression_rates:
-            self.domain_compression_rates[domain_type] = self.base_rate
-        return self.domain_compression_rates[domain_type]
+        Returns:
+            Dictionary containing compressed gradients
+        """
+        compressed = {}
         
-    def _update_domain_stats(self, domain_type: str, stats: Dict):
-        """Update compression statistics per domain"""
-        if domain_type not in self.cross_domain_stats:
-            self.cross_domain_stats[domain_type] = []
-        self.cross_domain_stats[domain_type].append(stats)
-        
-        # Prune old stats
-        if len(self.cross_domain_stats[domain_type]) > self.stats_history_size:
-            self.cross_domain_stats[domain_type].pop(0)
-
-    async def compress_batch_parallel(self, updates: List[Dict[str, torch.Tensor]]) -> List[Tuple[Dict, float]]:
-        """Process compression in optimized parallel batches"""
-        tasks = []
-        results = []
-        
-        for i in range(0, len(updates), self.batch_config['parallel_limit']):
-            batch = updates[i:i + self.batch_config['parallel_limit']]
-            batch_tasks = [
-                asyncio.create_task(self.compress_model_updates(update))
-                for update in batch
-            ]
-            tasks.extend(batch_tasks)
-            
-            if len(tasks) >= self.batch_config['parallel_limit']:
-                done, tasks = await asyncio.wait(
-                    tasks, return_when=asyncio.FIRST_COMPLETED
-                )
-                results.extend([t.result() for t in done])
-        
-        if tasks:
-            done, _ = await asyncio.wait(tasks)
-            results.extend([t.result() for t in done])
-            
-        return results
-
-    def compress_updates(self, updates: Dict[str, torch.Tensor]) -> Dict:
-        """Compress model updates with sparse encoding"""
-        try:
-            compressed = {}
-            for key, tensor in updates.items():
-                # Use top-k sparsification
-                k = max(1, int(tensor.numel() * self.base_rate))
-                values, indices = torch.topk(tensor.abs().flatten(), k)
-                threshold = values[-1].item()
+        for name, grad in gradients.items():
+            if grad is None or not torch.is_tensor(grad):
+                compressed[name] = grad
+                continue
                 
-                # Create sparse tensor
-                mask = tensor.abs() >= threshold
-                compressed[key] = {
-                    'values': tensor[mask].cpu(),
-                    'indices': mask.nonzero().cpu(),
-                    'shape': tensor.shape
+            # Convert to numpy for processing
+            grad_np = grad.detach().cpu().numpy()
+            
+            if compression_ratio < 1.0:
+                # Top-k sparsification
+                size = grad_np.size
+                k = max(1, int(size * compression_ratio))
+                
+                # Flatten the tensor
+                flattened = grad_np.flatten()
+                
+                # Find indices of top k values by magnitude
+                indices = np.argsort(np.abs(flattened))[-k:]
+                values = flattened[indices]
+                
+                # Store as sparse representation
+                compressed[name] = {
+                    'shape': grad_np.shape,
+                    'indices': indices.tolist(),
+                    'values': values.tolist(),
                 }
+            else:
+                # Just store the full tensor
+                compressed[name] = {
+                    'shape': grad_np.shape,
+                    'data': grad_np.tolist(),
+                }
+        
+        return compressed
 
-            return compressed
-
-        except Exception as e:
-            logger.error(f"Update compression failed: {str(e)}")
-            raise
-
-    def decompress_updates(self, compressed: Dict) -> Dict[str, torch.Tensor]:
-        """Decompress model updates"""
-        try:
-            decompressed = {}
-            for key, data in compressed.items():
-                tensor = torch.zeros(data['shape'])
-                tensor[data['indices'][:, 0], data['indices'][:, 1]] = data['values']
-                decompressed[key] = tensor
-            return decompressed
-
-        except Exception as e:
-            logger.error(f"Update decompression failed: {str(e)}")
-            raise
+    def _decompress_gradients(self, compressed_grads: Dict[str, Any]) -> Dict[str, torch.Tensor]:
+        """
+        Decompress gradients that were compressed with _compress_gradients.
+        
+        Args:
+            compressed_grads: Dictionary of compressed gradients
+            
+        Returns:
+            Dictionary of decompressed gradients
+        """
+        result = {}
+        
+        for name, item in compressed_grads.items():
+            if isinstance(item, dict) and 'shape' in item:
+                shape = tuple(item['shape'])
+                
+                if 'indices' in item:  # Sparse representation
+                    # Initialize with zeros
+                    grad_np = np.zeros(np.prod(shape))
+                    
+                    # Put values back in their original positions
+                    indices = item['indices']
+                    values = item['values']
+                    for idx, val in zip(indices, values):
+                        grad_np[idx] = val
+                    
+                    # Reshape back to original dimensions
+                    grad_np = grad_np.reshape(shape)
+                else:  # Full representation
+                    grad_np = np.array(item['data']).reshape(shape)
+                
+                # Convert back to PyTorch tensor
+                result[name] = torch.tensor(grad_np)
+            else:
+                result[name] = item  # Keep as is (None or non-tensor)
+        
+        return result

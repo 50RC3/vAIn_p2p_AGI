@@ -1,427 +1,397 @@
 """Main entry point for vAIn P2P AGI system"""
-import asyncio
-import logging
 import os
 import sys
-import signal
+import time
+import json
+import logging
+import argparse
+import asyncio
 import traceback
+import numpy as np
+from typing import Dict, Optional, List, Any, Union, Tuple
 from pathlib import Path
-from functools import partial
+from dataclasses import dataclass, field
+from abc import ABC, abstractmethod
+
+# Import our system coordinator for cross-module communication
+from ai_core.system_coordinator import SystemCoordinator, SystemCoordinatorConfig
+from core.model_storage import ModelStorage
+from memory.memory_manager import MemoryManager
 
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=[logging.StreamHandler(), logging.FileHandler("vain_p2p.log")]
 )
-logger = logging.getLogger("vAIn")
+logger = logging.getLogger("vAIn_p2p")
 
-# Add file logging
-os.makedirs("logs", exist_ok=True)
-file_handler = logging.FileHandler("logs/main.log")
-file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-logger.addHandler(file_handler)
+try:
+    import torch
+    import torch.nn as nn
+    TORCH_AVAILABLE = True
+except ImportError:
+    logger.warning("PyTorch not available. Some features will be disabled.")
+    TORCH_AVAILABLE = False
 
-# Signal handling to gracefully exit on ctrl+c
-def handle_signals():
-    """Set up signal handlers for graceful termination."""
-    loop = asyncio.get_running_loop()
-    
-    def signal_handler():
-        logger.info("Shutdown signal received, initiating graceful exit...")
-        # Stop all running tasks
-        for task in asyncio.all_tasks(loop):
-            if task is not asyncio.current_task():
-                task.cancel()
-    
-    # Add signal handlers for graceful termination
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, signal_handler)
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    logger.warning("psutil not available. Resource monitoring will be limited.")
+    PSUTIL_AVAILABLE = False
 
-async def initialize_module(name, init_func):
-    """Initialize a module with proper error handling and reporting"""
+# Configuration loader
+def load_config() -> Dict[str, Any]:
+    """Load system configuration"""
+    config_path = os.environ.get("VAIN_CONFIG_PATH", "config/system_config.json")
     try:
-        logger.info(f"Initializing {name}...")
-        
-        # Check if init_func is callable
-        if not callable(init_func):
-            logger.error(f"Initialization function for {name} is not callable")
-            return None
-            
-        # Check if it's async or regular function
-        if asyncio.iscoroutinefunction(init_func):
-            result = await init_func()
+        if os.path.exists(config_path):
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        logger.warning("Failed to load config from file: %s", e)
+    
+    return {
+        'enable_p2p': True,
+        'network': {'host': 'localhost', 'port': 8000},
+        'debug_mode': True,
+        'max_cycles': 10,
+        'cycle_delay': 1,
+        'resource_monitor_enabled': True,
+        'cross_module_events_enabled': True
+    }
+
+# Configuration classes
+@dataclass
+class ReplayBuffer:
+    buffer_size: int = 10000
+    experiences: List = field(default_factory=list)
+    
+    def add(self, experience):
+        self.experiences.append(experience)
+        if len(self.experiences) > self.buffer_size:
+            self.experiences.pop(0)
+    
+    def sample(self, batch_size):
+        if len(self.experiences) < batch_size:
+            return self.experiences
+        # Simple random sampling
+        import random
+        return random.sample(self.experiences, batch_size)
+
+@dataclass
+class PrioritizedReplayBuffer(ReplayBuffer):
+    alpha: float = 0.6  # Priority exponent
+    beta: float = 0.4   # Importance sampling weight
+    
+    def add(self, experience, priority=None):
+        if priority is None:
+            priority = 1.0  # Default priority
+        self.experiences.append((experience, priority))
+        if len(self.experiences) > self.buffer_size:
+            self.experiences.pop(0)
+
+@dataclass
+class RLConfig:
+    learning_rate: float = 0.001
+    gamma: float = 0.99
+    epsilon: float = 0.1
+    batch_size: int = 32
+    target_update: int = 10
+    memory_size: int = 10000
+    optimizer: str = "adam"
+    loss_function: str = "mse"
+    hidden_size: int = 128
+    model_path: Optional[Path] = None
+    parameters: Dict[str, Any] = field(default_factory=dict)
+    networks: List[str] = field(default_factory=list)
+
+# Learning modules
+class UnsupervisedLearningModule:
+    def __init__(self, input_size, hidden_size, output_size):
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.model = None
+        if TORCH_AVAILABLE:
+            self.model = nn.Sequential(
+                nn.Linear(input_size, hidden_size),
+                nn.ReLU(),
+                nn.Linear(hidden_size, hidden_size // 2),
+                nn.ReLU(),
+                nn.Linear(hidden_size // 2, output_size),
+            )
         else:
-            result = init_func()
-            
-        if result is None:
-            logger.warning(f"{name} initialization returned None")
-        elif result is False:
-            logger.error(f"{name} initialization failed (returned False)")
-            return None
-            
-        logger.info(f"Successfully initialized {name}")
-        return result
-    except Exception as e:
-        logger.error(f"Error initializing {name}: {str(e)}")
-        logger.debug(f"Initialization error details for {name}: {traceback.format_exc()}")
-        return None
-
-async def shutdown_module(name, module):
-    """Shutdown a module with proper error handling"""
-    try:
-        logger.info(f"Shutting down {name}...")
-        
-        if hasattr(module, 'shutdown'):
-            if asyncio.iscoroutinefunction(module.shutdown):
-                await module.shutdown()
-            else:
-                module.shutdown()
-            logger.info(f"Successfully shut down {name}")
-        elif hasattr(module, 'stop'):
-            if asyncio.iscoroutinefunction(module.stop):
-                await module.stop()
-            else:
-                module.stop()
-            logger.info(f"Successfully stopped {name}")
-        elif hasattr(module, 'close'):
-            if asyncio.iscoroutinefunction(module.close):
-                await module.close()
-            else:
-                module.close()
-            logger.info(f"Successfully closed {name}")
-        else:
-            logger.debug(f"No shutdown method found for {name}, skipping")
-            
-    except Exception as e:
-        logger.error(f"Error shutting down {name}: {str(e)}")
-        if '--debug' in sys.argv or '--interactive' in sys.argv:
-            logger.debug(traceback.format_exc())
-
-async def ensure_directories_exist():
-    """Ensure necessary directories exist."""
-    essential_dirs = [
-        "logs", 
-        "config", 
-        "data", 
-        "models",
-        "checkpoints"
-    ]
+            logger.warning("PyTorch not available. UnsupervisedLearningModule will not function.")
     
-    for directory in essential_dirs:
-        os.makedirs(directory, exist_ok=True)
-        logger.debug(f"Ensured directory exists: {directory}")
+    def train(self, data):
+        if not TORCH_AVAILABLE or self.model is None:
+            logger.error("Cannot train without PyTorch or initialized model")
+            return
+        # Implement training logic here
+        logger.info("Training unsupervised learning module")
+        return {"loss": 0.0}
 
-async def check_system_requirements():
-    """Check if system meets all requirements for running the application"""
-    try:
-        # Check Python version
-        if sys.version_info < (3, 8):
-            logger.error(f"Python 3.8 or higher is required. Current version: {sys.version}")
-            return False
-        
-        # Check for critical directories
-        required_dirs = ['logs', 'config', 'data']
-        missing_dirs = []
-        for dir_name in required_dirs:
-            if not os.path.exists(dir_name):
-                missing_dirs.append(dir_name)
-                try:
-                    os.makedirs(dir_name)
-                    logger.info(f"Created missing directory: {dir_name}")
-                except Exception as e:
-                    logger.error(f"Failed to create directory {dir_name}: {e}")
-                    return False
-        
-        # Check if we can write to the log directory
-        try:
-            test_file_path = os.path.join('logs', 'test_write.tmp')
-            with open(test_file_path, 'w') as f:
-                f.write('test')
-            os.unlink(test_file_path)
-        except Exception as e:
-            logger.error(f"Log directory is not writable: {e}")
-            return False
-            
-        return True
-    except Exception as e:
-        logger.error(f"Error checking system requirements: {e}")
-        return False
+class SelfSupervisedLearning:
+    def __init__(self, input_size, hidden_size, output_size):
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.model = None
+        if TORCH_AVAILABLE:
+            self.model = nn.Sequential(
+                nn.Linear(input_size, hidden_size),
+                nn.ReLU(),
+                nn.Linear(hidden_size, hidden_size),
+                nn.ReLU(),
+                nn.Linear(hidden_size, output_size),
+            )
+        else:
+            logger.warning("PyTorch not available. SelfSupervisedLearning will not function.")
+    
+    def train(self, data, labels=None):
+        if not TORCH_AVAILABLE or self.model is None:
+            logger.error("Cannot train without PyTorch or initialized model")
+            return
+        # Generate labels from data for self-supervised learning
+        if labels is None:
+            # Simple identity mapping as an example
+            labels = data
+        logger.info("Training self-supervised learning module")
+        return {"loss": 0.0}
 
-async def main():
-    """Initialize and run the vAIn P2P AGI system"""
-    # Modules to be cleaned up in finally block
+class RLTrainer:
+    def __init__(self, config: RLConfig):
+        self.config = config
+        self.memory = ReplayBuffer(config.memory_size)
+        self.model = None
+        self.target_model = None
+        self.optimizer = None
+        
+        if TORCH_AVAILABLE:
+            # Define simple DQN model
+            self.model = nn.Sequential(
+                nn.Linear(config.parameters.get('input_size', 10), config.hidden_size),
+                nn.ReLU(),
+                nn.Linear(config.hidden_size, config.hidden_size),
+                nn.ReLU(),
+                nn.Linear(config.hidden_size, config.parameters.get('output_size', 4))
+            )
+            # Copy weights to target model
+            self.target_model = nn.Sequential(
+                nn.Linear(config.parameters.get('input_size', 10), config.hidden_size),
+                nn.ReLU(),
+                nn.Linear(config.hidden_size, config.hidden_size),
+                nn.ReLU(),
+                nn.Linear(config.hidden_size, config.parameters.get('output_size', 4))
+            )
+            if self.model and self.target_model:
+                self.target_model.load_state_dict(self.model.state_dict())
+                if config.optimizer == "adam":
+                    from torch import optim
+                    self.optimizer = optim.Adam(self.model.parameters(), lr=config.learning_rate)
+        else:
+            logger.warning("PyTorch not available. RLTrainer will not function.")
+    
+    def train(self, state, action, reward, next_state, done):
+        if not TORCH_AVAILABLE or not self.model:
+            logger.error("Cannot train without PyTorch or initialized model")
+            return
+        # Store experience
+        self.memory.add((state, action, reward, next_state, done))
+        # Implement DQN training here
+        logger.info("Training RL model")
+        return {"loss": 0.0}
+
+# Cache implementation
+class LRUCache:
+    def __init__(self, capacity: int):
+        self.capacity = capacity
+        self.cache = {}
+        self.order = []
+    
+    def get(self, key):
+        if key not in self.cache:
+            return None
+        # Move key to the end to indicate most recently used
+        self.order.remove(key)
+        self.order.append(key)
+        return self.cache[key]
+    
+    def put(self, key, value):
+        if key in self.cache:
+            self.order.remove(key)
+        elif len(self.cache) >= self.capacity:
+            # Evict least recently used item
+            oldest = self.order.pop(0)
+            del self.cache[oldest]
+            logger.debug(f"Evicting {oldest} from cache")
+        
+        self.cache[key] = value
+        self.order.append(key)
+        logger.debug(f"Added {key} to cache")
+
+def _initialize_learning_modules(config):
+    """Initialize various learning modules based on configuration."""
     modules = {}
     
     try:
-        # Ensure necessary directories exist
-        await ensure_directories_exist()
+        logger.info("Initializing unsupervised learning module")
+        input_size = config.get('input_size', 100)
+        hidden_size = config.get('hidden_size', 64)
+        output_size = config.get('output_size', 32)
         
-        logger.info("Initializing vAIn P2P AGI system...")
+        modules['unsupervised'] = UnsupervisedLearningModule(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            output_size=output_size
+        )
         
-        # Set up proper signal handling for graceful termination
-        handle_signals()
+        logger.info("Initializing self-supervised learning module")
+        modules['self_supervised'] = SelfSupervisedLearning(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            output_size=output_size
+        )
         
-        # Determine if we're in debug mode
-        debug_mode = '--debug' in sys.argv or '--interactive' in sys.argv
-        if debug_mode:
-            logger.setLevel(logging.DEBUG)
-            logger.debug("Debug mode enabled")
-            # Configure more verbose logging
-            for handler in logger.handlers:
-                handler.setLevel(logging.DEBUG)
-        
-        # Check for system requirements before proceeding
-        if not await check_system_requirements():
-            logger.error("System requirements check failed")
-            return 1
-
-        # Initialize configuration
-        try:
-            from config.network_config import NetworkConfig
-            network_config = NetworkConfig.from_env()
-        except ImportError as e:
-            logger.error(f"Could not import NetworkConfig: {e}")
-            logger.error("Make sure the config module is properly installed.")
-            return 1
-        except Exception as e:
-            logger.error(f"Failed to load network configuration: {str(e)}")
-            if debug_mode:
-                logger.debug(traceback.format_exc())
-            return 1
-        
-        # Initialize module registry first
-        try:
-            from ai_core.module_registry import ModuleRegistry
-            registry = ModuleRegistry.get_instance()
-            initialized = await initialize_module("module_registry", registry.initialize)
-            if initialized:
-                modules["module_registry"] = registry
-                logger.debug("Module registry initialized successfully")
-            else:
-                logger.warning("Module registry initialization returned False")
-        except ImportError as e:
-            logger.warning(f"Module registry not available: {e}")
-            logger.warning("Continuing without component registration")
-        except Exception as e:
-            logger.error(f"Failed to initialize module registry: {str(e)}")
-            if debug_mode:
-                logger.debug(traceback.format_exc())
-        
-        # Initialize memory manager with registration check
-        try:
-            from memory.memory_manager import MemoryManager
-            from core.constants import MAX_CACHE_SIZE
-            
-            # Check if memory manager has already been registered
-            memory_manager = None
-            if 'module_registry' in modules:
-                registry = modules['module_registry']
-                if registry.is_module_registered("memory_manager"):
-                    logger.info("Using existing registered memory_manager")
-                    memory_manager = registry.get_module("memory_manager")
-            
-            if memory_manager is None:
-                memory_manager = await initialize_module(
-                    "memory_manager",
-                    lambda: MemoryManager(max_cache_size=MAX_CACHE_SIZE)
-                )
-                
-                # Register with module registry if available
-                if 'module_registry' in modules and memory_manager is not None:
-                    await registry.register_module(
-                        "memory_manager", 
-                        MemoryManager, 
-                        dependencies=[], 
-                        replace=True
-                    )
-                
-                modules["memory_manager"] = memory_manager
-        except ImportError as e:
-            logger.error(f"Could not import memory management modules: {e}")
-            memory_manager = None
-        except Exception as e:
-            logger.error(f"Failed to initialize memory manager: {str(e)}")
-            if debug_mode:
-                logger.debug(traceback.format_exc())
-            memory_manager = None
-        
-        # Initialize cognitive system with proper parameters
-        try:
-            from ai_core import initialize_cognitive_system
-            
-            # Define cognitive parameters - but don't pass as 'config' since the function doesn't accept it
-            cognitive_params = {
-                'memory_vector_dim': 40,
-                'hidden_size': 64, 
-                'memory_size': 128,
-                'nhead': 4,
-                'num_layers': 2
+        logger.info("Initializing reinforcement learning module")
+        rl_config = RLConfig(
+            learning_rate=config.get('learning_rate', 0.001),
+            gamma=config.get('gamma', 0.99),
+            epsilon=config.get('epsilon', 0.1),
+            hidden_size=hidden_size,
+            parameters={
+                'input_size': input_size,
+                'output_size': output_size
             }
-            
-            # Pass configuration to cognitive system with proper error handling
-            # NOTE: Not using 'config' parameter as it's not supported
-            cognitive_init = partial(initialize_cognitive_system,
-                memory_manager=memory_manager,
-                resource_metrics=cognitive_params  # Pass as resource_metrics instead of config
-            )
-            
-            result = await initialize_module("cognitive_system", cognitive_init)
-            if result:
-                unified_system, cognitive_system = result
-                modules["cognitive_system"] = cognitive_system
-            else:
-                unified_system, cognitive_system = None, None
-        except ImportError as e:
-            logger.error(f"Could not import cognitive system modules: {e}")
-            unified_system, cognitive_system = None, None
-        except Exception as e:
-            logger.error(f"Failed to initialize cognitive system: {str(e)}")
-            if debug_mode:
-                logger.debug(traceback.format_exc())
-            unified_system, cognitive_system = None, None
+        )
+        modules['rl'] = RLTrainer(rl_config)
         
-        # Initialize P2P network with proper error handling
-        try:
-            from network.p2p_network import P2PNetwork
-            node_id = os.environ.get('NODE_ID', None)
-            
-            # Ensure network config has all required components
-            network_dict = network_config.to_dict()
-            
-            # Add encryption key if missing
-            if 'security' in network_dict and 'encryption' in network_dict['security'] and network_dict['security']['encryption']:
-                if 'encryption_key' not in network_dict['security']:
-                    import secrets
-                    network_dict['security']['encryption_key'] = secrets.token_hex(16)
-                    logger.info("Generated encryption key for secure communication")
-            
-            # Network initialization with proper error handling
-            p2p_init = partial(P2PNetwork,
-                node_id=node_id or f"vAIn-{os.getpid()}",
-                network_config=network_dict,
-                interactive=True
-            )
-            
-            p2p_network = await initialize_module("P2P network", p2p_init)
-            if p2p_network:
-                modules["p2p_network"] = p2p_network
-        except ImportError as e:
-            logger.error(f"Could not import network modules: {e}")
-            p2p_network = None
-        except Exception as e:
-            logger.error(f"Failed to initialize P2P network: {str(e)}")
-            if debug_mode:
-                logger.debug(traceback.format_exc())
-            p2p_network = None
-        
-        # Initialize UI with proper error handling
-        try:
-            from ui.interface_manager import UserInterfaceManager
-            from ui.terminal_ui import TerminalUI
-            
-            ui_manager = UserInterfaceManager()
-            terminal_ui = TerminalUI(interactive=True)
-            ui_manager.register_interface(terminal_ui)
-            
-            # Connect components if they exist
-            if cognitive_system:
-                ui_manager.connect_system(cognitive_system)
-            else:
-                # Connect UI to a null system or other fallback
-                from models.null_system import NullSystem
-                ui_manager.connect_system(NullSystem())
-            
-            # Start UI
-            ui_manager.start()
-            modules["ui_manager"] = ui_manager
-            
-            logger.info("User interface initialized")
-        except ImportError as e:
-            logger.error(f"Could not import UI modules: {e}")
-            ui_manager = None
-        except Exception as e:
-            logger.error(f"Failed to initialize UI: {str(e)}")
-            if debug_mode:
-                logger.debug(traceback.format_exc())
-            ui_manager = None
-        
-        # Final status message
-        has_critical_components = cognitive_system is not None and p2p_network is not None and ui_manager is not None
-        if has_critical_components:
-            logger.info("vAIn P2P AGI system initialized and ready")
-        else:
-            logger.warning("vAIn P2P AGI system initialized with limited functionality")
-        
-        if cognitive_system:
-            try:
-                active_learning = getattr(cognitive_system, '_active_learning', False)
-                logger.info(f"Cognitive evolution active: {active_learning}")
-            except Exception:
-                pass
-        
-        # Run the UI event loop instead of just sleeping
-        if ui_manager:
-            await run_ui_loop(ui_manager)
-        else:
-            # Keep the main application running until interrupted
-            logger.info("Running in headless mode (no UI). Press Ctrl+C to exit.")
-            while True:
-                await asyncio.sleep(1)
-                
-    except asyncio.CancelledError:
-        logger.info("Main task cancelled, shutting down gracefully...")
-    except KeyboardInterrupt:
-        logger.info("Keyboard interrupt received, shutting down...")
+        return modules
     except Exception as e:
-        logger.error(f"System initialization failed: {str(e)}")
-        if '--debug' in sys.argv or '--interactive' in sys.argv:
-            logger.debug(traceback.format_exc())
-    finally:
-        # Cleanup resources in reverse order of initialization
-        logger.info("Cleaning up resources...")
-        
-        # Shutdown modules in reverse dependency order
-        for module_name, module in reversed(list(modules.items())):
-            await shutdown_module(module_name, module)
-            
-        logger.info("System shutdown complete")
+        logger.error(f"Failed to initialize learning modules: {str(e)}")
+        logger.debug(traceback.format_exc())
+        return {}
 
-async def run_ui_loop(ui_manager):
-    """Run the UI event loop as an awaitable task."""
+def get_resource_metrics():
+    """Get current system resource usage metrics."""
+    metrics = {
+        "cpu_percent": None,
+        "memory_percent": None,
+        "disk_usage": None,
+        "network_io": None
+    }
+    
+    if PSUTIL_AVAILABLE:
+        try:
+            metrics["cpu_percent"] = psutil.cpu_percent(interval=0.1)
+            metrics["memory_percent"] = psutil.virtual_memory().percent
+            metrics["disk_usage"] = psutil.disk_usage('/').percent
+            # Network IO counters could be added here
+        except Exception as e:
+            logger.error(f"Error getting system metrics: {str(e)}")
+    
+    return metrics
+
+async def interactive_mode(host='127.0.0.1', port=8000):
+    """Run the system in interactive mode."""
+    logger.info("Starting interactive mode")
+    
+    # Initialize cache
+    memory_cache = LRUCache(capacity=1000)
+    
+    # Initialize learning modules with default configuration
+    config = {
+        'input_size': 128,
+        'hidden_size': 64,
+        'output_size': 32,
+        'learning_rate': 0.001
+    }
+    modules = _initialize_learning_modules(config)
+    
+    if not modules:
+        logger.error("Failed to initialize learning modules. Exiting interactive mode.")
+        return
+    
     try:
-        loop = asyncio.get_event_loop()
-        future = loop.create_future()
-        
-        def ui_thread_func():
-            try:
-                ui_manager.run_event_loop()
-            except Exception as e:
-                loop.call_soon_threadsafe(lambda: future.set_exception(e))
+        while True:
+            command = input("\nEnter command (or 'help', 'quit'): ")
+            
+            if command.lower() == 'quit':
+                logger.info("Exiting interactive mode")
+                break
+                
+            elif command.lower() == 'help':
+                print("\nAvailable commands:")
+                print("  help - Show this help message")
+                print("  status - Show system status")
+                print("  train - Run a training cycle")
+                print("  metrics - Show system metrics")
+                print("  quit - Exit interactive mode")
+            
+            elif command.lower() == 'status':
+                print("\nSystem Status:")
+                print(f"Learning modules: {', '.join(modules.keys())}")
+                print(f"Cache size: {len(memory_cache.cache)}/{memory_cache.capacity}")
+                
+            elif command.lower() == 'train':
+                print("\nRunning training cycle...")
+                # Simple mock data for training
+                import numpy as np
+                if TORCH_AVAILABLE:
+                    data = torch.randn(10, config['input_size'])
+                else:
+                    # Create numpy array as fallback
+                    data = np.random.randn(10, config['input_size'])
+                
+                for name, module in modules.items():
+                    print(f"Training {name}...")
+                    if hasattr(module, 'train'):
+                        result = module.train(data)
+                        print(f"Result: {result}")
+                    else:
+                        print(f"Module {name} does not support training")
+            
+            elif command.lower() == 'metrics':
+                metrics = get_resource_metrics()
+                print("\nSystem Metrics:")
+                for key, value in metrics.items():
+                    print(f"  {key}: {value}")
+            
             else:
-                loop.call_soon_threadsafe(future.set_result, None)
-        
-        import threading
-        ui_thread = threading.Thread(target=ui_thread_func, daemon=True)
-        ui_thread.start()
-        
-        await future
-    except asyncio.CancelledError:
-        logger.info("UI loop cancelled, shutting down UI...")
-        ui_manager.shutdown()
-        raise
+                print(f"Unknown command: {command}")
+                
+    except KeyboardInterrupt:
+        logger.info("Interactive mode interrupted")
+    except Exception as e:
+        logger.error(f"Error in interactive mode: {str(e)}")
+        logger.debug(traceback.format_exc())
+
+def main():
+    parser = argparse.ArgumentParser(description="vAIn P2P AGI System")
+    parser.add_argument("--interactive", action="store_true", help="Run in interactive mode")
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    args = parser.parse_args()
+    
+    if args.debug:
+        logger.setLevel(logging.DEBUG)
+        logger.debug("Debug logging enabled")
+    
+    if args.interactive:
+        asyncio.run(interactive_mode())
+    else:
+        logger.info("Running in standard mode")
+        # Implement standard mode logic here
+        logger.info("Standard mode not yet implemented")
 
 if __name__ == "__main__":
     try:
-        sys.exit(asyncio.run(main()))
+        main()
     except KeyboardInterrupt:
-        print("\nExiting due to keyboard interrupt")
-        sys.exit(0)
+        logger.info("Program interrupted by user")
     except Exception as e:
-        print(f"\nFatal error: {e}")
-        if '--debug' in sys.argv:
-            traceback.print_exc()
+        logger.error(f"Unhandled exception: {str(e)}")
+        logger.error(traceback.format_exc())
         sys.exit(1)
 

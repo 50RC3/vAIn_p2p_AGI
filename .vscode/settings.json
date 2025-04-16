@@ -1,0 +1,44 @@
+{
+    "dbcode.connections": [
+        {
+            "connectionId": "DgH38iVC9d9qKb6mcLAvX",
+            "name": "DATABASE_URL (.env)",
+            "driver": "postgres",
+            "color": "#33B8FF",
+            "connectionType": "host",
+            "host": "localhost",
+            "port": 5432,
+            "ssl": false,
+            "username": "50RC3",
+            "password": "",
+            "savePassword": "secretStorage",
+            "tunnelId": "P6RBDa28ZIaKUGZoEd6Iz",
+            "database": "vain_db",
+            "readOnly": false,
+            "role": "development",
+            "connectionTimeout": 30
+        },
+        {
+            "connectionId": "_5dqLkfGLgCYPVO6QhEfN",
+            "name": "mongoDB- develoment",
+            "driver": "sqlite",
+            "color": "#71F9F8",
+            "socket": "c:\\Users\\Mr.V\\.vscode\\extensions\\dbcode.dbcode-1.7.0\\out\\resources\\sakila.db",
+            "readOnly": false,
+            "role": "development",
+            "driverOptions": {
+                "extensions": [
+                    "sqlite-vec"
+                ]
+            },
+            "connectionType": "socket"
+        }
+    ],
+    "python.testing.pytestArgs": [
+        "tests"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "inlineChat.lineEmptyHint": true,
+    "accessibility.voice.keywordActivation": "chatInView"
+}

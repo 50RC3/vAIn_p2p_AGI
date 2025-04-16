@@ -66,6 +66,9 @@ class ReplayBuffer:
     
     def sample(self, batch_size: int) -> Tuple:
         """Sample random batch from buffer"""
+        if len(self.buffer) < batch_size:
+            raise ValueError(f"Not enough samples in buffer ({len(self.buffer)}/{batch_size})")
+            
         states, actions, rewards, next_states, dones = [], [], [], [], []
         
         # Sample batch_size items from buffer

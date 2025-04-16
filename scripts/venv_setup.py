@@ -38,8 +38,9 @@ def install_dependencies():
     logger.info("Installing build dependencies...")
     build_deps = [
         "setuptools>=65.0.0",
-        "wheel>=0.37.0",
-        "cython>=0.29.0",
+        "wheel>=0.37.0", 
+        "cython>=0.29.0,<3.0.0",  # Pin to a compatible version
+        "numpy>=1.19.0,<2.0.0",   # Pin to version compatible with your compiler
         "ninja>=1.10.0"
     ]
     

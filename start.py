@@ -5,14 +5,15 @@ vAIn P2P AGI System Startup Script
 This script initializes all system components in the correct order,
 ensuring proper dependency resolution and configuration.
 """
+import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 import asyncio
 import logging
 import argparse
-import sys
-import os
-from pathlib import Path
 import time
+from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 # Configure basic logging before imports

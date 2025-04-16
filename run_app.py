@@ -4,6 +4,8 @@ Main application entry point for vAIn_p2p_AGI project.
 """
 import os
 import sys
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+
 import logging
 import argparse
 from pathlib import Path
@@ -33,11 +35,11 @@ def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Run vAIn_p2p_AGI application")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
-    parser.add_argument("--config", type=str, default=None, 
+    parser.add_argument("--config", type=str, default=None,
                         help="Path to custom configuration file")
-    parser.add_argument("--interactive", "-i", action="store_true", 
+    parser.add_argument("--interactive", "-i", action="store_true",
                         help="Enable interactive mode")
-    parser.add_argument("--verbose", "-v", action="count", default=0, 
+    parser.add_argument("--verbose", "-v", action="count", default=0,
                         help="Increase verbosity level")
     return parser.parse_args()
 
@@ -154,12 +156,16 @@ def main():
         # Main application loop now handled by UI manager
         ui_manager.run_event_loop()
             
-    except Exception as e:
-        logger.error(f"Application error: {str(e)}")
+    except (ValueError, IOError, ImportError) as e:
+        # Catch common expected exceptions
+        logger.error("Application error: %s", str(e))
         if config["debug"]:
             import traceback
             traceback.print_exc()
         return 1
+    except KeyboardInterrupt:
+        logger.info("Application terminated by user.")
+        return 0
     finally:
         # Clean up resources
         logger.info("Cleaning up resources...")

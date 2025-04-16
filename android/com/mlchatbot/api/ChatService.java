@@ -1,4 +1,4 @@
-package com.mlchatbot.api;
+// Removed package declaration as file is in default package
 
 import android.content.Context;
 import android.net.ConnectivityManager;
