@@ -1,6 +1,12 @@
 name: Pylint
 
-on: [push]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build:
@@ -10,14 +16,65 @@ jobs:
         python-version: ["3.8", "3.9", "3.10"]
     steps:
     - uses: actions/checkout@v4
+    
+    # Cache pip dependencies
+    - name: Cache pip
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    # Set up Python
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v3
       with:
         python-version: ${{ matrix.python-version }}
+
+    # Install dependencies
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pylint
+        pip install -r requirements.txt
+        pip install pylint pytest pytest-cov
+
+    # Run tests with coverage
+    - name: Run tests with coverage
+      run: |
+        pytest --cov=your_package_name tests/
+
+    # Split files for parallel pylint
+    - name: Split files for parallel Pylint
+      run: |
+        git ls-files '*.py' | split -l 10 - pylint_files_
+        ls pylint_files_*
+      shell: bash
+
+    # Analyze the code with pylint (excluding migrations and tests)
+    - name: Analyzing the code with pylint
+      run: |
+        pylint $(git ls-files '*.py' | grep -v 'migrations/' | grep -v 'tests/') --rcfile=.pylintrc
+
+    # Publish the Pylint results as an artifact
+    - name: Save pylint report
+      run: |
+        pylint $(git ls-files '*.py') --rcfile=.pylintrc --output-format=json > pylint-report.json
+
+    - name: Upload pylint report
+      uses: actions/upload-artifact@v3
+      with:
+        name: pylint-report
+        path: pylint-report.json
+
+    # Enable debug mode
+    - name: Enable debug mode
+      run: |
+        echo "DEBUG: On"
+      env:
+        ACTIONS_STEP_DEBUG: true
+
+
     - name: Analysing the code with pylint
       run: |
         pylint $(git ls-files '*.py')
