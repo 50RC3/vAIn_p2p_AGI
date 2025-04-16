@@ -26,6 +26,7 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pip-
 
+
     # Set up Python
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v3
@@ -39,42 +40,45 @@ jobs:
         pip install -r requirements.txt
         pip install pylint pytest pytest-cov
 
+    # Collect Python files
+    - name: Collect Python files
+      run: |
+        find . -name "*.py" -not -path "./migrations/*" -not -path "./tests/*" > python_files.txt
+
     # Run tests with coverage
     - name: Run tests with coverage
       run: |
-        pytest --cov=your_package_name tests/
+        pytest --cov=your_package_name --cov-report=html
 
-    # Split files for parallel pylint
-    - name: Split files for parallel Pylint
+    # Upload coverage report
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: htmlcov/
+
+    # Analyze the code with pylint
+    - name: Analyze the code with pylint
       run: |
-        git ls-files '*.py' | split -l 10 - pylint_files_
-        ls pylint_files_*
-      shell: bash
+        pylint $(cat python_files.txt) --rcfile=.pylintrc --output-format=json > pylint-report.json
 
-    # Analyze the code with pylint (excluding migrations and tests)
-    - name: Analyzing the code with pylint
-      run: |
-        pylint $(git ls-files '*.py' | grep -v 'migrations/' | grep -v 'tests/') --rcfile=.pylintrc
-
-    # Publish the Pylint results as an artifact
-    - name: Save pylint report
-      run: |
-        pylint $(git ls-files '*.py') --rcfile=.pylintrc --output-format=json > pylint-report.json
-
+    # Upload pylint report
     - name: Upload pylint report
       uses: actions/upload-artifact@v3
       with:
         name: pylint-report
         path: pylint-report.json
 
-    # Enable debug mode
-    - name: Enable debug mode
+    # Set up results summary
+    - name: Generate summary
       run: |
-        echo "DEBUG: On"
-      env:
-        ACTIONS_STEP_DEBUG: true
+        echo "## Workflow Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- Python version: ${{ matrix.python-version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Tests executed with coverage" >> $GITHUB_STEP_SUMMARY
+        echo "- Pylint report uploaded as artifact" >> $GITHUB_STEP_SUMMARY
+        echo "- Coverage report available in artifacts" >> $GITHUB_STEP_SUMMARY
 
-
-    - name: Analysing the code with pylint
+    # Enable debug logging
+    - name: Enable debug logging
       run: |
-        pylint $(git ls-files '*.py')
+        echo "ACTIONS_STEP_DEBUG=true" >> $GITHUB_ENV
