@@ -1,23 +1,74 @@
-name: Pylint
+# Workflow name reflects the broader scope beyond just pylint
+name: Python Code Quality Checks (vAIn_p2p_AGI)
 
-on: [push]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  build:
+  # Renamed job for clarity
+  code-quality:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        # Testing across versions, but note py3.8 is the target for mypy/black
         python-version: ["3.8", "3.9", "3.10"]
+      # Don't cancel all jobs if one Python version fails
+      fail-fast: false
+
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout repository code
+      uses: actions/checkout@v4
+
+    # Set up the specific Python version for this job instance
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v3
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
+
+    # Cache dependencies for faster builds
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        # Key includes Python version and requirements hash
+        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-${{ matrix.python-version }}-
+          ${{ runner.os }}-pip-
+
+    # Install project dependencies and quality tools
+    - name: Install dependencies and quality tools
       run: |
         python -m pip install --upgrade pip
-        pip install pylint
-    - name: Analysing the code with pylint
+        # Install from requirements if it exists
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        # Install quality tools (ensure versions match if needed, otherwise latest)
+        pip install black isort mypy pylint pytest pytest-cov pytest-asyncio
+
+    # --- Code Formatting and Style Checks ---
+    - name: Check code formatting with Black
+      # Run black in check mode; relies on pyproject.toml for config
+      run: black --check .
+
+    - name: Check import sorting with isort
+      # Run isort in check mode; relies on pyproject.toml for config
+      run: isort --check-only .
+
+    # --- Static Analysis ---
+    - name: Check type hints with MyPy
+      # Run mypy; relies on pyproject.toml for strict config
+      # Consider specifying source dirs like 'src tests' if '.' is too broad/slow
+      run: mypy .
+
+    - name: Lint code with Pylint
+      # Run pylint; relies on pyproject.toml for config (disable/enable rules)
+      # Assumes pylint automatically finds pyproject.toml
+      # Collect files first to respect omit rules implicitly handled by coverage source
       run: |
-        pylint $(git ls-files '*.py')
+        find . -name "*.py" -not \( -path "./tests/*" -o -path "./setup.py" \) > python_files_for_pylint.txt
+        pylint --jobs=0 $(cat python_files_for_pylint.txt)
