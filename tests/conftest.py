@@ -7,9 +7,43 @@ import torch.nn as nn
 import os
 import tempfile
 from unittest.mock import MagicMock, patch
+import sys
 
 # Configure logging for tests
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("pytest_setup")
+
+# List of modules we expect might be missing
+OPTIONAL_MODULES = [
+    'ai_core.coordinator_factory',
+    'ai_core.learning',
+    'ai_core.chatbot',
+    'ai_core.cognitive_evolution',
+    'monitoring.node_status',
+    'monitoring.system_monitor',
+    'network.node_communication',
+    'kademlia',
+]
+
+# Helper functions for tests
+@pytest.fixture(scope="session")
+def skip_missing_modules():
+    """Skip tests that require modules that are not yet implemented."""
+    missing = []
+    for module in OPTIONAL_MODULES:
+        try:
+            __import__(module.split('.')[0])
+        except ImportError:
+            missing.append(module)
+    
+    return missing
+
+def safe_import(module_name):
+    """Import a module or return None if it's not available."""
+    try:
+        return __import__(module_name, fromlist=['*'])
+    except ImportError:
+        return None
 
 @pytest.fixture(scope="session")
 def event_loop():
@@ -82,3 +116,11 @@ def temp_model_file():
     yield file_path
     if os.path.exists(file_path):
         os.remove(file_path)
+
+@pytest.fixture(scope="session", autouse=True)
+def add_project_root_to_path():
+    """Add project root to Python path."""
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+        logger.info(f"Added {project_root} to Python path")

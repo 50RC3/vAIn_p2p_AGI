@@ -2,22 +2,21 @@ import asyncio
 import logging
 import time
 import json
+import os
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 class ModelStorage:
-    """A simple model storage implementation."""
+    """Storage for model data, weights, and metadata."""
     
-    def __init__(self, storage_dir: str = "model_storage"):
-        """Initialize the model storage with a directory path."""
-        self.storage_dir = Path(storage_dir)
-        self.version = "0.1.0"
-        self.feedback_file = self.storage_dir / "feedback.json"
-        
-        # Create storage directory if it doesn't exist
-        self.storage_dir.mkdir(exist_ok=True, parents=True)
+    def __init__(self, base_path: str = "model_storage"):
+        """Initialize the model storage."""
+        self.base_path = base_path
+        os.makedirs(base_path, exist_ok=True)
+        self.feedback_file = os.path.join(base_path, "feedback.json")
+        logger.info(f"ModelStorage initialized with base path: {base_path}")
         
     async def get_model_version(self) -> str:
         """Get the current model version."""
@@ -89,3 +88,36 @@ class ModelStorage:
         except Exception as e:
             logger.error(f"Error persisting feedback: {e}")
             raise
+
+    def save_feedback(self, user_id: str, message: str, response: str, rating: int) -> bool:
+        """Save user feedback for a response."""
+        feedback = self._load_feedback()
+        
+        # Add new feedback
+        if user_id not in feedback:
+            feedback[user_id] = []
+            
+        feedback[user_id].append({
+            "message": message,
+            "response": response,
+            "rating": rating,
+            "timestamp": str(datetime.datetime.now())
+        })
+        
+        # Save updated feedback
+        with open(self.feedback_file, 'w') as f:
+            json.dump(feedback, f, indent=2)
+            
+        return True
+        
+    def _load_feedback(self) -> Dict[str, Any]:
+        """Load existing feedback data."""
+        if not os.path.exists(self.feedback_file):
+            return {}
+            
+        try:
+            with open(self.feedback_file, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Error loading feedback: {e}")
+            return {}
