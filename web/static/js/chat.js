@@ -148,6 +148,19 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Helper functions
+    function escapeHTML(str) {
+        return str.replace(/[&<>"']/g, function(match) {
+            const escapeMap = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            };
+            return escapeMap[match];
+        });
+    }
+
     function addMessage(message) {
         const messageDiv = document.createElement('div');
         messageDiv.classList.add('message');
@@ -155,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (message.type === 'system') {
             messageDiv.classList.add('system');
-            messageDiv.innerHTML = message.content;
+            messageDiv.innerHTML = escapeHTML(message.content);
         } else {
             // Determine if this is the current user's message
             const isCurrentUser = message.sender === username;
@@ -167,8 +180,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             messageDiv.innerHTML = `
-                <div class="message-sender">${message.sender}${queuedLabel}</div>
-                <div class="message-content">${message.content}</div>
+                <div class="message-sender">${escapeHTML(message.sender)}${queuedLabel}</div>
+                <div class="message-content">${escapeHTML(message.content)}</div>
                 <div class="message-time">${formatTime(message.timestamp)}</div>
             `;
         }
