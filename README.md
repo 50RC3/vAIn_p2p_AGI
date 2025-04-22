@@ -1,4 +1,6 @@
-### Decentralized P2P AGI Network - Full System Outline
+## Decentralized P2P AGI Network - ***Full System Outline***
+
+[![Python Code Quality Checks (vAIn_p2p_AGI)](https://github.com/50RC3/vAIn_p2p_AGI/actions/workflows/pylint.yml/badge.svg)](https://github.com/50RC3/vAIn_p2p_AGI/actions/workflows/pylint.yml)
 
 This document provides a comprehensive overview of the decentralized peer-to-peer (P2P) AGI network, detailing its architecture, functionality, and key features. It is intended to guide developers, contributors, and stakeholders in understanding the system's design, governance, and implementation.
 
