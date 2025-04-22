@@ -1,0 +1,93 @@
+---
+name: Dev-Notes
+about: Maintaining Clarity Throughout the vAIn_p2p_AGI Codebase
+title: Dev Changes - Reported
+labels: dev notes
+assignees: ''
+
+---
+
+***An Issue Template for Collabiration and Clarity***  
+This template is intended for contributors working on the vAIn_p2p_AGI project.
+Communication is key.
+
+---
+***Focus of the commit/feature/issue being addressed:***
+- [Clearly state what you are working on and what it is meant to achive. (e.g., Implimenting spcific protocol to enhance node communication for improved federated learning latency tolerance.)]  
+---
+> **⚠️ NOTICE: This commit/feature/issue is NOT production-ready.**  
+> Contributions flagged under this template indicate that the implementation is incomplete, experimental, or pending further testing and validation.  
+> Ensure you verify all code dependencies and system impacts before integrating into production environments.  
+
+---
+
+### Overview  
+- **Start Date**: [Insert Date]  
+- **Current Progress**: [Insert estimated % completion]  
+- **Target Completion Date**: [Insert Date]  
+
+**Pending for Full Functionality:**  
+- [Clearly state what is required to achieve full functionality]  
+
+---
+
+### System Layer Affected  
+- **Select the Layer(s) Involved**:  
+  - [ ] **Data Layer** (e.g., DHT for peer discovery, decentralized storage)  
+  - [ ] **Logic Layer** (e.g., Federated Learning, multi-agent systems)  
+  - [ ] **Network Layer** (e.g., peer-to-peer communication, consensus mechanisms)  
+  - [ ] **Tokenomics Layer** (e.g., blockchain integration, proof-of-stake, smart contracts)  
+  - [ ] **Model Training Layer** (e.g., AI/ML model updates, reputation-based systems)  
+  - [ ] **Other**: [Specify any other relevant layer]  
+
+---
+
+### Priority and Dependencies  
+- **Priority Level**: [High/Medium/Low]  
+- **Dependencies**:  
+  - [List any dependent tasks, features, or external resources]  
+
+---
+
+### Existing Functional Features  
+[List all tested and fully functional features with clear descriptions and references to related documentation or code sections]  
+
+---
+
+### Features In Progress  
+[List all features currently under development with a brief status update and any blockers]  
+
+---
+
+### Planned Features  
+[List all features planned but not yet initiated, along with any relevant context]  
+
+---
+
+### Testing and Verification  
+**Tests Conducted:**  
+- [List all tests conducted, including scenarios, inputs, outputs, and results]  
+**Test Results:**  
+- [Provide detailed results, including pass/fail status and any issues identified]  
+
+---
+
+### Documentation and References  
+- **Documentation**: [Link to relevant documentation, guides, or references]  
+- **Code References**: [Link to relevant code sections or files]  
+- **External Resources**: [Link to any external resources or dependencies]  
+
+---
+
+### Additional Notes and Considerations  
+[Provide any additional context, challenges, or information worth highlighting]  
+
+---
+
+### Related Issues or Pull Requests  
+[List any related issues or pull requests for cross-referencing]  
+
+---
+
+### Reviewer Feedback  
+[Space for reviewers to leave comments, suggestions, or additional instructions]  
