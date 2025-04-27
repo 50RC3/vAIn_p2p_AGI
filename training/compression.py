@@ -127,6 +127,10 @@ class AdaptiveCompression:
             logger.error(f"Compression failed: {str(e)}")
             raise CompressionError(f"Failed to compress model updates: {str(e)}") from e
     
+    async def decompress_model_updates(
+        self, 
+        compressed: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Decompress model updates received from peers.
         This asynchronous method takes compressed model updates and restores them to their
@@ -154,6 +158,8 @@ class AdaptiveCompression:
             # Update stats
             decomp_time = time.time() - start_time
             self.stats.update(
+                ratio=0.0,
+                bandwidth_saved=0.0,
                 decomp_time=decomp_time
             )
             
