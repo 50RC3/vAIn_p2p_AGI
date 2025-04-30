@@ -1,0 +1,98 @@
+{
+  // These tasks will run in order when initializing your CodeSandbox project.
+  "setupTasks": [
+    {
+      "command": "npm install",
+      "name": "Installing Dependencies"
+    }
+  ],
+
+  // These tasks can be run from CodeSandbox. Running one will open a log in the app.
+  "tasks": {
+    "start": {
+      "name": "start",
+      "command": "npm run start",
+      "runAtStart": false
+    },
+    "build": {
+      "name": "build",
+      "command": "npm run build",
+      "runAtStart": false
+    },
+    "test": {
+      "name": "test",
+      "command": "npm run test",
+      "runAtStart": false
+    },
+    "lint": {
+      "name": "lint",
+      "command": "npm run lint",
+      "runAtStart": false
+    },
+    "format": {
+      "name": "format",
+      "command": "npm run format",
+      "runAtStart": false
+    },
+    "solhint": {
+      "name": "solhint",
+      "command": "npm run solhint",
+      "runAtStart": false
+    },
+    "cleanup": {
+      "name": "cleanup",
+      "command": "npm run cleanup",
+      "runAtStart": false
+    },
+    "dev": {
+      "name": "dev",
+      "command": "npm run dev",
+      "runAtStart": true
+    },
+    "start:interactive": {
+      "name": "start:interactive",
+      "command": "npm run start:interactive",
+      "runAtStart": false
+    },
+    "start:minimal": {
+      "name": "start:minimal",
+      "command": "npm run start:minimal",
+      "runAtStart": false
+    },
+    "start:verbose": {
+      "name": "start:verbose",
+      "command": "npm run start:verbose",
+      "runAtStart": false
+    },
+    "start:production": {
+      "name": "start:production",
+      "command": "npm run start:production",
+      "runAtStart": false
+    },
+    "monitor": {
+      "name": "monitor",
+      "command": "npm run monitor",
+      "runAtStart": false
+    },
+    "interactive:setup": {
+      "name": "interactive:setup",
+      "command": "npm run interactive:setup",
+      "runAtStart": false
+    },
+    "interactive:test": {
+      "name": "interactive:test",
+      "command": "npm run interactive:test",
+      "runAtStart": false
+    },
+    "setup": {
+      "name": "setup",
+      "command": "npm run setup",
+      "runAtStart": false
+    },
+    "setup:python": {
+      "name": "setup:python",
+      "command": "npm run setup:python",
+      "runAtStart": false
+    }
+  }
+}
