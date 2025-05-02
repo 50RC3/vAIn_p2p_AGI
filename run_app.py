@@ -27,7 +27,7 @@ try:
     from ui.interface_manager import UserInterfaceManager
     from ui.terminal_ui import TerminalUI
 except ImportError as e:
-    logger.error(f"Failed to import required modules: {e}")
+    logger.error("Failed to import required modules: %s", e)
     logger.error("Make sure you're running this script from the project root directory.")
     sys.exit(1)
 
@@ -50,11 +50,11 @@ def setup_environment(args):
         logger.setLevel(logging.INFO)
     elif args.verbose >= 2:
         logger.setLevel(logging.DEBUG)
-        
+
     # Configure paths
     project_root = Path(__file__).parent.absolute()
     os.environ['PROJECT_ROOT'] = str(project_root)
-    
+
     # Return config info
     return {
         "interactive": args.interactive,
@@ -65,16 +65,19 @@ def setup_environment(args):
 def initialize_user_interface(config):
     """Initialize the appropriate user interface based on configuration."""
     logger.info("Initializing user interface...")
-    
+
     ui_type = os.environ.get('UI_TYPE', 'terminal')
-    
+
     # Create the UI manager
     ui_manager = UserInterfaceManager()
-    
+
     # Initialize the appropriate UI based on configuration
     if ui_type.lower() == 'web':
         try:
             from ui.web_ui import WebUI
+            # Ensure web UI can handle Windows paths if needed
+            if os.name == 'nt':  # Check if running on Windows
+                os.environ['WEBUI_WINDOWS_MODE'] = 'true'
             ui = WebUI(debug=config["debug"])
             logger.info("Web UI initialized on http://localhost:8080")
         except ImportError:
@@ -92,10 +95,10 @@ def initialize_user_interface(config):
         # Default to terminal UI
         ui = TerminalUI(interactive=config["interactive"])
         logger.info("Terminal UI initialized")
-    
+
     # Register the UI with the manager
     ui_manager.register_interface(ui)
-    
+
     return ui_manager
 
 def main():
@@ -104,7 +107,8 @@ def main():
     config = setup_environment(args)
     
     # Initialize interactive session
-    interaction_level = InteractionLevel.HIGH if config["interactive"] else InteractionLevel.NORMAL
+    # Use appropriate InteractionLevel values based on what's available in the enum
+    interaction_level = InteractionLevel.ADVANCED if config["interactive"] else InteractionLevel.NORMAL
     session = InteractiveSession(
         level=interaction_level,
         config=InteractiveConfig(
@@ -119,7 +123,7 @@ def main():
         
         # Load configuration
         if config["config_path"]:
-            agent_config = AgentConfig.from_file(config["config_path"])
+            agent_config = AgentConfig.load(config["config_path"])
         else:
             # Use default configuration
             params = {
@@ -148,7 +152,7 @@ def main():
         
         # Start the system
         logger.info("Starting application...")
-        system.start()
+        system.initialize()  # Assuming 'initialize' is the correct method
         
         # Start the UI
         ui_manager.start()
@@ -171,7 +175,7 @@ def main():
         logger.info("Cleaning up resources...")
         if 'ui_manager' in locals():
             ui_manager.shutdown()
-        session.cleanup()
+        session._cleanup()
         
     logger.info("Application terminated successfully.")
     return 0

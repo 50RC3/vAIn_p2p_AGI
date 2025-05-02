@@ -77,7 +77,7 @@ def install_dependencies(update: bool = False) -> bool:
         logger.error("Failed to install dependencies: %s", e)
         return False
 
-def setup_nodejs_dependencies(update=False) -> bool:
+def setup_nodejs_dependencies(update: bool = False) -> bool:
     """Install Node.js dependencies if package.json exists."""
     package_json = PROJECT_ROOT / "package.json"
     backend_dir = PROJECT_ROOT / "backend"

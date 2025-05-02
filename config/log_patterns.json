@@ -1,0 +1,66 @@
+{
+  "error": [
+    {
+      "pattern": "ERROR.*?Exception: (.*)",
+      "level": "error",
+      "action": "alert",
+      "recovery": "restart_component"
+    },
+    {
+      "pattern": "CRITICAL: (.*)",
+      "level": "critical",
+      "action": "alert,notify",
+      "recovery": "escalate"
+    },
+    {
+      "pattern": "Failed to initialize (.*)",
+      "level": "error",
+      "action": "alert",
+      "recovery": "restart_component"
+    }
+  ],
+  "resource": [
+    {
+      "pattern": "(Out of memory|MemoryError)",
+      "level": "critical",
+      "action": "alert,notify",
+      "recovery": "free_memory"
+    },
+    {
+      "pattern": "(Disk full|No space left on device)",
+      "level": "critical",
+      "action": "alert,notify",
+      "recovery": "clean_temp_files"
+    }
+  ],
+  "network": [
+    {
+      "pattern": "(Connection refused|Failed to connect|Network timeout)",
+      "level": "warning",
+      "action": "alert",
+      "recovery": "retry_connection"
+    },
+    {
+      "pattern": "(Socket error|Connection reset|Broken pipe)",
+      "level": "error",
+      "action": "alert",
+      "recovery": "reset_network"
+    }
+  ],
+  "ai_core": [
+    {
+      "pattern": "(Model loading failed|Inference error|Training diverged)",
+      "level": "error",
+      "action": "alert",
+      "recovery": "reload_model"
+    }
+  ],
+  "system": [
+    {
+      "pattern": "(System shutdown|Initialization failure)",
+      "level": "critical",
+      "action": "alert,notify,recover",
+      "recovery": "restart_system"
+    }
+  ]
+}

@@ -1,14 +1,13 @@
 """Main entry point for vAIn P2P AGI system"""
 import os
 import sys
-import time
 import json
 import logging
 import argparse
 import asyncio
 import traceback
 import numpy as np
-from typing import Dict, Optional, List, Any, Union, Tuple
+from typing import Dict, Optional, List, Any
 from pathlib import Path
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
@@ -17,6 +16,9 @@ from abc import ABC, abstractmethod
 from ai_core.system_coordinator import SystemCoordinator, SystemCoordinatorConfig
 from core.model_storage import ModelStorage
 from memory.memory_manager import MemoryManager
+
+# Import monitoring utilities
+from monitoring import initialize_monitoring, stop_monitoring
 
 # Setup logging
 logging.basicConfig(
@@ -334,7 +336,7 @@ async def interactive_mode(host='127.0.0.1', port=8000):
                 print("\nSystem Status:")
                 print(f"Learning modules: {', '.join(modules.keys())}")
                 print(f"Cache size: {len(memory_cache.cache)}/{memory_cache.capacity}")
-                
+             
             elif command.lower() == 'train':
                 print("\nRunning training cycle...")
                 # Simple mock data for training
@@ -352,7 +354,6 @@ async def interactive_mode(host='127.0.0.1', port=8000):
                         print(f"Result: {result}")
                     else:
                         print(f"Module {name} does not support training")
-            
             elif command.lower() == 'metrics':
                 metrics = get_resource_metrics()
                 print("\nSystem Metrics:")
@@ -368,26 +369,45 @@ async def interactive_mode(host='127.0.0.1', port=8000):
         logger.error(f"Error in interactive mode: {str(e)}")
         logger.debug(traceback.format_exc())
 
-def main():
-    parser = argparse.ArgumentParser(description="vAIn P2P AGI System")
-    parser.add_argument("--interactive", action="store_true", help="Run in interactive mode")
-    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
-    args = parser.parse_args()
-    
-    if args.debug:
-        logger.setLevel(logging.DEBUG)
-        logger.debug("Debug logging enabled")
-    
-    if args.interactive:
-        asyncio.run(interactive_mode())
-    else:
-        logger.info("Running in standard mode")
-        # Implement standard mode logic here
-        logger.info("Standard mode not yet implemented")
+async def main():
+    # Initialize logging first
+    from logging_config import configure_logging
+    configure_logging()
+
+    # Initialize monitoring (early in the startup sequence)
+    await initialize_monitoring({
+        "log_dir": "logs",
+        "metrics_dir": "metrics",
+        "check_interval": 15,
+        "notification_webhooks": ["https://your-webhook-url/alerts"]
+    })
+
+    try:
+        # Rest of your application startup
+        parser = argparse.ArgumentParser(description="vAIn P2P AGI System")
+        parser.add_argument("--interactive", action="store_true", help="Run in interactive mode")
+        parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+        args = parser.parse_args()
+
+        if args.debug:
+            logger.setLevel(logging.DEBUG)
+            logger.debug("Debug logging enabled")
+        
+        if args.interactive:
+            await interactive_mode()
+        else:
+            logger.info("Running in standard mode")
+            # Implement standard mode logic here
+            logger.info("Standard mode not yet implemented")
+
+    finally:
+        # Clean shutdown
+        await stop_monitoring()
+        # Other cleanup
 
 if __name__ == "__main__":
     try:
-        main()
+        asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Program interrupted by user")
     except Exception as e:

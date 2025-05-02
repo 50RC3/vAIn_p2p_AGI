@@ -3,8 +3,8 @@
   "learning_rate": 0.001,
   "num_epochs": 10,
   "hidden_size": 256,
-  "num_layers": 2,
-  "num_rounds": 5,
+  "num_layers": 3,
+  "num_rounds": 6,
   "min_clients": 2,
   "clients_per_round": 2
 }

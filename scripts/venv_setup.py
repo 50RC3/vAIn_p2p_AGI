@@ -10,28 +10,51 @@ logger = logging.getLogger(__name__)
 
 REQUIRED_PYTHON = (3, 8, 0)
 
-def check_python_version():
+
+def check_python_version() -> None:
     """Verify that the correct version of Python is being used."""
     if sys.version_info < REQUIRED_PYTHON:
-        logger.error(f"This project requires Python {'.'.join(map(str, REQUIRED_PYTHON))} or higher")
+        logger.error(
+            "This project requires Python %s or higher",
+            '.'.join(map(str, REQUIRED_PYTHON)),
+        )
         sys.exit(1)
-    logger.info(f"Python version check passed: {sys.version.split()[0]}")
+    logger.info("Python version check passed: %s", sys.version.split()[0])
 
-def create_venv():
-    """Create a virtual environment."""
+
+def create_venv() -> bool:
+    """Create a virtual environment.
+    
+    If the virtual environment already exists, this function will ask the user
+    if they want to recreate it. If the user chooses not to recreate the
+    virtual environment, this function will return False.
+
+    Returns:
+        bool: True if the virtual environment was created successfully, False
+            if the user chose not to recreate the virtual environment.
+    """
     venv_path = Path("venv")
     if venv_path.exists():
         logger.warning("Virtual environment already exists")
         if input("Recreate virtual environment? (y/N): ").lower() != 'y':
             return False
+        logger.info("Removing existing virtual environment")
         import shutil
         shutil.rmtree(venv_path)
     
     logger.info("Creating virtual environment...")
     subprocess.run([sys.executable, "-m", "venv", "venv"], check=True)
+    
+    logger.info("Upgrading pip to latest version")
+    if platform.system() == "Windows":
+        subprocess.run([venv_path / "Scripts" / "python", "-m", "pip", "install", "--upgrade", "pip"], check=True)
+    else:
+        subprocess.run([venv_path / "bin" / "python", "-m", "pip", "install", "--upgrade", "pip"], check=True)
+    
     return True
 
-def install_dependencies():
+
+def install_dependencies() -> None:
     """Install project dependencies."""
     pip_cmd = "venv/Scripts/pip" if platform.system() == "Windows" else "venv/bin/pip"
     
@@ -60,10 +83,10 @@ def install_dependencies():
             logger.warning("requirements.txt not found. Skipping project dependencies.")
             
     except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to install dependencies: {e}")
+        logger.error("Failed to install dependencies: %s", e)
         raise
 
-def print_activation_instructions():
+def print_activation_instructions() -> None:
     """Print instructions for activating the virtual environment."""
     if platform.system() == "Windows":
         activate_cmd = ".\\venv\\Scripts\\activate"
@@ -74,7 +97,7 @@ def print_activation_instructions():
     print("To activate the virtual environment, run:")
     print(f"  {activate_cmd}")
 
-def main():
+def main() -> None:
     """Main setup function."""
     try:
         check_python_version()
@@ -87,13 +110,13 @@ def main():
         print_activation_instructions()
         
     except subprocess.CalledProcessError as e:
-        logger.error(f"Setup failed: {e}")
+        logger.error("Setup failed: %s", e)
         sys.exit(1)
     except KeyboardInterrupt:
         logger.info("\nSetup cancelled by user")
         sys.exit(1)
-    except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
+    except (IOError, OSError, PermissionError) as e:
+        logger.error("Unexpected error: %s", e)
         sys.exit(1)
 
 if __name__ == "__main__":

@@ -13,11 +13,28 @@ python_version = "3.8"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
-strict = true
 disallow_incomplete_defs = true
 check_untyped_defs = true
 disallow_untyped_decorators = true
 no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = "ui.*"
+ignore_missing_imports = true
+
+# Add overrides for other third-party libraries that don't have type stubs
+[[tool.mypy.overrides]]
+module = [
+    "torch.*",
+    "websockets.*",
+    "fastapi.*",
+    "pydantic.*",
+    "uvicorn.*",
+    "ipfshttpclient.*"
+]
+ignore_missing_imports = true
+
+strict = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 warn_no_return = true

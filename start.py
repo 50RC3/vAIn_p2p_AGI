@@ -7,14 +7,12 @@ ensuring proper dependency resolution and configuration.
 """
 import os
 import sys
-sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-
 import asyncio
 import logging
 import argparse
 import time
+import warnings
 from pathlib import Path
-from typing import Dict, Any, Optional, List
 
 # Configure basic logging before imports
 logging.basicConfig(
@@ -34,23 +32,23 @@ def setup_paths():
 setup_paths()
 
 # Import components only after path setup
-from utils.dependency_checker import check_dependencies, check_module_dependencies, install_dependencies
-from core.constants import FEATURES, BASE_DIR
-from core.interactive_utils import InteractionLevel
+from .utils.dependency_checker import check_dependencies, check_module_dependencies, install_dependencies
+from .core.constants import BASE_DIR
+from .core.interactive_utils import InteractionLevel
 
 
 async def check_system_dependencies(args):
     """Check and install system dependencies if needed"""
     logger.info("Checking system dependencies...")
-    
-    success, missing = check_dependencies(required_only=args.minimal)
-    
-    if success:
+
+    deps_success, missing = check_dependencies(required_only=args.minimal)
+
+    if deps_success:
         logger.info("✓ All required dependencies are installed.")
         return True
-        
-    logger.warning(f"Missing dependencies: {', '.join(missing)}")
-    
+
+    logger.warning("Missing dependencies: %s", ', '.join(missing))
+
     if args.auto_install or (not args.non_interactive and 
                             input("Install missing dependencies? (y/n): ").lower().startswith('y')):
         logger.info("Installing missing dependencies...")
@@ -64,53 +62,53 @@ async def check_system_dependencies(args):
     elif args.strict:
         logger.error("Missing dependencies and --strict flag is set. Exiting.")
         return False
-        
+
     return not args.strict
 
 
 async def check_module_readiness(module_name: str, args) -> bool:
     """Check if a specific module is ready with all dependencies"""
-    logger.info(f"Checking {module_name} module dependencies...")
+    logger.info("Checking %s module dependencies...", module_name)
     
-    success, missing = check_module_dependencies(module_name)
-    if success:
-        logger.info(f"✓ Module {module_name} dependencies satisfied")
+    deps_success, missing = check_module_dependencies(module_name)
+    if deps_success:
+        logger.info("✓ Module %s dependencies satisfied", module_name)
         return True
-        
-    logger.warning(f"Module {module_name} has missing dependencies: {', '.join(missing)}")
-    
+
+    logger.warning("Module %s has missing dependencies: %s", module_name, ', '.join(missing))
+
     if args.auto_install or (not args.non_interactive and 
                            input(f"Install {module_name} dependencies? (y/n): ").lower().startswith('y')):
         if install_dependencies(missing):
-            logger.info(f"✓ Successfully installed {module_name} dependencies")
+            logger.info("✓ Successfully installed %s dependencies", module_name)
             return True
-    
+
     if args.strict:
-        logger.error(f"Cannot continue without {module_name} dependencies")
+        logger.error("Cannot continue without %s dependencies", module_name)
         return False
-        
+ 
     return not args.strict
 
 
 async def initialize_core_systems(args):
     """Initialize core system components"""
     logger.info("Initializing core systems...")
+
+# First check if the AI core module is ready
+if not await check_module_readiness("ai_core", args):
+    return False
+
+try:
+    # Import here to allow dependency installation first
+    from core.resource_manager import ResourceManager
+    from core.module_registry import ModuleRegistry
     
-    # First check if the AI core module is ready
-    if not await check_module_readiness("ai_core", args):
-        return False
-    
-    try:
-        # Import here to allow dependency installation first
-        from ai_core.resource_management import ResourceManager
-        from ai_core.module_registry import ModuleRegistry
-        
-        # Initialize resource manager first
-        logger.info("Initializing resource manager...")
-        resource_manager = ResourceManager()
-        await resource_manager.initialize()
-        logger.info("✓ Resource manager initialized")
-        
+    # Initialize resource manager first
+    logger.info("Initializing resource manager...")
+    resource_manager = ResourceManager()
+    await resource_manager.initialize()
+    logger.info("✓ Resource manager initialized")
+
         # Initialize module registry
         logger.info("Initializing module registry...")
         registry = ModuleRegistry.get_instance()
@@ -119,16 +117,16 @@ async def initialize_core_systems(args):
             logger.error("Failed to initialize module registry")
             return False
         logger.info("✓ Module registry initialized")
-        
+
         # Load configurations
         from config import get_config
         config = get_config(interactive=not args.non_interactive)
-        
+
         # Check if we need to update config interactively at startup
         if args.update_config and not args.non_interactive:
             logger.info("Updating configuration interactively")
             config.update_interactive()
-        
+
         # Validate configuration
         if not args.skip_config_validation:
             valid = config.validate()
@@ -139,28 +137,28 @@ async def initialize_core_systems(args):
         
         logger.info("✓ Configuration loaded and validated")
         return True
-        
+
     except Exception as e:
         logger.error(f"Failed to initialize core systems: {e}", exc_info=True)
         return False
 
 
-async def init_memory_system(args):
+async def init_memory_system(args: argparse.Namespace) -> bool:
     """Initialize memory subsystem"""
     logger.info("Initializing memory subsystem...")
-    
+
     if not await check_module_readiness("ai_core", args):
         return False
-    
+
     try:
         # Import memory system
-        from memory import MemoryManager
-        
+        from memory import MemoryManager  # pylint: disable=import-outside-toplevel
+
         # Initialize simple placeholder memory manager
         memory_manager = MemoryManager()
-        logger.info("✓ Memory system initialized")
+        logger.info("Memory system initialized")
         return True
-        
+
     except Exception as e:
         logger.error(f"Failed to initialize memory system: {e}")
         if args.strict:

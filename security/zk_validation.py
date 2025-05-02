@@ -27,7 +27,7 @@ class ZKProofValidator:
         try:
             return self._verify_without_revealing_data(proof)
         except Exception as e:
-            logger.error(f"Proof verification failed: {str(e)}")
+            logger.error("Proof verification failed: %s", str(e))
             return False
             
     def _verify_without_revealing_data(self, proof: bytes) -> bool:

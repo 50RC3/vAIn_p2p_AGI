@@ -10,18 +10,19 @@ import ssl
 import logging
 import inspect
 from pathlib import Path
-from typing import Dict, Any, Tuple, List, Optional, Union, Callable
+from typing import Dict, Any, List, Optional, Callable
+from tools.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
 class ValidationResult:
     """Represents the result of a configuration validation."""
     
-    def __init__(self):
-        self.valid = True
-        self.errors = []
-        self.warnings = []
-        self.field_errors = {}
+    def __init__(self) -> None:
+        self.valid: bool = True
+        self.errors: List[str] = []
+        self.warnings: List[str] = []
+        self.field_errors: Dict[str, List[str]] = {}
         
     def add_error(self, message: str, field: Optional[str] = None) -> None:
         """Add an error message."""
@@ -409,9 +410,9 @@ class ConfigValidator:
         return result
 
     @classmethod
-    def get_all_validators(cls) -> Dict[str, Callable]:
+    def get_all_validators(cls) -> Dict[str, Callable[[Dict[str, Any]], ValidationResult]]:
         """Get all validator methods in the class."""
-        validators = {}
+        validators: Dict[str, Callable[[Dict[str, Any]], ValidationResult]] = {}
         for name, method in inspect.getmembers(cls, predicate=inspect.isfunction):
             if name.startswith('validate_') and name != 'validate_general_config':
                 config_type = name.replace('validate_', '', 1).replace('_config', '')
@@ -424,18 +425,63 @@ class ConfigValidator:
         validators = cls.get_all_validators()
         
         # Apply general validation
-        result = cls.validate_general_config(config)
+        validation_result = cls.validate_general_config(config)
         
         # Apply specific validation if available
         if config_type in validators:
             specific_result = validators[config_type](config)
             
             # Merge results
-            result.valid = result.valid and specific_result.valid
-            result.errors.extend(specific_result.errors)
-            result.warnings.extend(specific_result.warnings)
-            result.field_errors.update(specific_result.field_errors)
+            validation_result.valid = validation_result.valid and specific_result.valid
+            validation_result.errors.extend(specific_result.errors)
+            validation_result.warnings.extend(specific_result.warnings)
+            validation_result.field_errors.update(specific_result.field_errors)
         else:
             logger.warning(f"No specific validator available for '{config_type}' configuration")
             
-        return result
+        return validation_result
+
+# Initialize the config manager
+config_manager = ConfigManager()
+
+# List available configurations
+configs = config_manager.list_configs()
+print(f"Found configurations: {configs}")
+
+# Validate each configuration
+validation_results = {}
+for config_name in configs:
+    config = config_manager.read_config(config_name)
+    valid, errors = config_manager.validate_config(config_name, config)
+    validation_results[config_name] = {
+        "valid": valid,
+        "errors": [errors] if errors else []
+    }
+    # If it should be a list but is None or a single value:
+    if not isinstance(validation_results[config_name]["errors"], list):
+        validation_results[config_name]["errors"] = [validation_results[config_name]["errors"]] if validation_results[config_name]["errors"] else []
+
+# Process errors
+for config_name, result in validation_results.items():
+    errors = result.get("errors", [])
+    # Ensure errors is always a list before iterating
+    if not isinstance(errors, list):
+        errors = [errors] if errors else []
+    
+    for error in errors:
+        # process error
+        pass
+
+# Print validation results
+print("\nValidation Results:")
+for config_name, result in validation_results.items():
+    if result["valid"]:
+        print(f"✅ {config_name}: Valid")
+    else:
+        print(f"❌ {config_name}: Invalid")
+        # Ensure errors is a list before iterating
+        errors_list = result["errors"]
+        if not isinstance(errors_list, list):
+            errors_list = [errors_list] if errors_list else []
+        for error in errors_list:
+            print(f"   - {str(error)}")

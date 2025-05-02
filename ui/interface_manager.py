@@ -52,7 +52,7 @@ class UserInterfaceManager:
         self.component_integration = integration
         logger.info("Connected component integration to UI manager")
     
-    async def start_async(self):
+    async def start_async(self) -> None:
         """Start all registered interfaces asynchronously."""
         for name, interface in self.interfaces.items():
             try:
@@ -63,10 +63,10 @@ class UserInterfaceManager:
                     else:
                         interface.start()
                     logger.info(f"Started interface: {name}")
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-except
                 logger.error(f"Failed to start interface {name}: {e}")
     
-    def start(self):
+    def start(self) -> None:
         """Start all registered interfaces."""
         for name, interface in self.interfaces.items():
             try:
@@ -108,7 +108,7 @@ class UserInterfaceManager:
                     interface.process_events()
             time.sleep(0.05)
     
-    async def shutdown(self):
+    async def shutdown(self) -> None:
         """Shut down all interfaces."""
         self._running = False
         
