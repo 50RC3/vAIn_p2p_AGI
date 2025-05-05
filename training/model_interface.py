@@ -1,3 +1,6 @@
+"""Model interface definitions for federated learning"""
+
+from typing import Dict, Any, Optional, List
 import torch
 import torch.nn as nn
 import logging
@@ -5,17 +8,23 @@ import asyncio
 import os
 import psutil
 import time
-from typing import Dict, Any, Optional, List, Union, Callable
 
 logger = logging.getLogger(__name__)
 
 class ModelInterface:
-    """Interface for model training and inference operations"""
+    """Interface for model operations in federated learning"""
     
-    def __init__(self, model_path: Optional[str] = None, config: Dict[str, Any] = None):
-        self.model = None
-        self.model_path = model_path
-        self.config = config or {}
+    def __init__(self, model: nn.Module, model_name: str):
+        """Initialize model interface
+        
+        Args:
+            model: The PyTorch model
+            model_name: Name of the model
+        """
+        self.model = model
+        self.model_name = model_name
+        self.version = 1
+        self.metadata = {}
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.training = False
         self.initialized = False
@@ -24,26 +33,61 @@ class ModelInterface:
         self.p2p_network = None  # Will be set by the system if P2P is enabled
         self.interactive_session = None  # Will be set when running in interactive mode
         self.resource_monitor = None  # Will be set by the system for resource monitoring
+
+    def get_parameters(self) -> Dict[str, Any]:
+        """Get model parameters
         
+        Returns:
+            Dict containing model parameters
+        """
+        return {k: v.cpu().detach().numpy() for k, v in self.model.state_dict().items()}
+    
+    def update_parameters(self, parameters: Dict[str, Any]) -> bool:
+        """Update model parameters
+        
+        Args:
+            parameters: New parameters to apply
+            
+        Returns:
+            bool: Success status
+        """
+        try:
+            state_dict = {k: torch.tensor(v) for k, v in parameters.items()}
+            self.model.load_state_dict(state_dict)
+            self.version += 1
+            return True
+        except Exception as e:
+            logger.error("Failed to update parameters: %s", e)
+            return False
+    
+    def get_metadata(self) -> Dict[str, Any]:
+        """Get model metadata
+        
+        Returns:
+            Dict containing metadata
+        """
+        return {
+            "name": self.model_name,
+            "version": self.version,
+            "parameters": sum(p.numel() for p in self.model.parameters()),
+            "extra": self.metadata
+        }
+    
     async def initialize(self):
         """Initialize the model asynchronously"""
         if self.initialized:
             return
             
         try:
-            logger.info(f"Initializing model from {self.model_path}")
+            logger.info(f"Initializing model")
             # Notify any listeners that initialization is starting
             await self._trigger_event('initialization_started', {
-                'model_path': self.model_path,
+                'model_name': self.model_name,
                 'device': str(self.device)
             })
             
             # Model initialization logic here
-            if self.model_path and os.path.exists(self.model_path):
-                self.model = torch.load(self.model_path, map_location=self.device)
-            else:
-                # Create a default model if path doesn't exist
-                self.model = self._create_default_model()
+            self.model = self.model.to(self.device)
                 
             self.initialized = True
             logger.info("Model initialized successfully")
@@ -61,18 +105,6 @@ class ModelInterface:
                 'error': str(e)
             })
             
-    def _create_default_model(self) -> nn.Module:
-        """Create a default model if none exists"""
-        # Simple placeholder model - replace with actual model architecture
-        model = nn.Sequential(
-            nn.Linear(10, 64),
-            nn.ReLU(),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            nn.Linear(32, 10)
-        )
-        return model.to(self.device)
-        
     async def predict(self, inputs: torch.Tensor) -> torch.Tensor:
         """Run prediction with the model"""
         if not self.initialized:
@@ -207,17 +239,11 @@ class ModelInterface:
             self.training = False
             logger.info(f"Training completed in {training_duration:.2f} seconds")
             
-            # Save the trained model
-            if self.model_path:
-                torch.save(self.model, self.model_path)
-                logger.info(f"Model saved to {self.model_path}")
-            
             # Notify training completion
             await self._trigger_event('training_completed', {
                 'epochs_completed': epoch + 1,
                 'duration': training_duration,
-                'final_loss': self.training_stats['losses'][-1] if self.training_stats['losses'] else None,
-                'model_saved': self.model_path is not None
+                'final_loss': self.training_stats['losses'][-1] if self.training_stats['losses'] else None
             })
                 
             return {

@@ -2,6 +2,7 @@ import pytest
 import asyncio
 from network.p2p_network import P2PNetwork
 from unittest.mock import Mock, patch
+from network.exceptions import PeerAuthenticationError
 
 @pytest.fixture
 def network_config():

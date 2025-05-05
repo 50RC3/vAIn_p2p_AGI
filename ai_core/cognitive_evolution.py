@@ -1,15 +1,23 @@
 import torch
 import time
-import asyncio
-from typing import Dict, List, Optional, Any
+from typing import Dict, Optional, Any
 from dataclasses import dataclass
-from models import ModelOutput, ModelRole, get_resource_metrics
+from models import ModelOutput
 from memory.memory_manager import MemoryManager
 from .unified_model_system import UnifiedModelSystem
 from models.hybrid_memory_system import HybridMemorySystem
 import logging
+from enum import Enum, auto
 
 logger = logging.getLogger(__name__)
+
+class ModelRole(Enum):
+    """Defines the role of a model in the system"""
+    PERCEPTION = auto()
+    PROCESSING = auto()
+    GENERATION = auto()
+    META = auto()
+    MEMORY = auto()
 
 @dataclass
 class CognitiveState:
@@ -54,7 +62,7 @@ class CognitiveEvolution:
             
             # Then register cognitive processor (transformer)
             # Import locally to avoid circular imports
-            from models.transformers import vAInTransformer
+            from models.transformers import vAInTransformer  # Correct import path
             processor = vAInTransformer(
                 dim=512,
                 depth=6,

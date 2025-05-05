@@ -8,7 +8,7 @@ import string
 logger = logging.getLogger(__name__)
 
 try:
-    import spacy
+    import spacy  # type: ignore
     SPACY_AVAILABLE = True
 except ImportError:
     SPACY_AVAILABLE = False

@@ -5,18 +5,23 @@ import sys
 import time
 import os
 import gc
-from typing import Dict, Any, Optional, List, Set, Callable, Union, Tuple
-from dataclasses import dataclass, field
+from typing import Dict, Any, Optional, List, Callable, Tuple
+from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 from ai_core.module_registry import ModuleRegistry
-from ai_core.resource_management import ResourceManager
-from ai_core.metrics_collector import MetricsCollector, MetricsConfig
+from .resource_management import ResourceManager
+from ai_core.metrics_collector import MetricsCollector, MetricsConfig, MetricPoint
 from ai_core.model_storage import ModelStorage
 from ai_core.chatbot.module_integration import ModuleIntegration, ModuleIntegrationConfig
 from core.interactive_utils import InteractiveSession, InteractiveConfig
+from utils.unified_logger import get_logger
+from utils.memory_manager import memory_manager
+from debugging.debug_config import DebugConfigManager
+from debugging.port_manager import DebugPortManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger("system_coordinator")
 
 @dataclass
 class SystemCoordinatorConfig:
@@ -39,6 +44,14 @@ class SystemCoordinatorConfig:
     auto_restart_failed: bool = True
     backup_interval: int = 3600  # seconds (1 hour)
     thread_pool_size: int = 4
+    recovery_scripts_dir: str = "./recovery_scripts"
+    use_unified_logging: bool = True
+    log_config_path: Optional[str] = "config/logging.json"
+    debug_config_path: Optional[str] = "config/debug.json"
+    memory_monitoring: bool = True
+    memory_warning_threshold: float = 75.0
+    memory_critical_threshold: float = 85.0
+    debug_port: int = 5678
 
 class SystemCoordinator:
     """
@@ -56,7 +69,26 @@ class SystemCoordinator:
     
     def __init__(self, config: Optional[SystemCoordinatorConfig] = None):
         self.config = config or SystemCoordinatorConfig()
-        self._setup_logging()
+        
+        # Initialize logging using new unified logger
+        if self.config.use_unified_logging:
+            self.logger = get_logger("system_coordinator", self.config.log_config_path)
+        else:
+            self._setup_logging()  # Fall back to old method
+            
+        # Initialize debug configuration manager
+        self.debug_config_manager = DebugConfigManager.get_instance()
+        if self.config.debug_config_path:
+            self.debug_config_manager.config_path = self.config.debug_config_path
+            
+        # Initialize memory manager if enabled
+        if self.config.memory_monitoring:
+            memory_manager.set_thresholds(
+                warning=self.config.memory_warning_threshold,
+                critical=self.config.memory_critical_threshold
+            )
+            memory_manager.start_monitoring(interval=60, trace_memory=True)
+            memory_manager.register_callback("critical", self._handle_critical_memory)
         
         # Core components
         self.module_registry = None
@@ -91,7 +123,7 @@ class SystemCoordinator:
             'component_recovered': set(),
             'system_health': set(),
         }
-    
+
     def _setup_logging(self) -> None:
         """Configure logging for the system coordinator"""
         log_level = getattr(logging, self.config.log_level, logging.INFO)
@@ -130,67 +162,26 @@ class SystemCoordinator:
             all_handler.setFormatter(all_formatter)
             root_logger.addHandler(all_handler)
     
-    def _setup_signal_handlers(self) -> None:
-        """Set up signal handlers for graceful termination"""
-        try:
-            # Save original handlers
-            if hasattr(signal, 'SIGINT'):
-                self._original_signal_handlers[signal.SIGINT] = signal.getsignal(signal.SIGINT)
-                signal.signal(signal.SIGINT, self._handle_interrupt)
-            
-            if hasattr(signal, 'SIGTERM'):
-                self._original_signal_handlers[signal.SIGTERM] = signal.getsignal(signal.SIGTERM)
-                signal.signal(signal.SIGTERM, self._handle_termination)
+    def _handle_critical_memory(self, stats) -> None:
+        """Handle critical memory condition"""
+        logger.warning(f"Critical memory condition: {stats.system_percent}% system, {stats.process_mb:.1f}MB process")
+        
+        # Force garbage collection
+        memory_manager.force_garbage_collection()
+        
+        # Log memory-heavy components for investigation
+        if hasattr(stats, 'largest_objects') and stats.largest_objects:
+            top_consumers = stats.largest_objects[:3]
+            for i, obj in enumerate(top_consumers):
+                logger.warning(f"Memory consumer #{i+1}: {obj['file']}:{obj['line']} - {obj['size_mb']:.1f}MB")
                 
-            logger.debug("Signal handlers set up")
-        except Exception as e:
-            logger.warning(f"Failed to set up signal handlers: {e}")
-    
-    def _restore_signal_handlers(self) -> None:
-        """Restore original signal handlers"""
-        try:
-            for sig, handler in self._original_signal_handlers.items():
-                signal.signal(sig, handler)
-            logger.debug("Original signal handlers restored")
-        except Exception as e:
-            logger.warning(f"Failed to restore signal handlers: {e}")
-    
-    def _handle_interrupt(self, signum, frame) -> None:
-        """Handle SIGINT (Ctrl+C)"""
-        if not self.is_shutting_down:
-            logger.info("Interrupt signal received, initiating shutdown...")
-            self.is_shutting_down = True
-            
-            # Create a new event loop for the shutdown process
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            try:
-                loop.run_until_complete(self.shutdown())
-            except Exception as e:
-                logger.error(f"Error during emergency shutdown: {e}")
-            finally:
-                loop.close()
-                sys.exit(1)
-    
-    def _handle_termination(self, signum, frame) -> None:
-        """Handle SIGTERM"""
-        if not self.is_shutting_down:
-            logger.info("Termination signal received, initiating shutdown...")
-            self.is_shutting_down = True
-            
-            # Create a new event loop for the shutdown process
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            try:
-                loop.run_until_complete(self.shutdown())
-            except Exception as e:
-                logger.error(f"Error during emergency shutdown: {e}")
-            finally:
-                loop.close()
-                sys.exit(0)
-    
+        # Notify callbacks about memory issue
+        self._notify_callbacks('error', {
+            'phase': 'runtime',
+            'error': f"Critical memory usage: {stats.system_percent}%",
+            'timestamp': time.time()
+        })
+
     async def initialize(self) -> bool:
         """
         Initialize all system components in the correct order.
@@ -209,6 +200,19 @@ class SystemCoordinator:
             # Set up signal handlers
             self._setup_signal_handlers()
             
+            # Reserve debug port if needed
+            if hasattr(self.config, 'debug_port') and self.config.debug_port:
+                port = DebugPortManager.reserve_port(self.config.debug_port)
+                if port is None:
+                    logger.warning(f"Could not reserve debug port {self.config.debug_port}, finding alternative")
+                    port = DebugPortManager.find_available_port()
+                    
+                if port:
+                    self.debug_port = port
+                    logger.info(f"Reserved debug port: {port}")
+                else:
+                    logger.warning("Could not reserve any debug port")
+
             # Set up interactive session if enabled
             if self.config.interactive:
                 interactive_config = InteractiveConfig(
@@ -286,12 +290,21 @@ class SystemCoordinator:
                 self._watchdog_task = asyncio.create_task(self._run_system_watchdog())
                 self._backup_task = asyncio.create_task(self._run_periodic_backups())
             
+            # Track system components in memory manager
+            if self.config.memory_monitoring:
+                if self.module_registry:
+                    memory_manager.track_object(self.module_registry, "Module Registry")
+                if self.resource_manager:
+                    memory_manager.track_object(self.resource_manager, "Resource Manager")
+                if self.metrics_collector:
+                    memory_manager.track_object(self.metrics_collector, "Metrics Collector")
+            
             # Mark initialization as complete
             self.is_initialized = True
             self.startup_complete = True
             initialization_time = time.time() - start_time
             
-            logger.info(f"System initialization complete in {initialization_time:.2f} seconds")
+            logger.info("System initialization complete in %.2f seconds", initialization_time)
             
             # Notify callbacks
             await self._notify_callbacks('startup_complete', {
@@ -302,7 +315,7 @@ class SystemCoordinator:
             
             return True
             
-        except Exception as e:
+        except (RuntimeError, IOError, ValueError, asyncio.TimeoutError) as e:
             self.initialization_error = str(e)
             logger.error(f"Failed to initialize system: {e}", exc_info=True)
             
@@ -317,234 +330,38 @@ class SystemCoordinator:
             })
             
             return False
-    
-    async def _cleanup_failed_initialization(self) -> None:
-        """Clean up after a failed initialization"""
-        logger.info("Cleaning up after failed initialization")
-        
-        components = [
-            ("module_integration", self.module_integration),
-            ("module_registry", self.module_registry),
-            ("resource_manager", self.resource_manager),
-            ("metrics_collector", self.metrics_collector),
-            ("interactive_session", self.interactive_session)
-        ]
-        
-        for name, component in reversed(components):
-            if component:
-                try:
-                    logger.info(f"Cleaning up {name}")
-                    if hasattr(component, 'shutdown'):
-                        await asyncio.wait_for(
-                            component.shutdown(),
-                            timeout=self.config.shutdown_timeout
-                        )
-                        logger.info(f"Successfully cleaned up {name}")
-                except (asyncio.TimeoutError, Exception) as e:
-                    logger.error(f"Error shutting down {name} during cleanup: {e}")
-        
-        # Restore signal handlers
-        self._restore_signal_handlers()
-        
-        # Clear active tasks
-        for task in self._active_tasks:
-            if not task.done():
-                task.cancel()
-        
-        # Shutdown thread executor
-        self._thread_executor.shutdown(wait=False)
-        
-        # Run garbage collection
-        gc.collect()
-    
-    async def _run_system_watchdog(self) -> None:
-        """Monitor system health and recover failed components if possible"""
-        try:
-            logger.info("Starting system health watchdog")
+        except (RuntimeError, ValueError, TypeError, KeyError, AttributeError, 
+                IOError, OSError, asyncio.TimeoutError, LookupError) as e:
+            self.initialization_error = f"Unexpected error: {str(e)}"
+            logger.critical(f"Critical failure during initialization: {e}", exc_info=True)
             
-            while not self.is_shutting_down:
-                try:
-                    # Check component health
-                    health_status = await self._check_component_health()
-                    
-                    # Try to recover failed components
-                    if self.config.auto_restart_failed:
-                        await self._recover_failed_components(health_status)
-                    
-                    # Notify health status
-                    await self._notify_callbacks('system_health', {
-                        'timestamp': time.time(),
-                        'status': health_status,
-                        'overall_health': all(
-                            status == "active" for component, status in health_status.items()
-                        )
-                    })
-                    
-                except Exception as e:
-                    logger.error(f"Error in watchdog monitoring: {e}")
-                
-                # Wait for next check
-                await asyncio.sleep(self.config.watchdog_interval)
-                
-        except asyncio.CancelledError:
-            logger.info("Watchdog task cancelled")
-        except Exception as e:
-            logger.error(f"Watchdog task failed: {e}")
-    
-    async def _check_component_health(self) -> Dict[str, str]:
-        """Check health of all system components"""
-        health = {}
-        
-        # Check metrics collector
-        if self.metrics_collector:
-            try:
-                # A simple check if the collector is running
-                if getattr(self.metrics_collector, '_is_running', False):
-                    health['metrics_collector'] = 'active'
-                else:
-                    health['metrics_collector'] = 'inactive'
-            except Exception as e:
-                logger.warning(f"Error checking metrics collector health: {e}")
-                health['metrics_collector'] = 'error'
-        
-        # Check resource manager
-        if self.resource_manager:
-            try:
-                # Check if initialized
-                if getattr(self.resource_manager, 'is_initialized', False):
-                    health['resource_manager'] = 'active'
-                else:
-                    health['resource_manager'] = 'inactive'
-            except Exception as e:
-                logger.warning(f"Error checking resource manager health: {e}")
-                health['resource_manager'] = 'error'
-        
-        # Check module registry
-        if self.module_registry:
-            try:
-                # Try to get metrics as a health check
-                await self.module_registry.get_system_metrics()
-                health['module_registry'] = 'active'
-            except Exception as e:
-                logger.warning(f"Error checking module registry health: {e}")
-                health['module_registry'] = 'error'
-        
-        # Check module integration
-        if self.module_integration:
-            try:
-                # Check if it's initialized
-                if getattr(self.module_integration, 'is_initialized', False):
-                    await self.module_integration.get_system_status()
-                    health['module_integration'] = 'active'
-                else:
-                    health['module_integration'] = 'inactive'
-            except Exception as e:
-                logger.warning(f"Error checking module integration health: {e}")
-                health['module_integration'] = 'error'
-        
-        # Compare with previous statuses and log changes
-        for component, status in health.items():
-            previous = self.component_status.get(component)
-            if previous and previous != status:
-                if status == 'error' or status == 'inactive':
-                    logger.warning(f"Component {component} changed state from {previous} to {status}")
-                    await self._notify_callbacks('component_failure', {
-                        'component': component,
-                        'previous_status': previous,
-                        'current_status': status,
-                        'timestamp': time.time()
-                    })
-                elif previous == 'error' or previous == 'inactive':
-                    logger.info(f"Component {component} recovered from {previous} to {status}")
-                    await self._notify_callbacks('component_recovered', {
-                        'component': component,
-                        'previous_status': previous,
-                        'current_status': status,
-                        'timestamp': time.time()
-                    })
-        
-        # Update component status
-        self.component_status.update(health)
-        return health
-    
-    async def _recover_failed_components(self, health_status: Dict[str, str]) -> None:
-        """Attempt to recover failed components"""
-        for component, status in health_status.items():
-            if status in ('error', 'inactive'):
-                logger.info(f"Attempting to recover {component}")
-                
-                try:
-                    if component == 'metrics_collector' and self.metrics_collector:
-                        # Try to restart metrics collector
-                        await self.metrics_collector.stop()
-                        await self.metrics_collector.start()
-                        logger.info(f"Successfully restarted metrics collector")
-                    
-                    elif component == 'resource_manager' and self.resource_manager:
-                        # Try to re-initialize resource manager
-                        await self.resource_manager.initialize(metrics_collector=self.metrics_collector)
-                        logger.info(f"Successfully restarted resource manager")
-                    
-                    # Note: Module registry and module integration may be more complex to restart
-                    # and might require more careful handling
-                
-                except Exception as e:
-                    logger.error(f"Failed to recover {component}: {e}")
-    
-    async def _run_periodic_backups(self) -> None:
-        """Periodically back up system state"""
-        try:
-            while not self.is_shutting_down:
-                try:
-                    await self._create_system_backup()
-                except Exception as e:
-                    logger.error(f"Error creating system backup: {e}")
-                
-                # Wait for next backup
-                await asyncio.sleep(self.config.backup_interval)
-                
-        except asyncio.CancelledError:
-            logger.info("Backup task cancelled")
-        except Exception as e:
-            logger.error(f"Backup task failed: {e}")
-    
-    async def _create_system_backup(self) -> None:
-        """Create a backup of system state"""
-        try:
-            timestamp = int(time.time())
-            backup_dir = os.path.join(self.config.checkpoint_dir, f"system_backup_{timestamp}")
-            os.makedirs(backup_dir, exist_ok=True)
+            # Attempt cleanup of partially initialized components
+            await self._cleanup_failed_initialization()
             
-            logger.info(f"Creating system backup at {backup_dir}")
+            # Notify error callbacks
+            await self._notify_callbacks('error', {
+                'phase': 'initialization',
+                'error': f"Unexpected error: {str(e)}",
+                'timestamp': time.time()
+            })
             
-            # Get resource manager to create backups for registered modules
-            if self.resource_manager and hasattr(self.resource_manager, 'registered_modules'):
-                for module_id in self.resource_manager.registered_modules:
-                    try:
-                        # Use resource manager's backup functionality
-                        if hasattr(self.resource_manager, 'create_backup'):
-                            # In a real implementation, we would need to get module state
-                            # For now we just create an empty placeholder
-                            placeholder_data = {"timestamp": timestamp, "module_id": module_id}
-                            backup_path = await self.resource_manager.create_backup(module_id, placeholder_data)
-                            logger.debug(f"Created backup for {module_id} at {backup_path}")
-                    except Exception as e:
-                        logger.warning(f"Failed to create backup for {module_id}: {e}")
+            return False
+        except Exception as e:  # Fallback for truly unexpected errors
+            self.initialization_error = f"Critical error: {str(e)}"
+            logger.critical(f"Critical failure during initialization: {e}", exc_info=True)
             
-            # Save system status
-            status = await self.get_system_status()
-            try:
-                with open(os.path.join(backup_dir, "system_status.json"), "w") as f:
-                    import json
-                    json.dump(status, f, indent=2, default=str)
-            except Exception as e:
-                logger.warning(f"Failed to save system status: {e}")
-                
-            logger.info(f"System backup completed")
+            # Attempt cleanup of partially initialized components
+            await self._cleanup_failed_initialization()
             
-        except Exception as e:
-            logger.error(f"Error creating system backup: {e}")
-    
+            # Notify error callbacks
+            await self._notify_callbacks('error', {
+                'phase': 'initialization',
+                'error': f"Critical error: {str(e)}",
+                'timestamp': time.time()
+            })
+            
+            return False
+
     async def shutdown(self) -> bool:
         """
         Gracefully shut down all system components in reverse order.
@@ -632,6 +449,10 @@ class SystemCoordinator:
                 except asyncio.TimeoutError:
                     logger.warning("Some active tasks did not complete during shutdown")
             
+            # Stop memory monitoring
+            if self.config.memory_monitoring:
+                memory_manager.stop_monitoring()
+            
             # Shutdown thread executor
             self._thread_executor.shutdown(wait=False)
             
@@ -642,8 +463,11 @@ class SystemCoordinator:
             shutdown_time = time.time() - start_time
             logger.info(f"System shutdown {'completed successfully' if shutdown_success else 'completed with errors'} in {shutdown_time:.2f} seconds")
             
-        except Exception as e:
-            logger.error(f"Unexpected error during system shutdown: {e}")
+        except (RuntimeError, ValueError, TypeError, asyncio.CancelledError, IOError, OSError) as e:
+            logger.error(f"Error during system shutdown: {e}")
+            shutdown_success = False
+        except Exception as e:  # Still catch unexpected errors, but log with traceback
+            logger.error(f"Unexpected critical error during system shutdown", exc_info=True)
             shutdown_success = False
         
         finally:
@@ -661,24 +485,7 @@ class SystemCoordinator:
             })
         
         return shutdown_success
-    
-    def register_callback(self, event_type: str, callback: Callable) -> None:
-        """Register a callback for a specific event type"""
-        if event_type in self.callbacks:
-            self.callbacks[event_type].add(callback)
-    
-    async def _notify_callbacks(self, event_type: str, data: Dict[str, Any]) -> None:
-        """Notify registered callbacks of an event"""
-        if event_type in self.callbacks:
-            for callback in self.callbacks[event_type]:
-                try:
-                    if asyncio.iscoroutinefunction(callback):
-                        await callback(data)
-                    else:
-                        callback(data)
-                except Exception as e:
-                    logger.error(f"Error in {event_type} callback: {e}")
-    
+
     async def get_system_status(self) -> Dict[str, Any]:
         """Get overall system status"""
         status = {
@@ -698,13 +505,26 @@ class SystemCoordinator:
             "component_health": dict(self.component_status)
         }
         
+        # Add memory stats if monitoring enabled
+        if self.config.memory_monitoring:
+            try:
+                memory_stats = memory_manager.get_memory_stats()
+                status["memory"] = {
+                    "system_percent": memory_stats.system_percent,
+                    "process_mb": memory_stats.process_mb,
+                    "available_mb": memory_stats.available_system_mb,
+                    "tracked_objects": memory_stats.tracked_objects
+                }
+            except Exception as e:
+                logger.warning(f"Error getting memory stats: {e}")
+        
         # Get more detailed status if modules are initialized
         if self.module_registry:
             try:
                 registry_status = await self.module_registry.get_system_metrics()
                 status["module_registry_status"] = registry_status
             except Exception as e:
-                logger.warning(f"Error getting module registry status: {e}")
+                logger.warning("Error getting module registry status: %s", e)
                 status["module_registry_error"] = str(e)
         
         if self.module_integration:
@@ -712,147 +532,10 @@ class SystemCoordinator:
                 integration_status = await self.module_integration.get_system_status()
                 status["module_integration_status"] = integration_status
             except Exception as e:
-                logger.warning(f"Error getting module integration status: {e}")
+                logger.warning("Error getting module integration status: %s", e)
                 status["module_integration_error"] = str(e)
         
         if self.initialization_error:
             status["initialization_error"] = self.initialization_error
             
         return status
-    
-    async def execute_in_thread(self, func, *args, **kwargs) -> Any:
-        """Execute a blocking function in a thread pool to avoid blocking the event loop"""
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            self._thread_executor, 
-            lambda: func(*args, **kwargs)
-        )
-    
-    def add_task(self, coroutine) -> asyncio.Task:
-        """Add a task to be tracked by the coordinator"""
-        task = asyncio.create_task(coroutine)
-        self._active_tasks.add(task)
-        task.add_done_callback(lambda t: self._active_tasks.remove(t))
-        return task
-    
-    async def verify_compatibility(self) -> Tuple[bool, List[str]]:
-        """Verify system compatibility and dependencies"""
-        issues = []
-        
-        # Check Python version
-        import sys
-        if sys.version_info < (3, 7):
-            issues.append(f"Python version {sys.version} is not supported. Minimum required version is 3.7")
-        
-        # Check critical dependencies
-        try:
-            import torch
-            if not torch.cuda.is_available() and self.config.enable_distributed:
-                issues.append("CUDA is not available but distributed mode is enabled")
-        except ImportError:
-            issues.append("PyTorch is not installed")
-        
-        try:
-            import aiohttp
-        except ImportError:
-            issues.append("aiohttp is not installed")
-        
-        try:
-            import psutil
-        except ImportError:
-            issues.append("psutil is not installed for resource monitoring")
-        
-        # Check directories are writable
-        directories = [
-            self.config.checkpoint_dir,
-            self.config.metrics_storage_path,
-            "logs"
-        ]
-        
-        for directory in directories:
-            try:
-                os.makedirs(directory, exist_ok=True)
-                test_file = os.path.join(directory, ".write_test")
-                with open(test_file, "w") as f:
-                    f.write("test")
-                os.remove(test_file)
-            except (IOError, OSError, PermissionError) as e:
-                issues.append(f"Directory {directory} is not writable: {e}")
-        
-        return len(issues) == 0, issues
-    
-    async def get_detailed_metrics(self) -> Dict[str, Any]:
-        """Get detailed system metrics from all components"""
-        metrics = {
-            "timestamp": time.time(),
-            "system_uptime": time.time() - self.startup_complete if self.startup_complete else 0,
-        }
-        
-        # Get metrics from metrics collector
-        if self.metrics_collector:
-            try:
-                current_metrics = await self.metrics_collector.get_current_metrics()
-                metrics["system_metrics"] = current_metrics
-            except Exception as e:
-                logger.warning(f"Failed to get metrics from metrics collector: {e}")
-        
-        # Get module metrics from registry
-        if self.module_registry:
-            try:
-                registry_metrics = await self.module_registry.get_system_metrics()
-                metrics["module_metrics"] = registry_metrics
-            except Exception as e:
-                logger.warning(f"Failed to get metrics from module registry: {e}")
-        
-        # Get learning metrics if available
-        if self.module_integration and hasattr(self.module_integration, "get_learning_stats"):
-            try:
-                learning_stats = await self.module_integration.get_learning_stats()
-                metrics["learning_metrics"] = learning_stats
-            except Exception as e:
-                logger.warning(f"Failed to get learning stats: {e}")
-        
-        return metrics
-
-async def initialize_system() -> SystemCoordinator:
-    """Initialize system with default configuration"""
-    config = SystemCoordinatorConfig()
-    coordinator = SystemCoordinator(config)
-    
-    # Check compatibility first
-    compatibility, issues = await coordinator.verify_compatibility()
-    if not compatibility:
-        for issue in issues:
-            logger.error(f"Compatibility issue: {issue}")
-        raise RuntimeError("System compatibility check failed")
-    
-    # Initialize the coordinator
-    success = await coordinator.initialize()
-    if not success:
-        raise RuntimeError(f"System initialization failed: {coordinator.initialization_error}")
-    
-    return coordinator
-
-# Example usage
-if __name__ == "__main__":
-    async def main():
-        try:
-            coordinator = await initialize_system()
-            logger.info("System running. Press Ctrl+C to shutdown.")
-            
-            # Keep system running until interrupted
-            while True:
-                await asyncio.sleep(1)
-        except KeyboardInterrupt:
-            logger.info("Keyboard interrupt received")
-            if coordinator:
-                await coordinator.shutdown()
-        except Exception as e:
-            logger.error(f"System error: {e}")
-            if coordinator:
-                await coordinator.shutdown()
-    
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nShutdown complete")

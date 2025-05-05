@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Dict, List, Set, Optional, Tuple, Any, Callable, Union
 from dataclasses import dataclass, field
 import concurrent.futures
+import psutil
 
 logger = logging.getLogger(__name__)
 
@@ -828,6 +829,27 @@ class LogMonitor:
             pass
             
         return False
+
+    def process_system_metrics(self):
+        """Process system metrics and detect anomalies"""
+        try:
+            # Process CPU, memory, disk metrics
+            cpu_percent = psutil.cpu_percent()
+            memory = psutil.virtual_memory()
+            disk = psutil.disk_usage('/')
+            
+            # Check for resource issues
+            if cpu_percent > 95:
+                self.add_alert("high_cpu", f"CPU usage at {cpu_percent}%", level="warning")
+                
+            if memory.percent > 90:
+                self.add_alert("high_memory", f"Memory usage at {memory.percent}%", level="warning")
+                
+            if disk.percent > 95:
+                self.add_alert("low_disk", f"Disk space at {disk.percent}% used", level="warning")
+                
+        except Exception as e:
+            logger.error("Error processing system metrics: %s", e)
 
 
 # Helper function to create and start log monitor

@@ -10,7 +10,7 @@ import logging
 import time
 import torch
 import numpy as np
-from typing import Dict, List, Any, Optional, Set, Callable, Awaitable, Union
+from typing import Dict, Any
 from dataclasses import dataclass, field
 import os
 import json
@@ -120,9 +120,12 @@ class LearningCoordinator:
             except asyncio.CancelledError:
                 logger.info("Learning coordinator task cancelled")
                 break
-            except Exception as e:
+            except (asyncio.TimeoutError, ConnectionError, RuntimeError) as e:
                 logger.error(f"Error in coordinator loop: {e}", exc_info=True)
                 await asyncio.sleep(60)  # Back off on error
+            except Exception as e:  # Fallback for unexpected errors
+                logger.critical(f"Unexpected error in coordinator loop: {e}", exc_info=True)
+                await asyncio.sleep(120)  # Longer back off for unexpected errors
                 
     def _save_metrics(self):
         """Save learning metrics to disk"""
@@ -225,75 +228,75 @@ class LearningCoordinator:
                 if len(self.metrics_history) > 100:
                     self.metrics_history = self.metrics_history[-100:]
                 
-                        logger.info(f"Completed learning cycle {self.stats.training_cycles}")
-                        return metrics
-                        
-                    except Exception as e:
-                        logger.error(f"Coordinated training cycle failed: {e}", exc_info=True)
-                        return {"error": str(e), "status": "failed"}
-                        
-            async def _apply_cross_learning(self) -> Dict[str, Any]:
-                """Apply cross-learning between different learning systems
+                logger.info(f"Completed learning cycle {self.stats.training_cycles}")
+                return metrics
                 
-                Returns:
-                    Dict[str, Any]: Metrics from cross-learning
-                """
-                try:
-                    cross_metrics = {
-                        "transfers": 0,
-                        "insights_shared": 0
-                    }
-                        
-                        # Skip if required modules aren't available
-                        if not (self.interface.unsupervised_module and 
-                                self.interface.self_supervised_module and 
-                                self.interface.rl_trainer):
-                            return {"status": "skipped", "reason": "missing_modules"}
-                        
-                        # 1. Use unsupervised clusters to guide self-supervised learning
-                        if hasattr(self.interface.unsupervised_module, 'get_cluster_centers'):
-                            # Get representative samples from clusters
-                            cluster_centers = self.interface.unsupervised_module.get_cluster_centers()
-                            if cluster_centers is not None and len(cluster_centers) > 0:
-                                # Use cluster insights to improve representations
-                                if hasattr(self.interface.self_supervised_module, 'incorporate_clusters'):
-                                    await self.interface.self_supervised_module.incorporate_clusters(cluster_centers)
-                                    cross_metrics["transfers"] += 1
-                        
-                        # 2. Use self-supervised representations to improve RL state representation
-                        if hasattr(self.interface.self_supervised_module, 'get_model_improvements'):
-                            improvements = self.interface.self_supervised_module.get_model_improvements()
-                            if improvements and hasattr(self.interface.rl_trainer, 'update_state_representation'):
-                                await self.interface.rl_trainer.update_state_representation(improvements)
-                                cross_metrics["insights_shared"] += 1
-                        
-                            # Track cross-learning transfers
-                            self.stats.cross_learning_transfers += cross_metrics["transfers"]
-                            
-                            return cross_metrics
-                            
-                        except Exception as e:
-                            logger.error(f"Error in cross-learning: {e}", exc_info=True)
-                            return {"error": str(e), "status": "failed"}
-                
-                async def _handle_p2p_sharing(self) -> Dict[str, Any]:
-                    """Handle P2P sharing of high-quality learning samples
-                    
-                    Returns:
-                        Dict[str, Any]: Metrics from P2P sharing
-            Returns:
-                Dict[str, Any]: Metrics from P2P sharing
-            """
-            try:
-                # Implementation depends on your P2P network setup
-                # This is a placeholder for the actual implementation
-                return {"status": "not_implemented"}
             except Exception as e:
-                logger.error(f"Error in P2P sharing: {e}", exc_info=True)
+                logger.error(f"Coordinated training cycle failed: {e}", exc_info=True)
                 return {"error": str(e), "status": "failed"}
-                
-        async def _update_clusters(self) -> bool:
-            """Update unsupervised clustering with recent data
+                        
+    async def _apply_cross_learning(self) -> Dict[str, Any]:
+        """Apply cross-learning between different learning systems
+        
+        Returns:
+            Dict[str, Any]: Metrics from cross-learning
+        """
+        try:
+            cross_metrics = {
+                "transfers": 0,
+                "insights_shared": 0
+            }
+            
+            # Skip if required modules aren't available
+            if not (self.interface.unsupervised_module and 
+                    self.interface.self_supervised_module and 
+                    self.interface.rl_trainer):
+                return {"status": "skipped", "reason": "missing_modules"}
+            
+            # 1. Use unsupervised clusters to guide self-supervised learning
+            if hasattr(self.interface.unsupervised_module, 'get_cluster_centers'):
+                # Get representative samples from clusters
+                cluster_centers = self.interface.unsupervised_module.get_cluster_centers()
+                if cluster_centers is not None and len(cluster_centers) > 0:
+                    # Use cluster insights to improve representations
+                    if hasattr(self.interface.self_supervised_module, 'incorporate_clusters'):
+                        await self.interface.self_supervised_module.incorporate_clusters(cluster_centers)
+                        cross_metrics["transfers"] += 1
+            
+            # 2. Use self-supervised representations to improve RL state representation
+            if hasattr(self.interface.self_supervised_module, 'get_model_improvements'):
+                improvements = self.interface.self_supervised_module.get_model_improvements()
+                if improvements and hasattr(self.interface.rl_trainer, 'update_state_representation'):
+                    await self.interface.rl_trainer.update_state_representation(improvements)
+                    cross_metrics["insights_shared"] += 1
+            
+            # Track cross-learning transfers
+            self.stats.cross_learning_transfers += cross_metrics["transfers"]
+            
+            return cross_metrics
+            
+        except Exception as e:
+            logger.error("Error in cross-learning: %s", e, exc_info=True)
+            return {"error": str(e), "status": "failed"}
+
+    async def _handle_p2p_sharing(self) -> Dict[str, Any]:
+        """Handle P2P sharing of high-quality learning samples
+        
+        Returns:
+            Dict[str, Any]: Metrics from P2P sharing
+        """
+        try:
+            # Implementation depends on your P2P network setup
+            # This is a placeholder for the actual implementation
+            return {"status": "not_implemented"}
+        except Exception as e:
+            logger.error("Error in P2P sharing: %s", e, exc_info=True)
+            return {"error": str(e), "status": "failed"}
+            
+    async def _update_clusters(self) -> bool:
+        """Update unsupervised clustering with recent data
+        
+        Returns:
             bool: Whether clusters were updated successfully
         """
         if not self.interface.unsupervised_module or not hasattr(self.interface, 'history') or len(self.interface.history) < 3:
@@ -311,51 +314,51 @@ class LearningCoordinator:
                         if embedding is not None:
                             self.interface.unsupervised_module.add_to_buffer(embedding.cpu().numpy())
                     except Exception as e:
-                        logger.error(f"Error adding message to unsupervised buffer: {e}")
+                        logger.error("Error adding message to unsupervised buffer: %s", e)
             
             # After adding to buffer, update clusters if possible
             if hasattr(self.interface.unsupervised_module, 'update_clusters'):
                 await self.interface.unsupervised_module.update_clusters()
             return True
         except Exception as e:
-            logger.error(f"Error updating clusters: {e}")
+            logger.error("Error updating clusters: %s", e)
             return False
                 
     async def _update_self_supervised(self) -> Dict[str, Any]:
-            """Update self-supervised learning with recent conversation data
+        """Update self-supervised learning with recent conversation data
+        
+        Returns:
+            Dict[str, Any]: Metrics from self-supervised learning
+        """
+        if not self.interface.self_supervised_module or not hasattr(self.interface, 'history'):
+            return {"status": "skipped", "reason": "no_module_or_history"}
             
-            Returns:
-                Dict[str, Any]: Metrics from self-supervised learning
-            """
-            if not self.interface.self_supervised_module or not hasattr(self.interface, 'history'):
-                return {"status": "skipped", "reason": "no_module_or_history"}
-                
-            try:
-                # Get recent conversation samples for self-supervised learning
-                samples = []
-                if len(self.interface.history) >= 2:
-                    # Create training pairs from conversation history
-                    for i in range(1, len(self.interface.history)):
-                        prev_msg, _ = self.interface.history[i-1]
-                        curr_msg, _ = self.interface.history[i]
+        try:
+            # Get recent conversation samples for self-supervised learning
+            samples = []
+            if len(self.interface.history) >= 2:
+                # Create training pairs from conversation history
+                for i in range(1, len(self.interface.history)):
+                    prev_msg, _ = self.interface.history[i-1]
+                    curr_msg, _ = self.interface.history[i]
+                    
+                    if len(prev_msg.split()) >= self.config.min_sample_length and \
+                       len(curr_msg.split()) >= self.config.min_sample_length:
+                        samples.append((prev_msg, curr_msg))
                         
-                        if len(prev_msg.split()) >= self.config.min_sample_length and \
-                           len(curr_msg.split()) >= self.config.min_sample_length:
-                            samples.append((prev_msg, curr_msg))
-                            
-                # Train on collected samples
-                if samples:
-                    metrics = await self.interface.self_supervised_module.train(samples, 
-                                                                             batch_size=self.config.batch_size)
-                    # Update total examples count
-                    self.stats.total_examples += len(samples)
-                    return metrics
-                
-                return {"status": "no_samples"}
-                
-            except Exception as e:
-                logger.error(f"Error in self-supervised learning: {e}", exc_info=True)
-                return {"error": str(e), "status": "failed"}
+            # Train on collected samples
+            if samples:
+                metrics = await self.interface.self_supervised_module.train(samples, 
+                                                                         batch_size=self.config.batch_size)
+                # Update total examples count
+                self.stats.total_examples += len(samples)
+                return metrics
+            
+            return {"status": "no_samples"}
+            
+        except Exception as e:
+            logger.error("Error in self-supervised learning: %s", e, exc_info=True)
+            return {"error": str(e), "status": "failed"}
                 
     async def _train_rl_from_history(self) -> Dict[str, Any]:
         """Update reinforcement learning module with recent conversation history
@@ -396,5 +399,5 @@ class LearningCoordinator:
             return {"status": "no_samples"}
             
         except Exception as e:
-            logger.error(f"Error in reinforcement learning: {e}", exc_info=True)
+            logger.error("Error in reinforcement learning: %s", e, exc_info=True)
             return {"error": str(e), "status": "failed"}

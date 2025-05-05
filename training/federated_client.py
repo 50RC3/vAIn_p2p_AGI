@@ -7,6 +7,7 @@ import psutil
 import time
 from dataclasses import dataclass
 from .distillation import DistillationTrainer
+from .model_interface import ModelInterface
 from core.interactive_utils import Session
 
 # Move the MemoryManager import inside TYPE_CHECKING block to avoid circular imports

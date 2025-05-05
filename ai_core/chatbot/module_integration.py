@@ -487,16 +487,26 @@ class ModuleIntegration:
     async def _cleanup_resources(self) -> None:
         """Clean up resources when memory usage is high"""
         try:
+            # Record cleanup event in metrics
+            if self.metrics_collector:
+                await self.metrics_collector._add_metric_point(
+                    "resource_cleanup",
+                    1.0,
+                    time.time(),
+                    {"trigger": "high_memory"}
+                )
+            
             # Clear caches for all interfaces
             for interface_id, interface in self.chatbot_interfaces.items():
                 if hasattr(interface, 'response_cache'):
                     interface.response_cache.clear()
-                if hasattr(interface, 'context_cache'):
-                    interface.context_cache.clear()
-                if hasattr(interface, 'feedback_cache'):
-                    interface.feedback_cache.clear()
+                # Other interface caches...
             
-            # Clear torch cache
+            # Free memory from tensors no longer needed
+            if hasattr(self, 'last_embeddings') and self.last_embeddings is not None:
+                del self.last_embeddings
+            
+            # Clear torch cache if available
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 
@@ -642,3 +652,4 @@ class ModuleIntegration:
                 shutdown_success = False
         
         logger.info(f"Module integration shutdown {'completed successfully' if shutdown_success else 'completed with errors'}")
+``` 

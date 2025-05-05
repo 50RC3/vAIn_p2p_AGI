@@ -5,6 +5,7 @@ import pytest
 import numpy as np
 from unittest.mock import patch, Mock
 from compression import AdaptiveCompression, CompressionError
+from typing import Any, Dict, List, Tuple
 
 async def main():
     """Test the AdaptiveCompression class."""

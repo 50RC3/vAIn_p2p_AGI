@@ -1,12 +1,13 @@
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any, Tuple
 import logging
 import torch
 from tqdm import tqdm
 from .agent import Agent
-from .federated import FederatedLearning
+from .federated import FederatedLearningManager
 from config.agent_config import AgentConfig
 from core.interactive_utils import InteractiveSession
-from core.constants import InteractionLevel
+from .evolution_tracker import EvolutionTracker
+from .evolution import EvolutionTracker
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ class MultiAgentSystem:
         
         self.config = config
         self.interactive = interactive_session
-        self.agents = []
+        self.agents: List[Agent] = []
         
         # Initialize agents with validation
         for i in range(config.num_agents):
@@ -25,17 +26,47 @@ class MultiAgentSystem:
                 agent = Agent(config)
                 self.agents.append(agent)
             except Exception as e:
-                logger.error(f"Failed to initialize agent {i}: {str(e)}")
+                logger.error("Failed to initialize agent {}: {}", i, str(e))
                 raise
                 
-        logger.info(f"Successfully initialized {len(self.agents)} agents")
+        logger.info("Successfully initialized {} agents", len(self.agents))
         
         # Add AGI coordination
-        self.global_knowledge = {}
-        self.collective_intelligence = 0.0
+        self.global_knowledge: Dict[str, Any] = {}
+        self.collective_intelligence: float = 0.0
         self.evolution_tracker = EvolutionTracker()
 
-    def federated_update(self, federated_learning: FederatedLearning) -> bool:
+    async def _evolve_cognitive_abilities(self) -> Dict[str, float]:
+        """
+        Evolve cognitive abilities across all agents.
+        
+        Returns:
+            Dict[str, float]: Metrics of cognitive improvements
+        """
+        improvements = {
+            "reasoning": 0.0,
+            "memory": 0.0,
+            "learning": 0.0,
+            "adaptation": 0.0
+        }
+        
+        # Apply cognitive evolution to each agent
+        for agent in self.agents:
+            if hasattr(agent, 'evolve_cognition'):
+                agent_improvements = await agent.evolve_cognition(self.global_knowledge)
+                for key, value in agent_improvements.items():
+                    if key in improvements:
+                        improvements[key] += value / len(self.agents)
+                        
+        # Track these improvements
+        self.evolution_tracker.track_evolution_step({
+            "cognitive_improvements": improvements,
+            "collective_intelligence": self.collective_intelligence
+        })
+        
+        return improvements
+
+    def federated_update(self, federated_learning: FederatedLearningManager) -> bool:
         """Perform federated update with validation and error handling"""
         try:
             # Validate all agents have models
@@ -52,7 +83,7 @@ class MultiAgentSystem:
                         raise ValueError(f"Empty model state from agent {i}")
                     local_models.append(model_state)
                 except Exception as e:
-                    logger.error(f"Error getting model state from agent {i}: {str(e)}")
+                    logger.error("Error getting model state from agent {}: {}", i, str(e))
                     if self.config.strict_mode:
                         raise
                     continue
@@ -69,7 +100,7 @@ class MultiAgentSystem:
                 try:
                     agent.model.load_state_dict(aggregated_state)
                 except Exception as e:
-                    logger.error(f"Failed to update agent {i}: {str(e)}")
+                    logger.error("Failed to update agent {}: {}", i, str(e))
                     update_failed = True
                     if self.config.strict_mode:
                         raise
@@ -77,18 +108,18 @@ class MultiAgentSystem:
             return not update_failed
 
         except Exception as e:
-            logger.error(f"Federated update failed: {str(e)}")
+            logger.error("Federated update failed: {}", str(e))
             return False
 
-    def train(self, federated_learning: FederatedLearning, 
-              clients_data: List, rounds: int, meta_steps: int) -> dict:
+    def train(self, federated_learning: FederatedLearningManager, 
+              clients_data: List[Any], rounds: int, meta_steps: int) -> Dict[str, Any]:
         """Train the multi-agent system with progress tracking and validation"""
         if not self.agents or not clients_data:
             raise ValueError("Agents or client data not properly initialized")
         if len(self.agents) != len(clients_data):
             raise ValueError("Number of agents must match client data sets")
 
-        training_stats = {
+        training_stats: Dict[str, Any] = {
             'round_losses': [],
             'failed_updates': 0,
             'completed_rounds': 0
@@ -97,7 +128,7 @@ class MultiAgentSystem:
         try:
             # Main training loop with progress bar
             with tqdm(total=rounds, desc="Training Progress") as pbar:
-                for round in range(rounds):
+                for round_num in range(rounds):
                     round_losses = []
                     
                     # Train each agent
@@ -112,11 +143,13 @@ class MultiAgentSystem:
                                 loss = agent.local_update(x, y, meta_steps)
                                 batch_losses.append(loss)
                                 
-                            avg_batch_loss = sum(batch_losses) / len(batch_losses)
-                            round_losses.append(avg_batch_loss)
+                            # Calculate average batch loss safely
+                            if batch_losses:
+                                avg_batch_loss = sum(batch_losses) / len(batch_losses)
+                                round_losses.append(avg_batch_loss)
                             
                         except Exception as e:
-                            logger.error(f"Error training agent {agent_idx} in round {round}: {str(e)}")
+                            logger.error("Error training agent {} in round {}: {}", agent_idx, round_num, str(e))
                             if self.config.strict_mode:
                                 raise
                             continue
@@ -125,32 +158,32 @@ class MultiAgentSystem:
                     if not self.federated_update(federated_learning):
                         training_stats['failed_updates'] += 1
                         if self.config.strict_mode:
-                            raise RuntimeError(f"Federated update failed in round {round}")
+                            raise RuntimeError(f"Federated update failed in round {round_num}")
 
                     # Update statistics
                     if round_losses:
                         avg_round_loss = sum(round_losses) / len(round_losses)
-                        training_stats['round_losses'].append(avg_round_loss)
-                        logger.info(f'Round {round+1} complete, Average Loss: {avg_round_loss:.4f}')
+                        training_stats['round_losses'].append(float(avg_round_loss))
+                        logger.info("Round {} complete, Average Loss: {:.4f}", round_num+1, avg_round_loss)
                     
-                    training_stats['completed_rounds'] = round + 1
+                    training_stats['completed_rounds'] = round_num + 1
                     pbar.update(1)
 
         except Exception as e:
-            logger.error(f"Training interrupted: {str(e)}")
+            logger.error("Training interrupted: {}", str(e))
             if self.config.strict_mode:
                 raise
         
         return training_stats
     
     async def coordinate_global_learning(self, 
-                                      federated_learning: FederatedLearning,
-                                      rounds: int) -> Dict:
+                                      federated_learning: FederatedLearningManager,
+                                      rounds: int) -> Dict[str, Any]:
         """Coordinate global AGI evolution"""
         try:
             evolution_stats = []
             
-            for round in range(rounds):
+            for round_num in range(rounds):
                 # Synchronize agent knowledge
                 await self._share_global_knowledge()
                 
@@ -164,23 +197,28 @@ class MultiAgentSystem:
                 
                 # Track evolution
                 stats = {
-                    'round': round,
+                    'round': round_num,
                     'collective_intelligence': self.collective_intelligence,
                     'cognitive_improvements': cognitive_improvements,
                     'global_knowledge': len(self.global_knowledge)
                 }
                 evolution_stats.append(stats)
                 
-                logger.info(f"Global AGI Evolution - Round {round}")
-                logger.info(f"Collective Intelligence: {self.collective_intelligence:.4f}")
+                logger.info("Global AGI Evolution - Round {}", round_num)
+                logger.info("Collective Intelligence: {:.4f}", self.collective_intelligence)
                 
-            return evolution_stats
+            # Return the final state
+            return {
+                "evolution_rounds": rounds,
+                "final_intelligence": self.collective_intelligence,
+                "evolution_history": evolution_stats
+            }
             
         except Exception as e:
-            logger.error(f"Global coordination failed: {str(e)}")
+            logger.error("Global coordination failed: {}", str(e))
             raise
             
-    async def _share_global_knowledge(self):
+    async def _share_global_knowledge(self) -> None:
         """Share and integrate knowledge across agents"""
         try:
             for agent in self.agents:
@@ -194,5 +232,5 @@ class MultiAgentSystem:
                 await agent.integrate_knowledge(self.global_knowledge)
                 
         except Exception as e:
-            logger.error(f"Knowledge sharing failed: {str(e)}")
+            logger.error("Knowledge sharing failed: {}", str(e))
             raise

@@ -40,5 +40,34 @@
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "inlineChat.lineEmptyHint": true,
-    "accessibility.voice.keywordActivation": "chatInView"
+    "accessibility.voice.keywordActivation": "chatInView",
+    "scm.defaultViewMode": "list",
+    "python.analysis.autoImportCompletions": false,
+    "python.analysis.diagnosticMode": "workspace",
+    "python.analysis.displayEnglishDiagnostics": true,
+    "python.analysis.inlayHints.functionReturnTypes": false,
+    "git.alwaysSignOff": true,
+    "git.alwaysShowStagedChangesResourceGroup": true,
+    "git.autoStash": true,
+    "git.branchRandomName.dictionary": [
+        "adjectives",
+        "animals",
+        "colors",
+        "numbers"
+    ],
+    "git.diagnosticsCommitHook.Enabled": true,
+    "git.enableCommitSigning": true,
+    "git.enableSmartCommit": true,
+    "git.followTagsWhenSync": true,
+    "git.postCommitCommand": "sync",
+    "git.pruneOnFetch": false,
+    "git.replaceTagsWhenPull": true,
+    "git.repositoryScanMaxDepth": -1,
+    "github.copilot.nextEditSuggestions.enabled": true,
+    "gitlens.codeLens.scopes": [
+        "document",
+        "containers",
+        "blocks"
+    ],
+    "gitlens.detectNestedRepositories": true
 }

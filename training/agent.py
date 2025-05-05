@@ -1,106 +1,205 @@
+"""
+Agent implementation for the multi-agent system
+"""
+from typing import Dict, List, Any, Optional, Tuple
 import torch
-import torch.optim as optim
+import torch.nn as nn
 import logging
-from typing import Optional, Tuple
-from dataclasses import dataclass
-from models.hybrid_memory_system import HybridMemorySystem
-from .meta_reptile import MetaReptile
+import asyncio
+from config.agent_config import AgentConfig
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class AgentConfig:
-    input_size: int
-    hidden_size: int
-    memory_size: int
-    memory_vector_dim: int
-    num_heads: int
-    num_layers: int
-    inner_learning_rate: float
-    meta_learning_rate: float
-    learning_rate: float
-    device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
-    
-    def validate(self) -> None:
-        """Validate configuration parameters"""
-        if any(v <= 0 for v in [self.input_size, self.hidden_size, 
-               self.memory_size, self.memory_vector_dim, 
-               self.num_heads, self.num_layers]):
-            raise ValueError("All size/dimension parameters must be positive")
-        if any(not 0 < v < 1 for v in [self.inner_learning_rate,
-               self.meta_learning_rate, self.learning_rate]):
-            raise ValueError("Learning rates must be between 0 and 1")
-
 class Agent:
+    """An intelligent agent in the multi-agent system"""
+    
     def __init__(self, config: AgentConfig):
-        """Initialize agent with validated configuration"""
-        config.validate()
+        """
+        Initialize an agent with the specified configuration.
+        
+        Args:
+            config: The agent configuration
+        """
         self.config = config
-        self.device = torch.device(config.device)
+        self.model = self._create_model()
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config.learning_rate)
+        self.knowledge_base: Dict[str, Any] = {}
+        self.cognitive_state: Dict[str, float] = {
+            "reasoning": 0.1,
+            "memory": 0.1,
+            "learning": 0.1,
+            "adaptation": 0.1
+        }
+        self.experience: List[Dict[str, Any]] = []
         
-        try:
-            self.model = HybridMemorySystem(
-                input_size=config.input_size,
-                hidden_size=config.hidden_size,
-                memory_size=config.memory_size,
-                memory_vector_dim=config.memory_vector_dim,
-                nhead=config.num_heads,
-                num_layers=config.num_layers
-            ).to(self.device)
-        except Exception as e:
-            logger.error(f"Failed to initialize HybridMemorySystem: {e}")
-            raise RuntimeError(f"Model initialization failed: {e}")
-            
-        try:
-            self.meta_reptile = MetaReptile(
-                self.model,
-                inner_lr=config.inner_learning_rate,
-                meta_lr=config.meta_learning_rate
-            )
-            self.optimizer = optim.SGD(self.model.parameters(), 
-                                     lr=config.learning_rate)
-        except Exception as e:
-            logger.error(f"Failed to initialize training components: {e}")
-            raise RuntimeError(f"Training setup failed: {e}")
-
-    def local_update(self, x: torch.Tensor, y: torch.Tensor, 
-                    meta_steps: int) -> Tuple[float, dict]:
-        """Perform local model update with monitoring"""
-        if meta_steps <= 0:
-            raise ValueError("meta_steps must be positive")
-            
-        if not x.size(0) == y.size(0):
-            raise ValueError("Batch sizes of x and y must match")
-            
-        try:
-            x = x.to(self.device)
-            y = y.to(self.device)
-            
-            metrics = {
-                'memory_used': torch.cuda.memory_allocated() 
-                              if torch.cuda.is_available() else 0
-            }
-            
-            loss = 0
-            for step in range(meta_steps):
-                try:
-                    loss = self.meta_reptile.adapt_to_task(x, y)
-                    metrics[f'step_{step}_loss'] = float(loss)
-                except Exception as e:
-                    logger.error(f"Error at meta-step {step}: {e}")
-                    raise
-                    
-            metrics['final_loss'] = float(loss)
-            return loss, metrics
-            
-        except Exception as e:
-            logger.error(f"Local update failed: {e}")
-            raise RuntimeError(f"Error during local update: {e}")
+        logger.info("Agent initialized")
         
-    def cleanup(self):
-        """Release resources"""
-        try:
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        except Exception as e:
-            logger.warning(f"Cleanup failed: {e}")
+    def _create_model(self) -> nn.Module:
+        """
+        Create the neural network model for this agent.
+        
+        Returns:
+            nn.Module: The neural network model
+        """
+        # Create a simple model for demonstration
+        input_size = self.config.input_dim
+        hidden_size = self.config.hidden_dim
+        output_size = self.config.output_dim
+        
+        model = nn.Sequential(
+            nn.Linear(input_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, output_size)
+        )
+        
+        return model
+    
+    def local_update(self, x: torch.Tensor, y: torch.Tensor, steps: int) -> float:
+        """
+        Perform a local model update.
+        
+        Args:
+            x: Input data tensor
+            y: Target data tensor
+            steps: Number of optimization steps
+            
+        Returns:
+            float: The final loss value
+        """
+        final_loss = 0.0
+        
+        for _ in range(steps):
+            self.optimizer.zero_grad()
+            output = self.model(x)
+            loss = nn.functional.mse_loss(output, y)
+            loss.backward()
+            self.optimizer.step()
+            final_loss = loss.item()
+            
+            # Record this experience
+            self.experience.append({
+                "loss": final_loss,
+                "improvement": 1.0 if len(self.experience) == 0 else 
+                              self.experience[-1]["loss"] - final_loss
+            })
+            
+            # Limit experience memory
+            if len(self.experience) > 1000:
+                self.experience = self.experience[-1000:]
+            
+        return final_loss
+    
+    async def extract_knowledge(self) -> Dict[str, Any]:
+        """
+        Extract knowledge from the agent's experience and model.
+        
+        Returns:
+            Dict[str, Any]: Knowledge extracted from the agent
+        """
+        # Simulate knowledge extraction process
+        await asyncio.sleep(0.01)  # Simulate processing time
+        
+        knowledge = {
+            "model_weights_mean": {name: float(param.mean()) 
+                                for name, param in self.model.named_parameters()},
+            "learning_progress": self._calculate_learning_progress(),
+            "cognitive_state": self.cognitive_state.copy()
+        }
+        
+        # Add to knowledge base
+        for key, value in knowledge.items():
+            if key not in self.knowledge_base:
+                self.knowledge_base[key] = []
+            self.knowledge_base[key].append(value)
+            
+        # Only share the latest knowledge
+        return {k: v[-1] if isinstance(v, list) and v else v 
+                for k, v in self.knowledge_base.items()}
+    
+    async def integrate_knowledge(self, global_knowledge: Dict[str, Any]) -> None:
+        """
+        Integrate global knowledge into this agent's knowledge base.
+        
+        Args:
+            global_knowledge: The global knowledge to integrate
+        """
+        # Simulate knowledge integration process
+        await asyncio.sleep(0.01)  # Simulate processing time
+        
+        # Only integrate new knowledge
+        for key, value in global_knowledge.items():
+            if key not in self.knowledge_base:
+                self.knowledge_base[key] = value
+                
+            # Special handling for cognitive state - learn from the global average
+            if key == "cognitive_state" and isinstance(value, dict):
+                for cog_key, cog_value in value.items():
+                    if cog_key in self.cognitive_state:
+                        # Blend agent's cognitive state with global knowledge
+                        self.cognitive_state[cog_key] = 0.7 * self.cognitive_state[cog_key] + 0.3 * cog_value
+    
+    async def evolve_cognition(self, global_knowledge: Dict[str, Any]) -> Dict[str, float]:
+        """
+        Evolve the agent's cognitive abilities based on experience and global knowledge.
+        
+        Args:
+            global_knowledge: The global knowledge to use for evolution
+            
+        Returns:
+            Dict[str, float]: Improvements in cognitive abilities
+        """
+        previous_state = self.cognitive_state.copy()
+        
+        # Simulate neural plasticity and cognitive development
+        await asyncio.sleep(0.02)  # Simulate deeper processing
+        
+        # Calculate learning improvement from experience
+        if self.experience:
+            recent_exp = self.experience[-20:]  # Last 20 experiences
+            avg_improvement = sum(exp.get("improvement", 0) for exp in recent_exp) / len(recent_exp)
+            
+            # Update cognitive state based on experience
+            self.cognitive_state["learning"] += max(0, min(0.01, avg_improvement * 0.001))
+            self.cognitive_state["memory"] += 0.005  # Memory improves with experience
+            
+        # Update reasoning based on model complexity
+        param_count = sum(p.numel() for p in self.model.parameters())
+        self.cognitive_state["reasoning"] += 0.001 * (param_count / 10000)
+        
+        # Update adaptation based on global knowledge integration
+        self.cognitive_state["adaptation"] += 0.003
+        
+        # Calculate and return improvements
+        improvements = {k: self.cognitive_state[k] - previous_state[k] 
+                      for k in self.cognitive_state}
+        
+        return improvements
+    
+    def _calculate_learning_progress(self) -> float:
+        """
+        Calculate the agent's learning progress based on experience.
+        
+        Returns:
+            float: Learning progress metric
+        """
+        if not self.experience:
+            return 0.0
+            
+        if len(self.experience) < 5:
+            return 0.0
+            
+        # Compare first and last losses in experience window
+        first_losses = self.experience[:5]
+        last_losses = self.experience[-5:]
+        
+        avg_first = sum(exp["loss"] for exp in first_losses) / len(first_losses)
+        avg_last = sum(exp["loss"] for exp in last_losses) / len(last_losses)
+        
+        if avg_first == 0:
+            return 0.0
+        
+        # Learning progress as a percentage improvement
+        progress = (avg_first - avg_last) / avg_first
+        return max(0, min(1, progress))  # Clamp between 0 and 1

@@ -1,6 +1,9 @@
 import unittest
+import pytest
+import time
 import torch
 import torch.nn as nn
+from unittest.mock import MagicMock
 from ai_core.evaluation.benchmark import ModelBenchmark
 from models.simple_nn import SimpleNN
 from config import Config
@@ -49,6 +52,13 @@ class TestModelBenchmark(unittest.TestCase):
             (torch.randn(16, 784), torch.randint(0, 10, (16,))),
             (torch.randn(64, 784), torch.randint(0, 10, (64,)))
         ]
+
+def test_benchmark_execution_time():
+    start_time = time.time()
+    # Test code...
+    end_time = time.time()
+    execution_time = end_time - start_time
+    assert execution_time < 1.0  # Maximum allowed time
 
 if __name__ == '__main__':
     unittest.main()

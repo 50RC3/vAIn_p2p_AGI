@@ -190,76 +190,75 @@ class SelfSupervisedLearning:
                             
                         return loss_value
                         
-                    except Exception as transformer_e:
-                        logger.warning(f"Error using transformer implementation: {transformer_e}")
+                    except (RuntimeError, ValueError, IndexError, KeyError) as transformer_e:
+                        logger.warning("Error using transformer implementation: %s", transformer_e)
                         # Fall back to dummy implementation
                         return await self._dummy_training_step(text)
                 else:
                     # Dummy implementation
                     return await self._dummy_training_step(text)
                     
-            except Exception as e:
-                logger.error(f"Error in self-supervised training step: {e}")
+            except (RuntimeError, ValueError, IndexError, KeyError, TypeError, AttributeError) as e:
+                logger.error("Error in self-supervised training step: %s", e)
                 return None
     
-    async def _dummy_training_step(self, text: str) -> Optional[float]:
-        """Fallback dummy implementation when transformers are not available"""
-        try:
-            # Tokenize input text
-            tokens = [ord(c) % 10000 for c in text[:512]]  # Simple dummy tokenization
+async def _dummy_training_step(self, text: str) -> Optional[float]:
+    """Fallback dummy implementation when transformers are not available"""
+    try:
+        # Tokenize input text
+        tokens = [ord(c) % 10000 for c in text[:512]]  # Simple dummy tokenization
+        
+        # Apply masking
+        masked_tokens, labels = self._mask_tokens(tokens)
+        
+        # In real implementation, convert to tensors and forward pass
+        inputs = torch.tensor([masked_tokens])
+        labels = torch.tensor([labels])
+        
+        # Forward pass and calculate loss
+        if hasattr(self.model, 'forward'):
+            # Dummy forward pass
+            outputs = self.model(inputs)
+            loss = torch.mean((outputs - labels.float()) ** 2)  # Simple MSE loss
             
-            # Apply masking
-            masked_tokens, labels = self._mask_tokens(tokens)
+            # Backward pass and optimize
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
             
-            # In real implementation, convert to tensors and forward pass
-            inputs = torch.tensor([masked_tokens])
-            labels = torch.tensor([labels])
+            self.examples_processed += 1
             
-            # Forward pass and calculate loss
-            if hasattr(self.model, 'forward'):
-                # Dummy forward pass
-                outputs = self.model(inputs)
-                loss = torch.mean((outputs - labels.float()) ** 2)  # Simple MSE loss
-                
-                # Backward pass and optimize
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
-                
-                self.examples_processed += 1
-                
-                # Return loss value
-                return loss.item()
-            else:
-                # Can't perform training with this model
-                return None
-        except Exception as e:
-            logger.error(f"Error in dummy training step: {e}")
+            # Return loss value
+            return loss.item()
+        else:
+            # Can't perform training with this model
             return None
+    except Exception as e:
+        logger.error(f"Error in dummy training step: {e}")
+    return None
+
+def _mask_tokens(self, tokens: List[int]) -> Tuple[List[int], List[int]]:
+    """Apply random masking to tokens for MLM training
     
-    def _mask_tokens(self, tokens: List[int]) -> Tuple[List[int], List[int]]:
-        """Apply random masking to tokens for MLM training
-        
-        Returns:
-            Tuple of (masked_tokens, labels) where labels are original tokens
-        """
-        masked_tokens = tokens.copy()
-        labels = [-100] * len(tokens)  # Default label is -100 (ignored in loss)
-        
-        for i in range(len(tokens)):
-            if random.random() < self.mask_probability:
-                # Save original token as label
-                labels[i] = tokens[i]
-                
-                # Apply masking 80% of the time
-                if random.random() < 0.8:
-                    masked_tokens[i] = 1  # [MASK] token (using 1 as placeholder)
-                else:
-                    # Replace with random token 10% of time
-                    if random.random() < 0.5:
-                        masked_tokens[i] = random.randint(0, 9999)
-                    # Keep original token 10% of time (no change needed)
-        
+    Returns:
+        Tuple of (masked_tokens, labels) where labels are original tokens
+    """
+    masked_tokens = tokens.copy()
+    labels = [-100] * len(tokens)  # Default label is -100 (ignored in loss)
+    
+    for i, token in enumerate(tokens):
+        if random.random() < self.mask_probability:
+            # Save original token as label
+            labels[i] = token
+            
+            # Apply masking 80% of the time
+            if random.random() < 0.8:
+                masked_tokens[i] = 1  # [MASK] token (using 1 as placeholder)
+            else:
+                # Replace with random token 10% of time
+                if random.random() < 0.5:
+                    masked_tokens[i] = random.randint(0, 9999)
+    
         return masked_tokens, labels
     
     def _adjust_learning_rate(self):
@@ -267,33 +266,36 @@ class SelfSupervisedLearning:
         if len(self.recent_losses) < 10:
             return
             
-        # Calculate trend using simple linear regression
-        x = list(range(len(self.recent_losses)))
-        y = self.recent_losses
-        n = len(x)
-        
-        # Calculate slope of trend line
-        x_mean = sum(x) / n
-        y_mean = sum(y) / n
-        numerator = sum((x[i] - x_mean) * (y[i] - y_mean) for i in range(n))
-        denominator = sum((x[i] - x_mean) ** 2 for i in range(n))
-        
-        if denominator == 0:
-            return
+        try:
+            # Calculate trend using simple linear regression
+            x = list(range(len(self.recent_losses)))
+            y = self.recent_losses
+            n = len(x)
             
-        slope = numerator / denominator
-        
-        # If loss is increasing (positive slope), decrease learning rate
-        if slope > 0.01:
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = max(param_group['lr'] * 0.8, self.min_lr)
-            logger.debug(f"Decreased learning rate to {self.optimizer.param_groups[0]['lr']:.6f}")
-        
-        # If loss is decreasing rapidly, can slightly increase learning rate
-        elif slope < -0.05:
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = min(param_group['lr'] * 1.1, self.max_lr)
-            logger.debug(f"Increased learning rate to {self.optimizer.param_groups[0]['lr']:.6f}")
+            # Calculate slope of trend line
+            x_mean = sum(x) / n
+            y_mean = sum(y) / n
+            numerator = sum((x[i] - x_mean) * (y[i] - y_mean) for i in range(n))
+            denominator = sum((x[i] - x_mean) ** 2 for i in range(n))
+            
+            if denominator == 0:
+                return
+                
+            slope = numerator / denominator
+            
+            # If loss is increasing (positive slope), decrease learning rate
+            if slope > 0.01:
+                for param_group in self.optimizer.param_groups:
+                    param_group['lr'] = max(param_group['lr'] * 0.8, self.min_lr)
+                logger.debug(f"Decreased learning rate to {self.optimizer.param_groups[0]['lr']:.6f}")
+            
+            # If loss is decreasing rapidly, can slightly increase learning rate
+            elif slope < -0.05:
+                for param_group in self.optimizer.param_groups:
+                    param_group['lr'] = min(param_group['lr'] * 1.1, self.max_lr)
+                logger.debug(f"Increased learning rate to {self.optimizer.param_groups[0]['lr']:.6f}")
+        except (TypeError, ValueError, ZeroDivisionError, AttributeError) as e:
+            logger.warning(f"Error adjusting learning rate: {e}")
     
     async def save_model(self) -> bool:
         """Save the model to disk with additional metadata"""

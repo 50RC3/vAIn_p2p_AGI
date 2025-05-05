@@ -2,13 +2,41 @@ import os
 import json
 import logging
 import asyncio
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TextIO, Union
 from pathlib import Path
 from dataclasses import dataclass
 try:
     from dotenv import load_dotenv
 except ImportError:
-    load_dotenv = lambda: None
+    from typing import Any, Optional, TextIO, Union # Ensure necessary types are imported
+    from pathlib import Path # Ensure Path is imported
+
+    def load_dotenv(
+        dotenv_path: Union[str, Path, None] = None,
+        stream: Optional[TextIO] = None,
+        verbose: bool = False,
+        override: bool = False,
+        interpolate: bool = True,
+        encoding: Optional[str] = "utf-8",
+        **kwargs: Any,
+    ) -> bool:
+        """
+        Stub implementation of load_dotenv if dotenv is not available.
+        Matches the signature of the real function but does nothing.
+
+        Returns:
+            bool: Always returns False.
+        """
+        # Mark arguments as used to satisfy linters/type checkers while maintaining signature
+        _ = dotenv_path
+        _ = stream
+        _ = verbose
+        _ = override
+        _ = interpolate
+        _ = encoding
+        _ = kwargs
+        # This stub does nothing and indicates that .env loading did not happen.
+        return False
 
 try:
     from core.interactive_utils import InteractiveConfig, InteractionLevel
@@ -17,13 +45,13 @@ except ImportError:
     # Define minimal versions if not available
     class InteractionLevel:
         NORMAL = "normal"
-    
+
     @dataclass
-    class InteractiveConfig:
+    class _FallbackInteractiveConfig:  # Renamed to avoid collision
         timeout: int = 300
         persistent_state: bool = True
         safe_mode: bool = True
-    
+
     INTERACTION_TIMEOUTS = {
         "default": 300,
         "confirmation": 60,
@@ -44,7 +72,7 @@ class Config:
         # Load env vars
         try:
             load_dotenv()
-        except:
+        except ImportError:
             pass
         
         # Node identification
@@ -77,30 +105,32 @@ class Config:
         
         # Chatbot parameters
         self.chatbot: Dict[str, Any] = {
-            'max_context': int(os.getenv('CHATBOT_MAX_CONTEXT', 1024)),
-            'response_temp': float(os.getenv('CHATBOT_RESPONSE_TEMP', 0.7)),
-            'top_p': float(os.getenv('CHATBOT_TOP_P', 0.9)),
-            'max_tokens': int(os.getenv('CHATBOT_MAX_TOKENS', 256))
+            'max_context': int(os.getenv('CHATBOT_MAX_CONTEXT', '1024')),
+            'response_temp': float(os.getenv('CHATBOT_RESPONSE_TEMP', '0.7')),
+            'top_p': float(os.getenv('CHATBOT_TOP_P', '0.9')),
+            'max_tokens': int(os.getenv('CHATBOT_MAX_TOKENS', '256'))
         }
         
         # RL parameters
         self.rl: Dict[str, Any] = {
-            'gamma': float(os.getenv('RL_GAMMA', 0.99)),
-            'learning_rate': float(os.getenv('RL_LEARNING_RATE', 0.001)),
-            'batch_size': int(os.getenv('RL_BATCH_SIZE', 32)),
-            'update_interval': int(os.getenv('RL_UPDATE_INTERVAL', 100)),
-            'memory_size': int(os.getenv('RL_MEMORY_SIZE', 10000))
+            'gamma': float(os.getenv('RL_GAMMA', '0.99')),
+            'learning_rate': float(os.getenv('RL_LEARNING_RATE', '0.001')),
+            'batch_size': int(os.getenv('RL_BATCH_SIZE', '32')),
+            'update_interval': int(os.getenv('RL_UPDATE_INTERVAL', '100')),
+            'memory_size': int(os.getenv('RL_MEMORY_SIZE', '10000'))
         }
 
     async def update_interactive(self) -> bool:
         """Interactive configuration update with validation and recovery"""
         try:
-            # For compatibility with both modules
-            from config import get_config
+            # Use the function directly from this module
             config_module = get_config(interactive=self.interactive)
-            config_module.update_interactive()
+            # Avoid recursive call by checking if it's the same instance
+            if config_module is not self:
+                await config_module.update_interactive()
             return True
-        except ImportError:
+        except (ImportError, AttributeError, RuntimeError) as e:
+            logger.debug("Error using module config: %s", e)
             # Fall back to local implementation
             logger.info("Using standalone config update")
             self._display_current_config()
@@ -127,10 +157,16 @@ class Config:
             logger.info("Configuration updated successfully")
             return True
         except ValueError as e:
-            logger.error(f"Invalid input: {e}")
+            logger.error("Invalid input: %s", e)
             return False
-        except Exception as e:
-            logger.error(f"Error during configuration update: {e}")
+        except KeyboardInterrupt:
+            logger.error("Configuration update canceled by user")
+            return False
+        except EOFError:
+            logger.error("Input stream ended unexpectedly")
+            return False
+        except IOError as e:
+            logger.error("I/O error during configuration update: %s", e)
             return False
             
     def validate_config(self) -> bool:
@@ -151,30 +187,49 @@ class Config:
             
         return True
 
-    def _display_current_config(self):
+    def _display_current_config(self) -> None:
         """Display current configuration values"""
-        print("\nNetwork Configuration:")
-        print(f"UDP Port: {self.network['udp']['port']}")
-        print(f"DHT Bootstrap Nodes: {len(self.network['dht']['bootstrap_nodes'])}")
-        
-        print("\nTraining Configuration:")
-        print(f"Batch Size: {self.batch_size}")
-        print(f"Learning Rate: {self.learning_rate}")
-        print(f"Epochs: {self.num_epochs}")
-        
-        print("\nModel Configuration:")
-        print(f"Hidden Size: {self.hidden_size}")
-        print(f"Number of Layers: {self.num_layers}")
-        
-        print("\nChatbot Configuration:")
-        for k, v in self.chatbot.items():
-            print(f"{k}: {v}")
-            
-        print("\nRL Configuration:")
-        for k, v in self.rl.items():
-            print(f"{k}: {v}")
+        def display_section(title: str, items: Dict[str, Any]) -> None:
+            print(f"\n{title}:")
+            for k, v in items.items():
+                print(f"{k}: {v}")
 
-    def request_shutdown(self):
+        try:
+            display_section("Network Configuration", {
+                "UDP Port": self.network.get('udp', {}).get('port', 'N/A'),
+                "DHT Bootstrap Nodes": len(self.network.get('dht', {}).get('bootstrap_nodes', []))
+            })
+        except AttributeError as e:
+            logger.error("Error displaying network config: %s", e)
+
+        try:
+            display_section("Training Configuration", {
+                "Batch Size": self.batch_size,
+                "Learning Rate": self.learning_rate,
+                "Epochs": self.num_epochs
+            })
+        except AttributeError as e:
+            logger.error("Error displaying training config: %s", e)
+
+        try:
+            display_section("Model Configuration", {
+                "Hidden Size": self.hidden_size,
+                "Number of Layers": self.num_layers
+            })
+        except AttributeError as e:
+            logger.error("Error displaying model config: %s", e)
+
+        try:
+            display_section("Chatbot Configuration", self.chatbot)
+        except AttributeError as e:
+            logger.error("Error displaying chatbot config: %s", e)
+
+        try:
+            display_section("RL Configuration", self.rl)
+        except AttributeError as e:
+            logger.error("Error displaying RL config: %s", e)
+
+    def request_shutdown(self) -> None:
         """Request graceful shutdown"""
         self._interrupt_requested = True
 
@@ -182,10 +237,14 @@ class Config:
 def get_config(interactive: bool = True) -> Config:
     """Get configuration object compatible with both module and standalone versions"""
     try:
-        # Try importing from the package first
-        from config import get_config as pkg_get_config
-        return pkg_get_config(interactive)
-    except ImportError:
+        # Check if we're being imported as a package
+        import sys
+        if 'config' in sys.modules and sys.modules['config'] is not sys.modules[__name__]:
+            # Get config from the package
+            return sys.modules['config'].get_config(interactive)
+        # Fall back to local implementation
+        return Config(interactive=interactive)
+    except (ImportError, AttributeError):
         # Fall back to local implementation
         return Config(interactive=interactive)
 

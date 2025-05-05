@@ -1,6 +1,6 @@
 import logging
-import os
-from typing import Dict, Any, Optional, Type
+import torch
+from typing import Dict, Any, Optional
 
 from ai_core.model_storage import ModelStorage
 from ai_core.chatbot.module_integration import ModuleIntegration, ModuleIntegrationConfig
@@ -41,7 +41,7 @@ class ModuleIntegrationFactory:
             # Create model storage if not provided
             if not model_storage:
                 model_storage = ModelStorage(
-                    base_dir=config.get("model_dir", "./models"),
+                    models_directory=config.get("model_dir", "./models"),
                     use_versioning=config.get("use_versioning", True)
                 )
             
@@ -59,22 +59,18 @@ class ModuleIntegrationFactory:
                 batch_size=config.get("batch_size", 8),
                 save_interval=config.get("save_interval", 500)
             )
-            
             # Create RL config if reinforcement learning is enabled
             rl_config = None
             if config.get("enable_reinforcement", True):
                 rl_config = RLConfig(
-                    device=integration_config.device,
-                    lr=config.get("rl_learning_rate", 1e-4),
-                    discount_factor=config.get("discount_factor", 0.99),
+                    learning_rate=config.get("rl_learning_rate", 1e-4),
+                    gamma=config.get("discount_factor", 0.99),
                     memory_size=config.get("memory_size", 10000),
                     batch_size=config.get("rl_batch_size", 64),
                     update_interval=config.get("update_interval", 10),
                     prioritized_replay=config.get("prioritized_replay", True),
                     alpha=config.get("alpha", 0.6),
-                    beta=config.get("beta", 0.4),
-                    epsilon=config.get("epsilon", 0.01),
-                    grad_clip=config.get("grad_clip", 1.0)
+                    beta=config.get("beta", 0.4)
                 )
             
             # Initialize module integration
@@ -91,8 +87,8 @@ class ModuleIntegrationFactory:
             logger.info("Module integration created and initialized successfully")
             return integration
             
-        except Exception as e:
-            logger.error(f"Failed to create module integration: {e}")
+        except (ValueError, TypeError, ImportError, RuntimeError) as e:
+            logger.error("Failed to create module integration: %s", e)
             return None
     
     @staticmethod
@@ -154,6 +150,6 @@ class ModuleIntegrationFactory:
                     learning_config=learning_config
                 )
                 
-        except Exception as e:
-            logger.error(f"Failed to create chatbot interface: {e}")
+        except (ValueError, TypeError, ImportError, RuntimeError) as e:
+            logger.error("Failed to create chatbot interface: %s", e)
             return None

@@ -1,14 +1,14 @@
 import asyncio
-import logging
 import time
+import logging
 import os
+from datetime import datetime
+from typing import Dict, Any, List, Optional, Set, Callable
+from dataclasses import dataclass, field
 import json
 import psutil
-import threading
-from typing import Dict, Any, List, Optional, Set, Callable, Union
-from dataclasses import dataclass, field
 import torch
-from datetime import datetime
+import torch.cuda
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,40 @@ class MetricPoint:
     value: float
     timestamp: float
     metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    def __post_init__(self):
+        """Validate data after initialization"""
+        # Ensure value is a float
+        if not isinstance(self.value, (int, float)):
+            try:
+                self.value = float(self.value)
+            except (ValueError, TypeError) as exc:
+                raise TypeError(f"value must be numeric, got {type(self.value).__name__}") from exc
+                
+        # Ensure timestamp is a valid float
+        if not isinstance(self.timestamp, (int, float)):
+            try:
+                self.timestamp = float(self.timestamp)
+            except (ValueError, TypeError) as exc:
+                raise TypeError(f"timestamp must be numeric, got {type(self.timestamp).__name__}") from exc
+                
+        # Ensure metadata is a dictionary
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+            
+    def as_dict(self) -> Dict[str, Any]:
+        """Return data point as a serializable dictionary"""
+        return {
+            "value": self.value,
+            "timestamp": self.timestamp,
+            "metadata": self.metadata
+        }
+        
+    def __str__(self) -> str:
+        """String representation of the metric point"""
+        dt = datetime.fromtimestamp(self.timestamp)
+        time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+        return f"MetricPoint(value={self.value:.2f}, time={time_str})"
 
 class MetricsCollector:
     """Collects and stores system metrics"""
@@ -60,146 +94,133 @@ class MetricsCollector:
         
     async def start(self) -> None:
         """Start metrics collection"""
-        if self._is_running:
-            return
+        async with self.lock:
+            if hasattr(self, '_is_running') and self._is_running:
+                logger.warning("Metrics collection already running")
+                return
+                
+            self._is_running = True
+            self.last_collection = time.time()
+            self.last_aggregation = time.time()
+            self.last_cleanup = time.time()
             
-        self._is_running = True
-        self.last_collection = time.time()
-        self.last_aggregation = time.time()
-        self.last_cleanup = time.time()
-        
-        self.collection_task = asyncio.create_task(self._collect_metrics_loop())
-        logger.info("Metrics collection started")
-        
+            # Ensure storage directory exists
+            os.makedirs(self.config.storage_path, exist_ok=True)
+            
+            self.collection_task = asyncio.create_task(self._collect_metrics_loop())
+            logger.info("Metrics collection started")
+    
     async def stop(self) -> None:
         """Stop metrics collection"""
-        if not self._is_running:
-            return
+        async with self.lock:
+            if not hasattr(self, '_is_running') or not self._is_running:
+                logger.warning("Metrics collection not running")
+                return
+                
+            self._is_running = False
             
-        self._is_running = False
-        
-        if self.collection_task:
-            self.collection_task.cancel()
-            try:
-                await self.collection_task
-            except asyncio.CancelledError:
-                pass
-            self.collection_task = None
-            
-        # Save final metrics
-        await self._save_metrics()
-        logger.info("Metrics collection stopped")
+            if self.collection_task:
+                self.collection_task.cancel()
+                try:
+                    await self.collection_task
+                except asyncio.CancelledError:
+                    logger.debug("Metrics collection task cancelled")
+                
+            logger.info("Metrics collection stopped")
         
     async def _collect_metrics_loop(self) -> None:
-        """Main metrics collection loop"""
+        """Background task to collect system metrics at regular intervals"""
         try:
+            logger.info("Starting metrics collection loop")
+            
             while self._is_running:
-                await self._collect_metrics()
+                start_time = time.time()
                 
-                # Check if it's time for aggregation
-                if time.time() - self.last_aggregation >= self.config.aggregation_interval:
-                    await self._aggregate_metrics()
-                    self.last_aggregation = time.time()
+                try:
+                    # Collect system metrics
+                    await self._collect_system_metrics()
+                    
+                    # Perform aggregation if needed
+                    if time.time() - self.last_aggregation >= self.config.aggregation_interval:
+                        await self._aggregate_metrics()
+                        self.last_aggregation = time.time()
+                        
+                    # Perform cleanup if needed (once per day)
+                    if time.time() - self.last_cleanup >= 86400:
+                        await self._cleanup_old_metrics()
+                        self.last_cleanup = time.time()
+                        
+                except Exception as e:
+                    logger.error("Error in metrics collection cycle: %s", e)
                 
-                # Check if it's time for cleanup (once a day)
-                if time.time() - self.last_cleanup >= 86400:  # 24 hours
-                    await self._cleanup_old_metrics()
-                    self.last_cleanup = time.time()
-                
-                # Save metrics periodically
-                await self._save_metrics()
-                
-                # Sleep until next collection
-                await asyncio.sleep(self.config.collection_interval)
+                # Calculate sleep time to maintain consistent collection interval
+                elapsed = time.time() - start_time
+                sleep_time = max(0.1, self.config.collection_interval - elapsed)
+                await asyncio.sleep(sleep_time)
                 
         except asyncio.CancelledError:
-            logger.info("Metrics collection cancelled")
+            logger.info("Metrics collection loop cancelled")
         except Exception as e:
-            logger.error(f"Error in metrics collection: {e}", exc_info=True)
-            
-    async def _collect_metrics(self) -> None:
+            logger.error("Metrics collection loop failed: %s", e)
+    
+    async def _collect_system_metrics(self) -> None:
         """Collect current system metrics"""
         try:
-            timestamp = time.time()
+            # Collect CPU metrics
+            cpu_metrics = await self._get_cpu_metrics()
+            self._add_metric_point("cpu.percent", cpu_metrics.get("percent", 0.0))
             
-            # Basic system metrics
-            memory = psutil.virtual_memory()
-            cpu_percent = psutil.cpu_percent(interval=1)
+            # Collect memory metrics
+            memory_metrics = await self._get_memory_metrics()
+            self._add_metric_point("memory.percent", memory_metrics.get("percent", 0.0))
+            self._add_metric_point("memory.used", memory_metrics.get("used", 0.0))
             
-            # Collect and store memory metrics
-            await self._add_metric_point("memory_percent", memory.percent, timestamp)
-            await self._add_metric_point("memory_available", memory.available, timestamp, 
-                                        {"total": memory.total})
+            # Collect disk metrics
+            disk_metrics = await self._get_disk_metrics()
+            self._add_metric_point("disk.percent", disk_metrics.get("percent", 0.0))
             
-            # Collect and store CPU metrics
-            await self._add_metric_point("cpu_percent", cpu_percent, timestamp)
+            # Collect GPU metrics if enabled
+            if self.config.detailed_gpu_metrics:
+                gpu_metrics = await self._get_gpu_metrics()
+                for idx, gpu_data in enumerate(gpu_metrics):
+                    self._add_metric_point(
+                        f"gpu.{idx}.memory_percent", 
+                        gpu_data.get("memory_percent", 0.0)
+                    )
+                    self._add_metric_point(
+                        f"gpu.{idx}.utilization", 
+                        gpu_data.get("utilization", 0.0)
+                    )
             
-            if self.config.process_metrics:
-                # Process-specific metrics for this Python process
-                process = psutil.Process(os.getpid())
-                process_metrics = {
-                    "cpu_percent": process.cpu_percent(),
-                    "memory_percent": process.memory_percent(),
-                    "threads": len(process.threads()),
-                    "open_files": len(process.open_files()) if hasattr(process, 'open_files') else 0
-                }
-                
-                for key, value in process_metrics.items():
-                    await self._add_metric_point(f"process_{key}", value, timestamp)
-            
-            # GPU metrics if available
-            if torch.cuda.is_available():
-                for i in range(torch.cuda.device_count()):
-                    try:
-                        # Basic GPU metrics
-                        allocated = torch.cuda.memory_allocated(i)
-                        total = torch.cuda.get_device_properties(i).total_memory
-                        gpu_percent = (allocated / total) * 100
-                        
-                        await self._add_metric_point(f"gpu{i}_memory_percent", gpu_percent, timestamp)
-                        await self._add_metric_point(f"gpu{i}_memory_allocated", allocated, timestamp, 
-                                                {"total": total})
-                        
-                        # Detailed GPU metrics if enabled
-                        if self.config.detailed_gpu_metrics:
-                            reserved = torch.cuda.memory_reserved(i)
-                            cached = torch.cuda.memory_cached(i) if hasattr(torch.cuda, 'memory_cached') else 0
-                            
-                            await self._add_metric_point(f"gpu{i}_memory_reserved", reserved, timestamp)
-                            await self._add_metric_point(f"gpu{i}_memory_cached", cached, timestamp)
-                            
-                    except Exception as e:
-                        logger.warning(f"Error collecting GPU {i} metrics: {e}")
-            
-            # Network metrics if enabled
+            # Collect network metrics if enabled
             if self.config.network_metrics:
-                net_counters = psutil.net_io_counters()
-                
-                await self._add_metric_point("network_bytes_sent", net_counters.bytes_sent, timestamp)
-                await self._add_metric_point("network_bytes_recv", net_counters.bytes_recv, timestamp)
-                await self._add_metric_point("network_packets_sent", net_counters.packets_sent, timestamp)
-                await self._add_metric_point("network_packets_recv", net_counters.packets_recv, timestamp)
-                
-            # Disk metrics
-            disk = psutil.disk_usage('/')
-            await self._add_metric_point("disk_percent", disk.percent, timestamp)
-            await self._add_metric_point("disk_free", disk.free, timestamp, 
-                                         {"total": disk.total})
+                network_metrics = await self._get_network_metrics()
+                self._add_metric_point("network.bytes_sent", network_metrics.get("bytes_sent", 0.0))
+                self._add_metric_point("network.bytes_recv", network_metrics.get("bytes_recv", 0.0))
             
-            # Update collection time
-            self.last_collection = timestamp
+            # Collect process metrics if enabled
+            if self.config.process_metrics:
+                process_metrics = await self._get_process_metrics()
+                self._add_metric_point("process.count", process_metrics.get("count", 0.0))
+                self._add_metric_point(
+                    "process.memory_percent", 
+                    process_metrics.get("memory_percent", 0.0)
+                )
             
             # Check for alerts
             await self._check_alerts()
             
-            # Notify metric collection completed
+            # Notify metric collected callbacks
             await self._notify_callbacks("metric_collected", {
-                "timestamp": timestamp, 
+                "timestamp": time.time(),
                 "metrics_count": sum(len(points) for points in self.metrics.values())
             })
             
+            self.last_collection = time.time()
+            
         except Exception as e:
-            logger.error(f"Error collecting metrics: {e}", exc_info=True)
+            logger.error("Error collecting system metrics: %s", e)
+            raise
     
     async def _add_metric_point(self, name: str, value: float, timestamp: float, metadata: Dict[str, Any] = None) -> None:
         """Add a metric data point to the collection"""
@@ -258,8 +279,10 @@ class MetricsCollector:
                     "metrics_count": len(aggregated)
                 })
                 
-        except Exception as e:
-            logger.error(f"Error aggregating metrics: {e}", exc_info=True)
+        except (ValueError, KeyError, TypeError, RuntimeError) as e:
+            logger.error("Error aggregating metrics: %s", e, exc_info=True)
+        except (AttributeError, IndexError, OverflowError, MemoryError) as e:
+            logger.error("Critical error during metrics aggregation: %s", e, exc_info=True)
     
     async def _check_alerts(self) -> None:
         """Check metrics against alert thresholds"""
@@ -325,10 +348,12 @@ class MetricsCollector:
             # Send alerts
             for alert in alerts:
                 await self._notify_callbacks("alert", alert)
-                logger.warning(f"Metric alert: {alert['metric']} = {alert['value']:.1f}% (threshold: {alert['threshold']}%)")
+                logger.warning("Metric alert: %s = %.1f%% (threshold: %s%%)", alert['metric'], alert['value'], alert['threshold'])
                 
-        except Exception as e:
-            logger.error(f"Error checking metric alerts: {e}", exc_info=True)
+        except (ValueError, KeyError, TypeError, RuntimeError) as e:
+            logger.error("Error checking metric alerts: %s", e, exc_info=True)
+        except (AttributeError, IndexError, LookupError, ArithmeticError) as e:
+            logger.error("Critical error during alert checking: %s", e, exc_info=True)
     
     async def _save_metrics(self) -> None:
         """Save current metrics to storage"""
@@ -348,11 +373,11 @@ class MetricsCollector:
             serialized = self._serialize_metrics()
             
             # Write to file
-            with open(file_path, 'w') as f:
+            with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(serialized, f, indent=2)
                 
-        except Exception as e:
-            logger.error(f"Error saving metrics: {e}", exc_info=True)
+        except (IOError, OSError, TypeError, ValueError, json.JSONDecodeError) as e:
+            logger.error("Error saving metrics: %s", e, exc_info=True)
     
     async def _save_aggregated_metrics(self) -> None:
         """Save aggregated metrics to storage"""
@@ -367,39 +392,40 @@ class MetricsCollector:
             # Save aggregated metrics to file
             file_path = os.path.join(aggregated_dir, f"aggregated_{now.strftime('%Y%m%d_%H%M%S')}.json")
             
-            with open(file_path, 'w') as f:
+            with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(self.aggregated_metrics, f, indent=2)
                 
-        except Exception as e:
-            logger.error(f"Error saving aggregated metrics: {e}", exc_info=True)
+        except (IOError, OSError, TypeError, ValueError, json.JSONDecodeError) as e:
+            logger.error("Error saving aggregated metrics: %s", e, exc_info=True)
     
     async def _cleanup_old_metrics(self) -> None:
         """Clean up metrics older than retention period"""
         try:
-            import datetime
             from datetime import timedelta
             import shutil
             
             # Calculate cutoff date
-            now = datetime.datetime.now()
+            now = datetime.now()
             cutoff_date = now - timedelta(days=self.config.retention_days)
             cutoff_str = cutoff_date.strftime("%Y-%m-%d")
             
             # Find directories older than cutoff
-            for root, dirs, files in os.walk(self.config.storage_path):
+            for root, dirs, _ in os.walk(self.config.storage_path):
                 for dir_name in dirs:
                     try:
                         # Check if directory name is a date format (YYYY-MM-DD)
                         if len(dir_name) == 10 and dir_name[4] == '-' and dir_name[7] == '-':
                             if dir_name < cutoff_str:
                                 dir_path = os.path.join(root, dir_name)
-                                logger.info(f"Removing old metrics directory: {dir_path}")
+                                logger.info("Removing old metrics directory: %s", dir_path)
                                 shutil.rmtree(dir_path)
-                    except Exception as e:
-                        logger.warning(f"Error cleaning up directory {dir_name}: {e}")
+                    except (OSError, IOError, PermissionError) as e:
+                        logger.warning("Error cleaning up directory %s: %s", dir_name, e)
                         
-        except Exception as e:
-            logger.error(f"Error cleaning up old metrics: {e}", exc_info=True)
+        except (OSError, IOError, PermissionError, ValueError, TypeError) as e:
+            logger.error("Error cleaning up old metrics: %s", e, exc_info=True)
+        except (AttributeError, LookupError, ZeroDivisionError, MemoryError) as e:
+            logger.error("Unexpected error during metrics cleanup: %s", e, exc_info=True)
     
     def _serialize_metrics(self) -> Dict[str, Any]:
         """Convert metrics to a serializable format"""
@@ -438,8 +464,8 @@ class MetricsCollector:
                     await callback(data)
                 else:
                     callback(data)
-            except Exception as e:
-                logger.error(f"Error in metrics callback: {e}")
+            except (ValueError, TypeError, RuntimeError, AttributeError, KeyError) as e:
+                logger.error("Error in metrics callback: %s", e)
     
     async def get_current_metrics(self) -> Dict[str, float]:
         """Get the most recent value for each metric"""
