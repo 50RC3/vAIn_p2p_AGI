@@ -7,6 +7,7 @@ import logging
 import json
 import time
 from cryptography.hazmat.primitives.asymmetric import ed25519
+from cryptography.hazmat.primitives import serialization
 import base64
 from core.interactive_utils import InteractiveSession, InteractiveConfig, InteractionLevel
 from core.constants import INTERACTION_TIMEOUTS
@@ -152,7 +153,10 @@ class SecureMessageProtocol:
         return {
             'data': base64.b64encode(encrypted),
             'signature': base64.b64encode(signature),
-            'public_key': self.verify_key.public_bytes(),
+            'public_key': self.verify_key.public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw
+            ),
             'key_version': self.current_key_version
         }
 
