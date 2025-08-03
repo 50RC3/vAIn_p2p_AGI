@@ -52,7 +52,7 @@ websockets>=10.0
 tabulate>=0.8.9
 
 # Storage
-ipfshttpclient>=0.8.0
+ipfshttpclient>=0.7.0
 
 # Utilities
 ratelimit>=2.2.1
