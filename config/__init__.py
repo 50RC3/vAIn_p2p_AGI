@@ -66,11 +66,7 @@ class Config:
         min_clients=2,
         clients_per_round=2
     ))
-    network: NetworkConfig = field(default_factory=lambda: NetworkConfig(
-        node_env='development',
-        port=8000,
-        database_url='sqlite:///db.sqlite'
-    ))
+    network: NetworkConfig = field(default_factory=NetworkConfig)
     system: SystemConfig = field(default_factory=get_system_config)
     
     # Add node identification attributes
