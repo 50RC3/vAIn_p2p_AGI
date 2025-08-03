@@ -220,19 +220,32 @@ class UIManager:
                 model = SimpleNN(input_size=512, output_size=512, hidden_size=256)
             except ImportError:
                 # Fallback model
-                import torch.nn as nn
-                class FallbackModel(nn.Module):
-                    def __init__(self):
-                        super().__init__()
-                        self.layer = nn.Linear(512, 512)
-                        
-                    def forward(self, x):
-                        return self.layer(x)
-                        
-                    def generate_text(self, text, max_length=100):
-                        return f"Response to: {text[:30]}..."
-                        
-                model = FallbackModel()
+                try:
+                    import torch.nn as nn
+                    class FallbackModel(nn.Module):
+                        def __init__(self):
+                            super().__init__()
+                            self.layer = nn.Linear(512, 512)
+                            
+                        def forward(self, x):
+                            return self.layer(x)
+                            
+                        def generate_text(self, text, max_length=100):
+                            return f"Response to: {text[:30]}..."
+                            
+                    model = FallbackModel()
+                except ImportError:
+                    logger.warning("PyTorch not available, using mock model")
+                    class MockModel:
+                        def __call__(self, x):
+                            return x
+                        def eval(self):
+                            pass
+                        def train(self):
+                            pass
+                        def generate_text(self, text, max_length=100):
+                            return f"Mock response to: {text[:30]}..."
+                    model = MockModel()
                 
             try:
                 # Try to get storage

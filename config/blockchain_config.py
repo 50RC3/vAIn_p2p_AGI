@@ -4,13 +4,22 @@ import logging
 import time
 from pathlib import Path
 from typing import Dict, Optional, Any, Union
-from web3 import Web3
-from dotenv import load_dotenv
 from dataclasses import dataclass, field
 
-logger = logging.getLogger(__name__)
+try:
+    from web3 import Web3
+    HAS_WEB3 = True
+except ImportError:
+    Web3 = None
+    HAS_WEB3 = False
 
-HAS_WEB3 = True
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+logger = logging.getLogger(__name__)
 
 @dataclass 
 class BlockchainConfig:

@@ -16,3 +16,16 @@
 2025-08-03 10:26:49,364 - vAIn - ERROR - Make sure the config module is properly installed.
 2025-08-03 10:26:49,364 - vAIn - INFO - Cleaning up resources...
 2025-08-03 10:26:49,364 - vAIn - INFO - System shutdown complete
+2025-08-03 10:38:40,655 - vAIn - INFO - Initializing vAIn P2P AGI system...
+2025-08-03 10:38:40,672 - vAIn - WARNING - Module registry not available: No module named 'torch'
+2025-08-03 10:38:40,672 - vAIn - WARNING - Continuing without component registration
+2025-08-03 10:38:40,677 - vAIn - ERROR - Could not import memory management modules: No module named 'torch'
+2025-08-03 10:38:40,678 - vAIn - ERROR - Could not import cognitive system modules: No module named 'torch'
+2025-08-03 10:38:40,691 - vAIn - ERROR - Could not import network modules: No module named 'psutil'
+2025-08-03 10:38:40,694 - vAIn - ERROR - Could not import UI modules: No module named 'torch'
+2025-08-03 10:38:40,694 - vAIn - WARNING - vAIn P2P AGI system initialized with limited functionality
+2025-08-03 10:38:40,694 - vAIn - INFO - Running in headless mode (no UI). Press Ctrl+C to exit.
+2025-08-03 10:40:50,119 - vAIn - INFO - Shutdown signal received, initiating graceful exit...
+2025-08-03 10:40:50,119 - vAIn - INFO - Main task cancelled, shutting down gracefully...
+2025-08-03 10:40:50,119 - vAIn - INFO - Cleaning up resources...
+2025-08-03 10:40:50,119 - vAIn - INFO - System shutdown complete

@@ -1,16 +1,60 @@
-import torch
-from typing import Dict, Any, Optional, List
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    torch = None
+    HAS_TORCH = False
+
+from typing import Dict, Any, Optional, List, TYPE_CHECKING, Union
+
+if TYPE_CHECKING or HAS_TORCH:
+    import torch
+    TorchModule = torch.nn.Module
+    TorchTensor = torch.Tensor
+else:
+    TorchModule = Any
+    TorchTensor = Any
 from dataclasses import dataclass
 import time
-import psutil
 import logging
-from tqdm import tqdm
+
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    psutil = None
+    HAS_PSUTIL = False
+
+try:
+    from tqdm import tqdm
+    HAS_TQDM = True
+except ImportError:
+    tqdm = None
+    HAS_TQDM = False
+
 import signal
 import json
 from pathlib import Path
 import asyncio
 from contextlib import contextmanager
-from .interactive_utils import InteractiveSession, InteractionLevel, InteractiveConfig
+
+try:
+    from .interactive_utils import InteractiveSession, InteractionLevel, InteractiveConfig
+except ImportError:
+    # Define minimal fallbacks
+    class InteractionLevel:
+        NONE = "none"
+        MINIMAL = "minimal"
+        NORMAL = "normal"
+    
+    class InteractiveConfig:
+        def __init__(self, timeout=300, safe_mode=True):
+            self.timeout = timeout
+            self.safe_mode = safe_mode
+    
+    class InteractiveSession:
+        def __init__(self, config=None):
+            self.config = config or InteractiveConfig()
 
 @dataclass
 class EvaluationMetrics:
@@ -32,11 +76,16 @@ class EvaluationConfig:
     interactive_level: InteractionLevel = InteractionLevel.NORMAL
 
 class ModelEvaluator:
-    def __init__(self, model: torch.nn.Module, device: str = 'cuda', 
+    def __init__(self, model: TorchModule, device: str = 'cuda', 
                  config: Optional[EvaluationConfig] = None):
         self.model = model
         self.device = device
-        self.criterion = torch.nn.CrossEntropyLoss()
+        
+        if HAS_TORCH and torch is not None:
+            self.criterion = torch.nn.CrossEntropyLoss()
+        else:
+            self.criterion = lambda x, y: 0.0  # Mock criterion
+            
         self.logger = logging.getLogger(__name__)
         self._interrupt_requested = False
         self.config = config or EvaluationConfig()

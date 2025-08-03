@@ -2,10 +2,22 @@ import logging
 import time
 import statistics
 from typing import Dict, List, Optional
-import psutil
 from dataclasses import dataclass, field
 from threading import Lock
-import torch
+
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    psutil = None
+    HAS_PSUTIL = False
+
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    torch = None
+    HAS_TORCH = False
 
 logger = logging.getLogger(__name__)
 
