@@ -1,8 +1,23 @@
-import torch
-import numpy as np
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    torch = None
+    HAS_TORCH = False
+
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    np = None
+    HAS_NUMPY = False
+
 from typing import Dict
 
 def compute_accuracy(model, data_loader, device='cuda') -> float:
+    if not HAS_TORCH:
+        return 0.0
+        
     model.eval()
     correct = total = 0
     with torch.no_grad():
@@ -28,6 +43,10 @@ def compute_loss(model, data_loader, criterion=None, device='cuda') -> float:
         Average loss value across all batches
     """
     model.eval()
+    
+    if not HAS_TORCH:
+        return 0.0
+        
     total_loss = 0.0
     num_batches = 0
     

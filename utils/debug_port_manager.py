@@ -1,10 +1,16 @@
 import os
 import sys
 import socket
-import psutil
 import logging
 import random
 from typing import Optional, Tuple, List, Dict, Any
+
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    psutil = None
+    HAS_PSUTIL = False
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +32,11 @@ class DebugPortManager:
                 return True
     
     @staticmethod
-    def find_process_using_port(port: int) -> Optional[psutil.Process]:
+    def find_process_using_port(port: int) -> Optional[Any]:
         """Find the process that is using the specified port."""
+        if not HAS_PSUTIL:
+            return None
+            
         for proc in psutil.process_iter(['pid', 'name']):
             try:
                 # Get connections separately since it's not a valid attribute for process_iter
@@ -81,7 +90,12 @@ class DebugPortManager:
             proc.wait(timeout=5)
             logger.info(f"Successfully terminated process {proc_info}")
             return True
-        except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.TimeoutExpired) as e:
+        except Exception as e:
+            if HAS_PSUTIL:
+                # Handle psutil-specific exceptions
+                if isinstance(e, (psutil.AccessDenied, psutil.NoSuchProcess, psutil.TimeoutExpired)):
+                    logger.error(f"Failed to kill process {proc_info}: {str(e)}")
+                    return False
             logger.error(f"Failed to kill process {proc_info}: {str(e)}")
             return False
     
