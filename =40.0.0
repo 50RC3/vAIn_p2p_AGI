@@ -1,0 +1,7 @@
+Collecting cryptography
+  Using cached cryptography-44.0.2-cp39-abi3-manylinux_2_28_x86_64.whl.metadata (5.7 kB)
+Requirement already satisfied: cffi>=1.12 in /home/codespace/.local/lib/python3.12/site-packages (from cryptography) (1.17.1)
+Requirement already satisfied: pycparser in /home/codespace/.local/lib/python3.12/site-packages (from cffi>=1.12->cryptography) (2.22)
+Using cached cryptography-44.0.2-cp39-abi3-manylinux_2_28_x86_64.whl (4.2 MB)
+Installing collected packages: cryptography
+Successfully installed cryptography-44.0.2

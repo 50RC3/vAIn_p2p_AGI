@@ -423,19 +423,9 @@ async def startup_sequence(args):
     if not await check_system_dependencies(args):
         return False
     
-    # Initialize core systems
-    if not await initialize_core_systems(args):
+    # Validate configuration and initialize subsystems
+    if not await validate_and_initialize(args):
         return False
-    
-    # Initialize memory subsystem
-    if not await init_memory_system(args):
-        if args.strict:
-            return False
-    
-    # Initialize model subsystem
-    if not await init_model_system(args):
-        if args.strict:
-            return False
     
     # Start network if enabled
     network = await start_network_services(args)
@@ -457,6 +447,48 @@ async def startup_sequence(args):
             logger.error(f"Error in UI: {e}")
     
     return True
+
+
+async def check_system_dependencies(args):
+    """Check if all system dependencies are installed"""
+    logger.info("Checking system dependencies...")
+    
+    # Define the core dependencies that should always be checked
+    core_deps = ['numpy', 'torch', 'tqdm', 'web3']
+    
+    # Add optional dependencies based on enabled features
+    if not args.no_network:
+        core_deps.extend(['websockets'])
+    
+    # Check if dependencies are installed
+    missing = []
+    for dep in core_deps:
+        try:
+            __import__(dep)
+        except ImportError:
+            missing.append(dep)
+    
+    if not missing:
+        logger.info("✓ All system dependencies satisfied")
+        return True
+    
+    logger.warning(f"Missing dependencies: {', '.join(missing)}")
+    
+    if args.auto_install or (not args.non_interactive and 
+                            input("Install missing dependencies? (y/n): ").lower().startswith('y')):
+        logger.info("Installing missing dependencies...")
+        if install_dependencies(missing):
+            logger.info("✓ Successfully installed all dependencies.")
+            return True
+        else:
+            logger.error("Failed to install some dependencies.")
+            if args.strict:
+                return False
+    elif args.strict:
+        logger.error("Missing dependencies and --strict flag is set. Exiting.")
+        return False
+        
+    return not args.strict
 
 
 def main():

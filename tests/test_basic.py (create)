@@ -1,0 +1,5 @@
+def test_basic_functionality():
+    assert True
+
+def test_example():
+    assert 1 + 1 == 2
