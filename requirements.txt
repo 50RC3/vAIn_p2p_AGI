@@ -43,6 +43,10 @@ python-jose>=3.3.0
 passlib>=1.7.4
 cryptography>=41.0.0
 
+# TPM 2.0 Hardware Attestation
+tpm2-pytss>=2.2.0  # TPM 2.0 support for hardware attestation
+pycryptodome>=3.18.0  # Advanced cryptographic operations
+
 # Process management
 supervisor>=4.2.0
 tenacity>=8.2.0
@@ -52,7 +56,7 @@ websockets>=10.0
 tabulate>=0.8.9
 
 # Storage
-ipfshttpclient>=0.8.0
+ipfshttpclient==0.8.0a2
 
 # Utilities
 ratelimit>=2.2.1
