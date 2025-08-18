@@ -1,6 +1,7 @@
 import unittest
 import asyncio
 import json
+import hashlib
 import sys
 import time
 from unittest.mock import Mock, MagicMock, patch
@@ -197,9 +198,13 @@ class TestPBFTNode(unittest.TestCase):
 
     def test_prepare_quorum(self):
         """Test PREPARE phase quorum"""
-        # Set up a log entry
-        digest = "test_digest"
-        self.node.log[1] = LogEntry("test_request", digest, set(), set(), set())
+        # Set up a log entry with the correct digest calculation
+        payload = {"digest": "test_digest"}
+        actual_digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+        self.node.log[1] = LogEntry("test_request", actual_digest, set(), set(), set())
+        
+        # Clear sent messages at the start
+        self.sent_messages.clear()
         
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -211,11 +216,10 @@ class TestPBFTNode(unittest.TestCase):
                     view=0,
                     seq=1,
                     sender=f"node_{i}",
-                    payload={"digest": digest},
+                    payload=payload,
                     priv=self.keys[f"node_{i}"]
                 )
                 
-                self.sent_messages.clear()
                 loop.run_until_complete(self.node.on_message(prepare_msg))
         finally:
             loop.close()
