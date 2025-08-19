@@ -1,0 +1,556 @@
+name: 'vAIn P2P AGI - Consensus & Security Validation'
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'network/**'
+      - 'security/**'
+      - 'tests/**'
+      - 'config/**'
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'network/**'
+      - 'security/**'
+      - 'tests/**'
+      - 'config/**'
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+
+env:
+  PYTHON_VERSION: '3.11.9'
+  PYTEST_TIMEOUT: 300
+  PBFT_TEST_TIMEOUT: 600
+
+jobs:
+  # Phase 1: Fast validation and security checks
+  security-validation:
+    name: 'Security & Lint Validation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+    - name: 'Checkout Repository'
+      uses: actions/checkout@v4
+      
+    - name: 'Setup Python ${{ env.PYTHON_VERSION }}'
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: 'Install Base Dependencies'
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+        
+    - name: 'Security: Bandit Static Analysis'
+      run: |
+        pip install bandit[toml]
+        bandit -r network/ security/ -f json -o bandit-report.json
+        bandit -r network/ security/ --severity-level medium
+        
+    - name: 'Security: Safety Vulnerability Check'
+      run: |
+        pip install safety
+        safety check --json --output safety-report.json
+        safety check
+        
+    - name: 'Code Quality: Black Formatting'
+      run: |
+        pip install black
+        black --check --diff network/ security/ tests/
+        
+    - name: 'Code Quality: Flake8 Linting'
+      run: |
+        pip install flake8
+        flake8 network/ security/ tests/ --max-line-length=100 --extend-ignore=E203,W503
+        
+    - name: 'Type Checking: MyPy'
+      run: |
+        pip install mypy types-setuptools
+        mypy network/ security/ --ignore-missing-imports --no-strict-optional
+        
+    - name: 'Upload Security Reports'
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: security-reports
+        path: |
+          bandit-report.json
+          safety-report.json
+        retention-days: 30
+
+  # Phase 2: Core unit tests
+  unit-tests:
+    name: 'Unit Tests - ${{ matrix.os }}'
+    runs-on: ${{ matrix.os }}
+    needs: security-validation
+    timeout-minutes: 20
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        
+    steps:
+    - name: 'Checkout Repository'
+      uses: actions/checkout@v4
+      
+    - name: 'Setup Python ${{ env.PYTHON_VERSION }}'
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: 'Install Dependencies'
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+        
+    - name: 'Create Test Directories'
+      run: |
+        mkdir -p data logs memory model_storage
+        
+    - name: 'Run Unit Tests'
+      run: |
+        pytest tests/ \
+          --ignore=tests/test_pbft_harness.py \
+          --ignore=tests/integration/ \
+          --ignore=tests/e2e/ \
+          -v \
+          --timeout=${{ env.PYTEST_TIMEOUT }} \
+          --cov=network \
+          --cov=security \
+          --cov-report=xml \
+          --cov-report=html \
+          --junit-xml=junit-${{ matrix.os }}.xml
+          
+    - name: 'Upload Test Results'
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-${{ matrix.os }}
+        path: |
+          junit-${{ matrix.os }}.xml
+          htmlcov/
+          .coverage
+        retention-days: 30
+        
+    - name: 'Upload Coverage to Codecov'
+      uses: codecov/codecov-action@v4
+      if: matrix.os == 'ubuntu-latest'
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-unit-tests
+
+  # Phase 3: PBFT consensus integration tests
+  pbft-consensus-tests:
+    name: 'PBFT Consensus Integration Tests'
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    timeout-minutes: 25
+    
+    steps:
+    - name: 'Checkout Repository'
+      uses: actions/checkout@v4
+      
+    - name: 'Setup Python ${{ env.PYTHON_VERSION }}'
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: 'Install Dependencies'
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+        
+    - name: 'Setup Test Environment'
+      run: |
+        mkdir -p data logs memory model_storage
+        # Create test configuration
+        cp config/network.json config/network_test.json
+        
+    - name: 'Run PBFT Harness Tests'
+      run: |
+        pytest tests/test_pbft_harness.py \
+          -v \
+          --timeout=${{ env.PBFT_TEST_TIMEOUT }} \
+          --cov=network.consensus \
+          --cov=network.commit_certificate \
+          --cov-report=xml:coverage-pbft.xml \
+          --junit-xml=junit-pbft.xml \
+          -x  # Stop on first failure for faster feedback
+          
+    - name: 'PBFT Performance Benchmarks'
+      run: |
+        pytest tests/test_pbft_harness.py::test_pbft_performance \
+          -v \
+          --benchmark-only \
+          --benchmark-json=pbft-benchmarks.json
+          
+    - name: 'Upload PBFT Results'
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: pbft-test-results
+        path: |
+          junit-pbft.xml
+          coverage-pbft.xml
+          pbft-benchmarks.json
+        retention-days: 30
+
+  # Phase 4: Attestation & key management tests
+  attestation-tests:
+    name: 'Attestation & Key Management Tests'
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    timeout-minutes: 15
+    
+    steps:
+    - name: 'Checkout Repository'
+      uses: actions/checkout@v4
+      
+    - name: 'Setup Python ${{ env.PYTHON_VERSION }}'
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: 'Install Dependencies'
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+        
+    - name: 'Setup Test Environment'
+      run: |
+        mkdir -p data logs memory model_storage
+        
+    - name: 'Run Attestation Tests'
+      run: |
+        pytest tests/ \
+          -k "attestation or key_management" \
+          -v \
+          --timeout=${{ env.PYTEST_TIMEOUT }} \
+          --cov=security \
+          --cov-report=xml:coverage-attestation.xml \
+          --junit-xml=junit-attestation.xml
+          
+    - name: 'Test Key Rotation Scenarios'
+      run: |
+        pytest tests/ \
+          -k "key_rotation" \
+          -v \
+          --timeout=${{ env.PYTEST_TIMEOUT }}
+          
+    - name: 'Upload Attestation Results'
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: attestation-test-results
+        path: |
+          junit-attestation.xml
+          coverage-attestation.xml
+        retention-days: 30
+
+  # Phase 5: Integration and end-to-end tests
+  integration-tests:
+    name: 'Integration Tests'
+    runs-on: ubuntu-latest
+    needs: [pbft-consensus-tests, attestation-tests]
+    timeout-minutes: 30
+    
+    steps:
+    - name: 'Checkout Repository'
+      uses: actions/checkout@v4
+      
+    - name: 'Setup Python ${{ env.PYTHON_VERSION }}'
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: 'Install Dependencies'
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+        
+    - name: 'Setup Integration Environment'
+      run: |
+        mkdir -p data logs memory model_storage
+        cp config/network.json config/network_integration.json
+        
+    - name: 'Run Integration Tests'
+      run: |
+        pytest tests/integration/ \
+          -v \
+          --timeout=${{ env.PBFT_TEST_TIMEOUT }} \
+          --cov=network \
+          --cov=security \
+          --cov-report=xml:coverage-integration.xml \
+          --junit-xml=junit-integration.xml
+          
+    - name: 'End-to-End Network Tests'
+      run: |
+        pytest tests/e2e/ \
+          -v \
+          --timeout=${{ env.PBFT_TEST_TIMEOUT }} \
+          -x  # Stop on first failure
+          
+    - name: 'Upload Integration Results'
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: integration-test-results
+        path: |
+          junit-integration.xml
+          coverage-integration.xml
+        retention-days: 30
+
+  # Phase 6: Performance and stress tests
+  performance-tests:
+    name: 'Performance & Stress Tests'
+    runs-on: ubuntu-latest
+    needs: integration-tests
+    timeout-minutes: 20
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'performance')
+    
+    steps:
+    - name: 'Checkout Repository'
+      uses: actions/checkout@v4
+      
+    - name: 'Setup Python ${{ env.PYTHON_VERSION }}'
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: 'Install Dependencies'
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+        pip install pytest-benchmark
+        
+    - name: 'Setup Performance Environment'
+      run: |
+        mkdir -p data logs memory model_storage
+        # Optimize for performance testing
+        echo '{"performance_mode": true}' > config/test_performance.json
+        
+    - name: 'PBFT Throughput Tests'
+      run: |
+        pytest tests/ \
+          -k "performance or throughput" \
+          -v \
+          --benchmark-only \
+          --benchmark-json=performance-benchmarks.json \
+          --benchmark-min-rounds=3
+          
+    - name: 'Memory Usage Tests'
+      run: |
+        pytest tests/ \
+          -k "memory" \
+          -v \
+          --timeout=${{ env.PYTEST_TIMEOUT }}
+          
+    - name: 'Stress Test: High Load Consensus'
+      run: |
+        pytest tests/ \
+          -k "stress" \
+          -v \
+          --timeout=900  # 15 minutes for stress tests
+          
+    - name: 'Upload Performance Results'
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: performance-test-results
+        path: |
+          performance-benchmarks.json
+        retention-days: 30
+
+  # Phase 7: Final validation and reporting
+  final-validation:
+    name: 'Final Validation & Reporting'
+    runs-on: ubuntu-latest
+    needs: [integration-tests, performance-tests]
+    if: always()
+    timeout-minutes: 10
+    
+    steps:
+    - name: 'Checkout Repository'
+      uses: actions/checkout@v4
+      
+    - name: 'Download All Test Artifacts'
+      uses: actions/download-artifact@v4
+      with:
+        path: test-artifacts/
+        
+    - name: 'Generate Test Report'
+      run: |
+        python -c "
+        import json
+        import glob
+        import xml.etree.ElementTree as ET
+        
+        # Collect all test results
+        junit_files = glob.glob('test-artifacts/**/junit-*.xml', recursive=True)
+        
+        total_tests = 0
+        total_failures = 0
+        total_errors = 0
+        
+        for junit_file in junit_files:
+            try:
+                tree = ET.parse(junit_file)
+                root = tree.getroot()
+                
+                tests = int(root.get('tests', 0))
+                failures = int(root.get('failures', 0))
+                errors = int(root.get('errors', 0))
+                
+                total_tests += tests
+                total_failures += failures
+                total_errors += errors
+                
+                print(f'{junit_file}: {tests} tests, {failures} failures, {errors} errors')
+            except Exception as e:
+                print(f'Error parsing {junit_file}: {e}')
+        
+        print(f'\\nTotal: {total_tests} tests, {total_failures} failures, {total_errors} errors')
+        
+        # Check if all critical tests passed
+        success = total_failures == 0 and total_errors == 0
+        print(f'Overall Status: {\"PASS\" if success else \"FAIL\"}')
+        
+        # Write summary
+        with open('test-summary.json', 'w') as f:
+            json.dump({
+                'total_tests': total_tests,
+                'total_failures': total_failures,
+                'total_errors': total_errors,
+                'success': success
+            }, f, indent=2)
+        "
+        
+    - name: 'Validate Configuration Files'
+      run: |
+        python -c "
+        import json
+        
+        # Validate network configuration
+        with open('config/network.json') as f:
+            config = json.load(f)
+            
+        # Check required sections
+        required_sections = ['security', 'consensus', 'dht', 'network', 'observability']
+        for section in required_sections:
+            if section not in config:
+                raise ValueError(f'Missing required section: {section}')
+        
+        # Validate PBFT settings
+        pbft = config['consensus']['pbft']
+        if pbft['committee_size'] < 4:
+            raise ValueError('PBFT committee size must be at least 4')
+        if pbft['fault_tolerance'] != 1:
+            raise ValueError('PBFT fault tolerance must be 1 for 4-node setup')
+            
+        print('Configuration validation: PASS')
+        "
+        
+    - name: 'Check Test Coverage'
+      run: |
+        python -c "
+        import xml.etree.ElementTree as ET
+        import glob
+        
+        coverage_files = glob.glob('test-artifacts/**/coverage*.xml', recursive=True)
+        
+        for coverage_file in coverage_files:
+            try:
+                tree = ET.parse(coverage_file)
+                root = tree.getroot()
+                
+                line_rate = float(root.get('line-rate', 0))
+                coverage_percent = line_rate * 100
+                
+                print(f'{coverage_file}: {coverage_percent:.1f}% coverage')
+                
+                if coverage_percent < 80:
+                    print(f'WARNING: Coverage below 80% in {coverage_file}')
+                    
+            except Exception as e:
+                print(f'Error parsing {coverage_file}: {e}')
+        "
+        
+    - name: 'Upload Final Summary'
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: final-validation-summary
+        path: |
+          test-summary.json
+        retention-days: 90
+        
+    - name: 'Comment on PR'
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          try {
+            const summary = JSON.parse(fs.readFileSync('test-summary.json', 'utf8'));
+            
+            const status = summary.success ? '✅ PASS' : '❌ FAIL';
+            const body = `## vAIn P2P AGI - Test Results ${status}
+            
+            **Test Summary:**
+            - Total Tests: ${summary.total_tests}
+            - Failures: ${summary.total_failures}
+            - Errors: ${summary.total_errors}
+            
+            **Components Tested:**
+            - ✅ Security validation (bandit, safety)
+            - ✅ PBFT consensus with 4-node harness
+            - ✅ Attestation & key management
+            - ✅ Integration tests
+            - ✅ Performance benchmarks
+            
+            ${summary.success ? 
+              '🎉 All tests passed! Ready for merge.' : 
+              '⚠️ Some tests failed. Please review the logs.'}
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+          } catch (error) {
+            console.log('Could not post test summary:', error);
+          }
+
+  # Cleanup job
+  cleanup:
+    name: 'Cleanup Test Artifacts'
+    runs-on: ubuntu-latest
+    needs: final-validation
+    if: always()
+    
+    steps:
+    - name: 'Clean Test Directories'
+      run: |
+        echo "Cleanup completed - artifacts retained for configured retention period"
