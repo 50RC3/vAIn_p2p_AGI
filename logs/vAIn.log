@@ -1,1 +1,1066 @@
-2025-04-16 12:17:55,774 | vAIn | CRITICAL | Failed to import core components: No module named 'cryptography'
+2025-03-29 18:59:14 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-29 18:59:28 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-29 18:59:40 [INFO] root (main.py:78): Initializing user interface...
+2025-03-29 18:59:40 [WARNING] root (main.py:88): spaCy not available. NLP features will be limited.
+2025-03-29 18:59:40 [WARNING] models.simple_nn (simple_nn.py:156): Neither spaCy nor NLTK available. Using basic responses only.
+2025-03-29 18:59:40 [INFO] ai_core.chatbot.interface (interface.py:148): Started new session c13ac742-6aa2-4e62-a05d-6d1e11c60a32
+2025-03-29 18:59:59 [INFO] ai_core.chatbot.interface (interface.py:232): Preprocessing message: 'hi'
+2025-03-29 18:59:59 [INFO] models.simple_nn (simple_nn.py:184): Generating response for: 'hi'
+2025-03-29 18:59:59 [INFO] ai_core.chatbot.interface (interface.py:345): Generated response: 'That's an interesting point. Would you like me to analyze it further?' for message: 'hi'
+2025-03-29 19:05:11 [INFO] ai_core.chatbot.interface (interface.py:472): Cleared session data for c13ac742-6aa2-4e62-a05d-6d1e11c60a32
+2025-03-29 19:05:15 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-29 19:05:18 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-29 19:05:23 [INFO] root (main.py:78): Initializing user interface...
+2025-03-29 19:05:23 [WARNING] root (main.py:88): spaCy not available. NLP features will be limited.
+2025-03-29 19:05:23 [WARNING] models.simple_nn (simple_nn.py:156): Neither spaCy nor NLTK available. Using basic responses only.
+2025-03-29 19:05:23 [INFO] ai_core.chatbot.interface (interface.py:148): Started new session a6b35151-1bc5-4a61-abe0-5a13594cdb75
+2025-03-29 19:05:29 [INFO] ai_core.chatbot.interface (interface.py:232): Preprocessing message: 'hello'
+2025-03-29 19:05:29 [INFO] ai_core.chatbot.interface (interface.py:236): Fast path for common greeting: 'hello'
+2025-03-29 19:05:29 [INFO] models.simple_nn (simple_nn.py:184): Generating response for: 'hello'
+2025-03-29 19:05:29 [INFO] models.simple_nn (simple_nn.py:188): DIRECT GREETING MATCH detected for: 'hello'
+2025-03-29 19:05:29 [INFO] models.simple_nn (simple_nn.py:190): Responding with greeting: Hi there! I'm your AI assistant. What can I help you with?
+2025-03-29 19:05:29 [INFO] ai_core.chatbot.interface (interface.py:353): Generated response: 'Hi there! I'm your AI assistant. What can I help you with?' for message: 'hello'
+2025-03-29 19:05:36 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=1.0
+2025-03-29 19:08:26 [INFO] ai_core.model_storage (model_storage.py:83): Persisted 1 feedback entries for session a6b35151-1bc5-4a61-abe0-5a13594cdb75
+2025-03-29 19:08:26 [INFO] ai_core.chatbot.interface (interface.py:480): Cleared session data for a6b35151-1bc5-4a61-abe0-5a13594cdb75
+2025-03-29 19:08:30 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-29 19:08:33 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-29 19:08:37 [INFO] root (main.py:78): Initializing user interface...
+2025-03-29 19:08:37 [WARNING] root (main.py:88): spaCy not available. NLP features will be limited.
+2025-03-29 19:08:37 [WARNING] models.simple_nn (simple_nn.py:156): Neither spaCy nor NLTK available. Using basic responses only.
+2025-03-29 19:08:37 [INFO] ai_core.chatbot.interface (interface.py:148): Started new session e7c56159-5533-496c-9358-b26b9248c11e
+2025-03-29 19:08:42 [INFO] ai_core.chatbot.interface (interface.py:232): Preprocessing message: 'hello'
+2025-03-29 19:08:42 [INFO] ai_core.chatbot.interface (interface.py:236): Fast path for common greeting: 'hello'
+2025-03-29 19:08:42 [INFO] models.simple_nn (simple_nn.py:184): Generating response for: 'hello'
+2025-03-29 19:08:42 [INFO] models.simple_nn (simple_nn.py:188): DIRECT GREETING MATCH detected for: 'hello'
+2025-03-29 19:08:42 [INFO] models.simple_nn (simple_nn.py:190): Responding with greeting: Greetings! How may I be of service today?
+2025-03-29 19:08:42 [INFO] ai_core.chatbot.interface (interface.py:353): Generated response: 'Greetings! How may I be of service today?' for message: 'hello'
+2025-03-29 19:08:59 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=1.0
+2025-03-29 19:09:22 [INFO] ai_core.chatbot.interface (interface.py:232): Preprocessing message: 'tell me something'
+2025-03-29 19:09:22 [INFO] models.simple_nn (simple_nn.py:184): Generating response for: 'tell me something'
+2025-03-29 19:09:22 [INFO] ai_core.chatbot.interface (interface.py:353): Generated response: 'I see. Would you like me to provide more information on this topic?' for message: 'tell me something'
+2025-03-29 19:09:32 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=0.0
+2025-03-29 19:09:34 [INFO] ai_core.model_storage (model_storage.py:83): Persisted 2 feedback entries for session e7c56159-5533-496c-9358-b26b9248c11e
+2025-03-29 19:09:34 [INFO] ai_core.chatbot.interface (interface.py:480): Cleared session data for e7c56159-5533-496c-9358-b26b9248c11e
+2025-03-29 21:40:23 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-29 21:40:27 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-29 21:40:51 [INFO] root (main.py:78): Initializing user interface...
+2025-03-29 21:40:51 [WARNING] root (main.py:88): spaCy not available. NLP features will be limited.
+2025-03-29 21:40:51 [INFO] models.simple_nn (simple_nn.py:196): Initializing transformer model: gpt2-small
+2025-03-29 21:41:01 [WARNING] models.simple_nn (simple_nn.py:207): Could not initialize pipeline: gpt2-small is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `huggingface-cli login` or by passing `token=<your_token>`. Loading model components separately.
+2025-03-29 21:41:02 [ERROR] models.simple_nn (simple_nn.py:215): Failed to initialize transformer model: gpt2-small is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `huggingface-cli login` or by passing `token=<your_token>`
+2025-03-29 21:41:02 [WARNING] models.simple_nn (simple_nn.py:183): Neither spaCy nor NLTK available. Using basic responses only.
+2025-03-29 21:41:02 [INFO] ai_core.chatbot.interface (interface.py:148): Started new session 67360fd7-588a-4aed-bd44-62f64cd735ed
+2025-03-29 21:41:12 [INFO] ai_core.chatbot.interface (interface.py:232): Preprocessing message: 'hi'
+2025-03-29 21:41:12 [INFO] ai_core.chatbot.interface (interface.py:236): Fast path for common greeting: 'hi'
+2025-03-29 21:41:12 [INFO] models.simple_nn (simple_nn.py:293): Generating response for: 'hi'
+2025-03-29 21:41:12 [INFO] models.simple_nn (simple_nn.py:297): DIRECT GREETING MATCH detected for: 'hi'
+2025-03-29 21:41:12 [INFO] models.simple_nn (simple_nn.py:299): Responding with greeting: Hello! It's nice to chat with you. How can I assist?
+2025-03-29 21:41:12 [INFO] ai_core.chatbot.interface (interface.py:353): Generated response: 'Hello! It's nice to chat with you. How can I assist?' for message: 'hi'
+2025-03-29 21:41:24 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=1.0
+2025-03-29 21:41:47 [INFO] ai_core.chatbot.interface (interface.py:232): Preprocessing message: 'how are you'
+2025-03-29 21:41:47 [INFO] models.simple_nn (simple_nn.py:293): Generating response for: 'how are you'
+2025-03-29 21:41:47 [INFO] ai_core.chatbot.interface (interface.py:353): Generated response: 'I understand what you're saying. My NLP modules help me interpret that.' for message: 'how are you'
+2025-03-29 21:42:02 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=0.0
+2025-03-29 21:42:06 [INFO] ai_core.chatbot.interface (interface.py:232): Preprocessing message: 'why'
+2025-03-29 21:42:06 [INFO] models.simple_nn (simple_nn.py:293): Generating response for: 'why'
+2025-03-29 21:42:06 [INFO] ai_core.chatbot.interface (interface.py:353): Generated response: 'I understand what you're saying. My NLP modules help me interpret that.' for message: 'why'
+2025-03-29 21:42:12 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=0.0
+2025-03-29 21:42:28 [INFO] ai_core.model_storage (model_storage.py:83): Persisted 3 feedback entries for session 67360fd7-588a-4aed-bd44-62f64cd735ed
+2025-03-29 21:42:28 [INFO] ai_core.chatbot.interface (interface.py:480): Cleared session data for 67360fd7-588a-4aed-bd44-62f64cd735ed
+2025-03-29 21:45:38 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-29 21:45:48 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-29 21:46:03 [INFO] root (main.py:78): Initializing user interface...
+2025-03-29 21:46:03 [WARNING] root (main.py:88): spaCy not available. NLP features will be limited.
+2025-03-29 21:46:03 [INFO] models.simple_nn (simple_nn.py:196): Initializing transformer model: gpt2-small
+2025-03-29 21:46:04 [WARNING] models.simple_nn (simple_nn.py:207): Could not initialize pipeline: gpt2-small is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `huggingface-cli login` or by passing `token=<your_token>`. Loading model components separately.
+2025-03-29 21:46:05 [ERROR] models.simple_nn (simple_nn.py:215): Failed to initialize transformer model: gpt2-small is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `huggingface-cli login` or by passing `token=<your_token>`
+2025-03-29 21:46:05 [WARNING] models.simple_nn (simple_nn.py:183): Neither spaCy nor NLTK available. Using basic responses only.
+2025-03-29 21:46:05 [INFO] ai_core.chatbot.interface (interface.py:148): Started new session e2ed251a-b4e3-423f-98b9-20a19adf454e
+2025-03-29 21:49:41 [INFO] ai_core.chatbot.interface (interface.py:232): Preprocessing message: 'hi'
+2025-03-29 21:49:41 [INFO] ai_core.chatbot.interface (interface.py:236): Fast path for common greeting: 'hi'
+2025-03-29 21:49:41 [INFO] models.simple_nn (simple_nn.py:293): Generating response for: 'hi'
+2025-03-29 21:49:41 [INFO] models.simple_nn (simple_nn.py:297): DIRECT GREETING MATCH detected for: 'hi'
+2025-03-29 21:49:41 [INFO] models.simple_nn (simple_nn.py:299): Responding with greeting: Hello there! How can I help you today?
+2025-03-29 21:49:41 [INFO] ai_core.chatbot.interface (interface.py:353): Generated response: 'Hello there! How can I help you today?' for message: 'hi'
+2025-03-29 21:49:48 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=1.0
+2025-03-29 21:50:14 [INFO] ai_core.chatbot.interface (interface.py:232): Preprocessing message: 'tell me'
+2025-03-29 21:50:14 [INFO] models.simple_nn (simple_nn.py:293): Generating response for: 'tell me'
+2025-03-29 21:50:14 [INFO] ai_core.chatbot.interface (interface.py:353): Generated response: 'I see. Would you like me to provide more information on this topic?' for message: 'tell me'
+2025-03-29 21:50:21 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=0.0
+2025-03-29 21:50:26 [INFO] ai_core.chatbot.interface (interface.py:232): Preprocessing message: 'why'
+2025-03-29 21:50:26 [INFO] models.simple_nn (simple_nn.py:293): Generating response for: 'why'
+2025-03-29 21:50:26 [INFO] ai_core.chatbot.interface (interface.py:353): Generated response: 'That's an interesting point. Would you like me to analyze it further?' for message: 'why'
+2025-03-29 21:52:26 [INFO] ai_core.model_storage (model_storage.py:83): Persisted 2 feedback entries for session e2ed251a-b4e3-423f-98b9-20a19adf454e
+2025-03-29 21:52:26 [INFO] ai_core.chatbot.interface (interface.py:480): Cleared session data for e2ed251a-b4e3-423f-98b9-20a19adf454e
+2025-03-30 01:38:39 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 01:38:43 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 01:38:49 [INFO] root (main.py:78): Initializing user interface...
+2025-03-30 01:38:49 [WARNING] root (main.py:88): spaCy not available. NLP features will be limited.
+2025-03-30 01:38:49 [INFO] models.simple_nn (simple_nn.py:196): Initializing transformer model: gpt2-small
+2025-03-30 01:38:50 [WARNING] models.simple_nn (simple_nn.py:207): Could not initialize pipeline: gpt2-small is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `huggingface-cli login` or by passing `token=<your_token>`. Loading model components separately.
+2025-03-30 01:38:51 [ERROR] models.simple_nn (simple_nn.py:215): Failed to initialize transformer model: gpt2-small is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `huggingface-cli login` or by passing `token=<your_token>`
+2025-03-30 01:38:51 [WARNING] models.simple_nn (simple_nn.py:183): Neither spaCy nor NLTK available. Using basic responses only.
+2025-03-30 01:38:51 [INFO] ai_core.chatbot.interface (interface.py:290): Started new session 03362563-2453-4d56-b90c-9a53861b92c3
+2025-03-30 01:38:59 [ERROR] ai_core.chatbot.interface (interface.py:355): Error processing message: 'ChatbotInterface' object has no attribute '_trigger_event'
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\chatbot\interface.py", line 331, in process_message
+    await self._trigger_event('cache_miss', {'message': message})
+          ^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ChatbotInterface' object has no attribute '_trigger_event'
+2025-03-30 01:38:59 [ERROR] ai_core.ui.cli_interface (cli_interface.py:106): Error processing message
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\chatbot\interface.py", line 331, in process_message
+    await self._trigger_event('cache_miss', {'message': message})
+          ^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ChatbotInterface' object has no attribute '_trigger_event'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\ui\cli_interface.py", line 72, in start
+    response = await self.chatbot.process_message(user_input)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\chatbot\interface.py", line 356, in process_message
+    await self._trigger_event('error', {'error': error_msg})
+          ^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ChatbotInterface' object has no attribute '_trigger_event'
+2025-03-30 01:42:35 [INFO] ai_core.chatbot.interface (interface.py:620): Cleared session data for 03362563-2453-4d56-b90c-9a53861b92c3
+2025-03-30 01:42:39 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 01:42:42 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 01:42:48 [INFO] root (main.py:78): Initializing user interface...
+2025-03-30 01:42:48 [WARNING] root (main.py:88): spaCy not available. NLP features will be limited.
+2025-03-30 01:42:48 [INFO] models.simple_nn (simple_nn.py:196): Initializing transformer model: gpt2-small
+2025-03-30 01:42:48 [WARNING] models.simple_nn (simple_nn.py:207): Could not initialize pipeline: gpt2-small is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `huggingface-cli login` or by passing `token=<your_token>`. Loading model components separately.
+2025-03-30 01:42:49 [ERROR] models.simple_nn (simple_nn.py:215): Failed to initialize transformer model: gpt2-small is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `huggingface-cli login` or by passing `token=<your_token>`
+2025-03-30 01:42:49 [WARNING] models.simple_nn (simple_nn.py:183): Neither spaCy nor NLTK available. Using basic responses only.
+2025-03-30 01:42:49 [INFO] ai_core.chatbot.interface (interface.py:290): Started new session 2e122ac3-ed38-4fae-b9e2-687ac79d2a39
+2025-03-30 01:42:59 [INFO] ai_core.chatbot.interface (interface.py:376): Preprocessing message: 'hi'
+2025-03-30 01:42:59 [INFO] ai_core.chatbot.interface (interface.py:380): Fast path for common greeting: 'hi'
+2025-03-30 01:42:59 [INFO] models.simple_nn (simple_nn.py:293): Generating response for: 'hi'
+2025-03-30 01:42:59 [INFO] models.simple_nn (simple_nn.py:297): DIRECT GREETING MATCH detected for: 'hi'
+2025-03-30 01:42:59 [INFO] models.simple_nn (simple_nn.py:299): Responding with greeting: Hi there! I'm your AI assistant. What can I help you with?
+2025-03-30 01:42:59 [INFO] ai_core.chatbot.interface (interface.py:497): Generated response: 'Hi there! I'm your AI assistant. What can I help you with?' for message: 'hi'
+2025-03-30 01:43:52 [INFO] ai_core.chatbot.interface (interface.py:376): Preprocessing message: 'tell me something'
+2025-03-30 01:43:52 [INFO] models.simple_nn (simple_nn.py:293): Generating response for: 'tell me something'
+2025-03-30 01:43:52 [INFO] ai_core.chatbot.interface (interface.py:497): Generated response: 'That's an interesting point. Would you like me to analyze it further?' for message: 'tell me something'
+2025-03-30 01:44:00 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=0.0
+2025-03-30 01:44:06 [INFO] ai_core.model_storage (model_storage.py:83): Persisted 1 feedback entries for session 2e122ac3-ed38-4fae-b9e2-687ac79d2a39
+2025-03-30 01:44:06 [INFO] ai_core.chatbot.interface (interface.py:624): Cleared session data for 2e122ac3-ed38-4fae-b9e2-687ac79d2a39
+2025-03-30 01:46:10 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 01:46:13 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 01:46:18 [INFO] root (main.py:78): Initializing user interface...
+2025-03-30 01:46:18 [WARNING] root (main.py:88): spaCy not available. NLP features will be limited.
+2025-03-30 01:46:18 [INFO] models.simple_nn (simple_nn.py:196): Initializing transformer model: gpt2-small
+2025-03-30 01:46:19 [WARNING] models.simple_nn (simple_nn.py:207): Could not initialize pipeline: gpt2-small is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `huggingface-cli login` or by passing `token=<your_token>`. Loading model components separately.
+2025-03-30 01:46:20 [ERROR] models.simple_nn (simple_nn.py:215): Failed to initialize transformer model: gpt2-small is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `huggingface-cli login` or by passing `token=<your_token>`
+2025-03-30 01:46:20 [WARNING] models.simple_nn (simple_nn.py:183): Neither spaCy nor NLTK available. Using basic responses only.
+2025-03-30 01:46:20 [INFO] ai_core.chatbot.interface (interface.py:290): Started new session a4d2ce0f-ed4b-4fb9-b21f-17b4c6d0ba0c
+2025-03-30 01:46:30 [INFO] ai_core.chatbot.interface (interface.py:376): Preprocessing message: 'hi'
+2025-03-30 01:46:30 [INFO] ai_core.chatbot.interface (interface.py:380): Fast path for common greeting: 'hi'
+2025-03-30 01:46:30 [INFO] models.simple_nn (simple_nn.py:293): Generating response for: 'hi'
+2025-03-30 01:46:30 [INFO] models.simple_nn (simple_nn.py:297): DIRECT GREETING MATCH detected for: 'hi'
+2025-03-30 01:46:30 [INFO] models.simple_nn (simple_nn.py:299): Responding with greeting: Hello! It's nice to chat with you. How can I assist?
+2025-03-30 01:46:30 [INFO] ai_core.chatbot.interface (interface.py:497): Generated response: 'Hello! It's nice to chat with you. How can I assist?' for message: 'hi'
+2025-03-30 01:46:44 [INFO] ai_core.chatbot.interface (interface.py:376): Preprocessing message: 'talk'
+2025-03-30 01:46:44 [INFO] models.simple_nn (simple_nn.py:293): Generating response for: 'talk'
+2025-03-30 01:46:44 [INFO] ai_core.chatbot.interface (interface.py:497): Generated response: 'I see. Would you like me to provide more information on this topic?' for message: 'talk'
+2025-03-30 01:48:29 [INFO] ai_core.chatbot.interface (interface.py:624): Cleared session data for a4d2ce0f-ed4b-4fb9-b21f-17b4c6d0ba0c
+2025-03-30 11:37:50 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 11:37:59 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 11:45:07 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 11:45:09 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 11:47:40 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 11:47:43 [WARNING] root (main.py:43): Could not load config from config module: cannot import name 'get_config' from 'config' (C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\config\__init__.py)
+2025-03-30 11:50:56 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 11:50:58 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 11:50:58 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 11:51:03 [INFO] models.simple_nn (simple_nn.py:18): Successfully imported transformers library
+2025-03-30 11:51:08 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 11:51:11 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 11:51:11 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 11:51:15 [INFO] models.simple_nn (simple_nn.py:18): Successfully imported transformers library
+2025-03-30 11:53:57 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 11:54:00 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 11:54:00 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 11:54:05 [INFO] models.simple_nn (simple_nn.py:18): Successfully imported transformers library
+2025-03-30 11:54:05 [INFO] root (main.py:158): Starting in interactive mode
+2025-03-30 11:54:05 [INFO] root (main.py:100): Initializing user interface...
+2025-03-30 11:54:05 [WARNING] root (main.py:110): spaCy not available. NLP features will be limited.
+2025-03-30 11:54:05 [INFO] models.simple_nn (simple_nn.py:59): Loading transformer model: distilgpt2
+2025-03-30 11:57:01 [INFO] models.simple_nn (simple_nn.py:67): Successfully loaded transformer model on cpu
+2025-03-30 11:57:01 [INFO] ai_core.chatbot.interface (interface.py:290): Started new session 3ef5f9f4-76aa-466d-9a1f-619e886930d7
+2025-03-30 11:57:08 [INFO] ai_core.chatbot.interface (interface.py:376): Preprocessing message: 'hello'
+2025-03-30 11:57:08 [INFO] ai_core.chatbot.interface (interface.py:380): Fast path for common greeting: 'hello'
+2025-03-30 11:57:08 [ERROR] ai_core.chatbot.interface (interface.py:515): Response generation failed: mat1 and mat2 must have the same dtype, but got Long and Float
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\chatbot\interface.py", line 466, in _generate_response
+    output = self.model(input_tensor)
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\models\simple_nn.py", line 75, in forward
+    return self.base_model(x)
+           ~~~~~~~~~~~~~~~^^^
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\.venv\Lib\site-packages\torch\nn\modules\container.py", line 250, in forward
+    input = module(input)
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1739, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\.venv\Lib\site-packages\torch\nn\modules\module.py", line 1750, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\.venv\Lib\site-packages\torch\nn\modules\linear.py", line 125, in forward
+    return F.linear(input, self.weight, self.bias)
+           ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: mat1 and mat2 must have the same dtype, but got Long and Float
+2025-03-30 11:58:16 [INFO] ai_core.chatbot.interface (interface.py:624): Cleared session data for 3ef5f9f4-76aa-466d-9a1f-619e886930d7
+2025-03-30 12:02:29 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 12:02:32 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 12:02:32 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 12:02:37 [INFO] models.simple_nn (simple_nn.py:18): Successfully imported transformers library
+2025-03-30 12:02:37 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 12:02:37 [INFO] root (main.py:163): Starting in interactive mode
+2025-03-30 12:02:37 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 12:02:37 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 12:02:37 [INFO] models.simple_nn (simple_nn.py:59): Loading transformer model: distilgpt2
+2025-03-30 12:02:39 [INFO] models.simple_nn (simple_nn.py:67): Successfully loaded transformer model on cpu
+2025-03-30 12:02:39 [INFO] ai_core.chatbot.interface (interface.py:298): Started new session 23fc5e9e-4de7-423a-a155-b30ad32f55b6
+2025-03-30 12:02:43 [INFO] ai_core.chatbot.interface (interface.py:447): Generated response: '' for message: 'hi'
+2025-03-30 12:02:54 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=0.0
+2025-03-30 12:05:15 [INFO] ai_core.model_storage (model_storage.py:83): Persisted 1 feedback entries for session 23fc5e9e-4de7-423a-a155-b30ad32f55b6
+2025-03-30 12:05:15 [INFO] ai_core.chatbot.interface (interface.py:574): Cleared session data for 23fc5e9e-4de7-423a-a155-b30ad32f55b6
+2025-03-30 12:05:21 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 12:05:24 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 12:05:24 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 12:05:28 [INFO] models.simple_nn (simple_nn.py:18): Successfully imported transformers library
+2025-03-30 12:05:28 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 12:05:28 [INFO] root (main.py:163): Starting in interactive mode
+2025-03-30 12:05:28 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 12:05:28 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 12:05:28 [INFO] models.simple_nn (simple_nn.py:59): Loading transformer model: distilgpt2
+2025-03-30 12:05:30 [INFO] models.simple_nn (simple_nn.py:67): Successfully loaded transformer model on cpu
+2025-03-30 12:05:30 [INFO] ai_core.chatbot.interface (interface.py:298): Started new session 937a45da-977c-454e-b112-5e723a5c70b3
+2025-03-30 12:05:40 [INFO] ai_core.chatbot.interface (interface.py:398): Fast path for common greeting: 'hey'
+2025-03-30 12:05:47 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=1.0
+2025-03-30 12:06:16 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=0.0
+2025-03-30 12:07:21 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=0.0
+2025-03-30 12:07:48 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=0.0
+2025-03-30 12:10:22 [INFO] ai_core.model_storage (model_storage.py:83): Persisted 4 feedback entries for session 937a45da-977c-454e-b112-5e723a5c70b3
+2025-03-30 12:10:22 [INFO] ai_core.chatbot.interface (interface.py:598): Cleared session data for 937a45da-977c-454e-b112-5e723a5c70b3
+2025-03-30 12:10:25 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 12:10:28 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 12:10:28 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 12:10:32 [INFO] models.simple_nn (simple_nn.py:18): Successfully imported transformers library
+2025-03-30 12:10:32 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 12:10:32 [INFO] root (main.py:163): Starting in interactive mode
+2025-03-30 12:10:32 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 12:10:32 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 12:10:32 [INFO] models.simple_nn (simple_nn.py:59): Loading transformer model: distilgpt2
+2025-03-30 12:10:34 [INFO] models.simple_nn (simple_nn.py:67): Successfully loaded transformer model on cpu
+2025-03-30 12:10:34 [INFO] ai_core.chatbot.interface (interface.py:298): Started new session fc1b3db5-f61d-4f14-919a-b3e9bfe3b463
+2025-03-30 12:10:37 [INFO] ai_core.chatbot.interface (interface.py:400): Preprocessing message: 'hi'
+2025-03-30 12:11:07 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=0.0
+2025-03-30 12:13:31 [INFO] ai_core.model_storage (model_storage.py:83): Persisted 1 feedback entries for session fc1b3db5-f61d-4f14-919a-b3e9bfe3b463
+2025-03-30 12:13:31 [INFO] ai_core.chatbot.interface (interface.py:611): Cleared session data for fc1b3db5-f61d-4f14-919a-b3e9bfe3b463
+2025-03-30 12:13:33 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 12:13:36 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 12:13:36 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 12:13:41 [INFO] models.simple_nn (simple_nn.py:18): Successfully imported transformers library
+2025-03-30 12:13:41 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 12:13:41 [INFO] root (main.py:163): Starting in interactive mode
+2025-03-30 12:13:41 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 12:13:41 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 12:13:41 [INFO] models.simple_nn (simple_nn.py:59): Loading transformer model: distilgpt2
+2025-03-30 12:13:43 [INFO] models.simple_nn (simple_nn.py:67): Successfully loaded transformer model on cpu
+2025-03-30 12:13:43 [INFO] ai_core.chatbot.interface (interface.py:298): Started new session 15926565-1a33-421e-a381-54e12e2f5088
+2025-03-30 12:13:55 [INFO] ai_core.chatbot.interface (interface.py:400): Preprocessing message: 'hi'
+2025-03-30 12:15:21 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=1.0
+2025-03-30 12:17:45 [INFO] ai_core.chatbot.interface (interface.py:400): Preprocessing message: '1'
+2025-03-30 12:17:56 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=0.0
+2025-03-30 12:20:22 [INFO] ai_core.model_storage (model_storage.py:83): Persisted 2 feedback entries for session 15926565-1a33-421e-a381-54e12e2f5088
+2025-03-30 12:20:22 [INFO] ai_core.chatbot.interface (interface.py:611): Cleared session data for 15926565-1a33-421e-a381-54e12e2f5088
+2025-03-30 12:21:58 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 12:22:01 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 12:22:01 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 12:22:05 [INFO] models.simple_nn (simple_nn.py:18): Successfully imported transformers library
+2025-03-30 12:22:05 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 12:22:05 [INFO] root (main.py:163): Starting in interactive mode
+2025-03-30 12:22:05 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 12:22:05 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 12:22:05 [INFO] models.simple_nn (simple_nn.py:59): Loading transformer model: distilgpt2
+2025-03-30 12:22:07 [INFO] models.simple_nn (simple_nn.py:67): Successfully loaded transformer model on cpu
+2025-03-30 12:22:07 [INFO] ai_core.chatbot.interface (interface.py:298): Started new session 90f15272-1e7e-4cc4-86c8-246c470b11a3
+2025-03-30 12:22:10 [INFO] ai_core.chatbot.interface (interface.py:404): Using text generation for message: 'hi'
+2025-03-30 12:22:10 [INFO] ai_core.chatbot.interface (interface.py:416): Generated greeting response: 'Hello! I'm here to help. What do you need?'
+2025-03-30 12:22:50 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=0.0
+2025-03-30 12:25:24 [INFO] ai_core.model_storage (model_storage.py:83): Persisted 1 feedback entries for session 90f15272-1e7e-4cc4-86c8-246c470b11a3
+2025-03-30 12:25:24 [INFO] ai_core.chatbot.interface (interface.py:624): Cleared session data for 90f15272-1e7e-4cc4-86c8-246c470b11a3
+2025-03-30 12:25:26 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 12:25:29 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 12:25:29 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 12:25:33 [INFO] models.simple_nn (simple_nn.py:18): Successfully imported transformers library
+2025-03-30 12:25:33 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 12:25:33 [INFO] root (main.py:163): Starting in interactive mode
+2025-03-30 12:25:33 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 12:25:33 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 12:25:33 [INFO] models.simple_nn (simple_nn.py:59): Loading transformer model: distilgpt2
+2025-03-30 12:25:36 [INFO] models.simple_nn (simple_nn.py:67): Successfully loaded transformer model on cpu
+2025-03-30 12:25:36 [INFO] ai_core.chatbot.interface (interface.py:298): Started new session 48c047b7-b251-464d-bb07-ce7cf1617843
+2025-03-30 12:25:55 [INFO] ai_core.model_storage (model_storage.py:45): Feedback stored: score=0.0
+2025-03-30 12:26:54 [INFO] ai_core.model_storage (model_storage.py:83): Persisted 1 feedback entries for session 48c047b7-b251-464d-bb07-ce7cf1617843
+2025-03-30 12:26:54 [INFO] ai_core.chatbot.interface (interface.py:652): Cleared session data for 48c047b7-b251-464d-bb07-ce7cf1617843
+2025-03-30 13:52:47 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 13:52:50 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 13:52:50 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 13:52:55 [INFO] models.simple_nn (simple_nn.py:18): Successfully imported transformers library
+2025-03-30 13:52:55 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 13:52:55 [INFO] root (main.py:173): Starting in interactive mode
+2025-03-30 13:52:55 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 13:52:55 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 13:52:55 [INFO] models.simple_nn (simple_nn.py:59): Loading transformer model: distilgpt2
+2025-03-30 13:52:57 [INFO] models.simple_nn (simple_nn.py:67): Successfully loaded transformer model on cpu
+2025-03-30 13:52:57 [INFO] ai_core.chatbot.interface (interface.py:234): Initializing unsupervised learning module
+2025-03-30 13:52:57 [INFO] ai_core.learning.unsupervised (unsupervised.py:49): Initialized unsupervised module with 10 clusters
+2025-03-30 13:52:57 [INFO] ai_core.chatbot.interface (interface.py:243): Initializing self-supervised learning module
+2025-03-30 13:52:57 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 13:55:18 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 13:55:18 [INFO] ai_core.chatbot.interface (interface.py:253): Initializing reinforcement learning module
+2025-03-30 13:55:18 [INFO] ai_core.chatbot.interface (interface.py:302): Learning modules initialized
+2025-03-30 13:55:18 [INFO] ai_core.chatbot.interface (interface.py:962): Cleared session data for None
+2025-03-30 13:55:18 [ERROR] ai_core.chatbot.interface (interface.py:967): Error clearing session: 'ChatbotInterface' object has no attribute '_notify_handlers'
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\ui\cli_interface.py", line 42, in start
+    session_id = await self.chatbot.start_session()
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ChatbotInterface' object has no attribute 'start_session'. Did you mean: 'clear_session'?
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\chatbot\interface.py", line 964, in clear_session
+    await self._notify_handlers('session_cleared', old_session)
+          ^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ChatbotInterface' object has no attribute '_notify_handlers'
+2025-03-30 13:55:18 [ERROR] root (main.py:142): Error setting up interface: 'ChatbotInterface' object has no attribute '_notify_handlers'
+2025-03-30 13:55:18 [ERROR] root (main.py:186): Fatal error: 'ChatbotInterface' object has no attribute '_notify_handlers'
+2025-03-30 17:20:33 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 17:20:42 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 17:20:42 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 17:21:06 [INFO] models.simple_nn (simple_nn.py:18): Successfully imported transformers library
+2025-03-30 17:21:06 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 17:21:06 [INFO] root (main.py:173): Starting in interactive mode
+2025-03-30 17:21:06 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 17:21:06 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 17:21:06 [INFO] models.simple_nn (simple_nn.py:59): Loading transformer model: distilgpt2
+2025-03-30 17:21:08 [INFO] models.simple_nn (simple_nn.py:67): Successfully loaded transformer model on cpu
+2025-03-30 17:21:08 [INFO] ai_core.chatbot.interface (interface.py:234): Initializing unsupervised learning module
+2025-03-30 17:21:08 [INFO] ai_core.learning.unsupervised (unsupervised.py:49): Initialized unsupervised module with 10 clusters
+2025-03-30 17:21:08 [INFO] ai_core.chatbot.interface (interface.py:243): Initializing self-supervised learning module
+2025-03-30 17:21:08 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 17:21:09 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 17:21:09 [INFO] ai_core.chatbot.interface (interface.py:253): Initializing reinforcement learning module
+2025-03-30 17:21:09 [INFO] ai_core.chatbot.interface (interface.py:302): Learning modules initialized
+2025-03-30 17:21:09 [INFO] ai_core.chatbot.interface (interface.py:962): Cleared session data for None
+2025-03-30 17:21:09 [ERROR] ai_core.chatbot.interface (interface.py:967): Error clearing session: 'ChatbotInterface' object has no attribute '_notify_handlers'
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\ui\cli_interface.py", line 42, in start
+    session_id = await self.chatbot.start_session()
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ChatbotInterface' object has no attribute 'start_session'. Did you mean: 'clear_session'?
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\chatbot\interface.py", line 964, in clear_session
+    await self._notify_handlers('session_cleared', old_session)
+          ^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ChatbotInterface' object has no attribute '_notify_handlers'
+2025-03-30 17:21:09 [ERROR] root (main.py:142): Error setting up interface: 'ChatbotInterface' object has no attribute '_notify_handlers'
+2025-03-30 17:21:09 [ERROR] root (main.py:186): Fatal error: 'ChatbotInterface' object has no attribute '_notify_handlers'
+2025-03-30 17:49:26 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 17:49:29 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 17:49:29 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 17:49:32 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 17:49:32 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 17:49:35 [INFO] models.simple_nn (simple_nn.py:18): Successfully imported transformers library
+2025-03-30 17:49:35 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 17:49:35 [INFO] root (main.py:173): Starting in interactive mode
+2025-03-30 17:49:35 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 17:49:35 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 17:49:35 [INFO] models.simple_nn (simple_nn.py:59): Loading transformer model: distilgpt2
+2025-03-30 17:49:36 [INFO] models.simple_nn (simple_nn.py:67): Successfully loaded transformer model on cpu
+2025-03-30 17:49:36 [INFO] ai_core.chatbot.interface (interface.py:234): Initializing unsupervised learning module
+2025-03-30 17:49:36 [INFO] ai_core.learning.unsupervised (unsupervised.py:49): Initialized unsupervised module with 10 clusters
+2025-03-30 17:49:36 [INFO] ai_core.chatbot.interface (interface.py:243): Initializing self-supervised learning module
+2025-03-30 17:49:36 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 17:49:37 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 17:49:37 [INFO] ai_core.chatbot.interface (interface.py:253): Initializing reinforcement learning module
+2025-03-30 17:49:37 [INFO] ai_core.chatbot.interface (interface.py:302): Learning modules initialized
+2025-03-30 17:49:37 [INFO] ai_core.chatbot.interface (interface.py:962): Cleared session data for None
+2025-03-30 17:49:37 [ERROR] ai_core.chatbot.interface (interface.py:967): Error clearing session: 'ChatbotInterface' object has no attribute '_notify_handlers'
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\ui\cli_interface.py", line 42, in start
+    session_id = await self.chatbot.start_session()
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ChatbotInterface' object has no attribute 'start_session'. Did you mean: 'clear_session'?
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\chatbot\interface.py", line 964, in clear_session
+    await self._notify_handlers('session_cleared', old_session)
+          ^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ChatbotInterface' object has no attribute '_notify_handlers'
+2025-03-30 17:49:37 [ERROR] root (main.py:142): Error setting up interface: 'ChatbotInterface' object has no attribute '_notify_handlers'
+2025-03-30 17:49:37 [ERROR] root (main.py:186): Fatal error: 'ChatbotInterface' object has no attribute '_notify_handlers'
+2025-03-30 17:54:45 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 17:54:48 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 17:54:48 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 17:54:51 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 17:54:51 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 17:54:53 [INFO] models.simple_nn (simple_nn.py:18): Successfully imported transformers library
+2025-03-30 17:54:53 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 17:54:53 [INFO] root (main.py:173): Starting in interactive mode
+2025-03-30 17:54:53 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 17:54:53 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 17:54:53 [INFO] models.simple_nn (simple_nn.py:59): Loading transformer model: distilgpt2
+2025-03-30 17:54:55 [INFO] models.simple_nn (simple_nn.py:67): Successfully loaded transformer model on cpu
+2025-03-30 17:54:55 [INFO] ai_core.chatbot.interface (interface.py:234): Initializing unsupervised learning module
+2025-03-30 17:54:55 [INFO] ai_core.learning.unsupervised (unsupervised.py:49): Initialized unsupervised module with 10 clusters
+2025-03-30 17:54:55 [INFO] ai_core.chatbot.interface (interface.py:243): Initializing self-supervised learning module
+2025-03-30 17:54:55 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 17:55:00 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 17:55:00 [INFO] ai_core.chatbot.interface (interface.py:253): Initializing reinforcement learning module
+2025-03-30 17:55:00 [INFO] ai_core.chatbot.interface (interface.py:302): Learning modules initialized
+2025-03-30 17:55:00 [INFO] ai_core.chatbot.interface (interface.py:369): Cleared session data for None
+2025-03-30 17:55:00 [INFO] ai_core.chatbot.interface (interface.py:347): Started new session: session_1743350100_7585
+2025-03-30 17:55:00 [INFO] ai_core.chatbot.interface (interface.py:369): Cleared session data for session_1743350100_7585
+2025-03-30 17:55:00 [ERROR] root (main.py:142): Error setting up interface: 'ChatbotInterface' object has no attribute 'subscribe'
+2025-03-30 17:55:00 [ERROR] root (main.py:186): Fatal error: 'ChatbotInterface' object has no attribute 'subscribe'
+2025-03-30 17:57:50 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 17:57:53 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 17:57:53 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 17:57:56 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 17:57:56 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 17:57:58 [INFO] models.simple_nn (simple_nn.py:18): Successfully imported transformers library
+2025-03-30 17:57:58 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 17:57:58 [INFO] root (main.py:173): Starting in interactive mode
+2025-03-30 17:57:58 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 17:57:58 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 17:57:58 [INFO] models.simple_nn (simple_nn.py:59): Loading transformer model: distilgpt2
+2025-03-30 17:57:59 [INFO] models.simple_nn (simple_nn.py:67): Successfully loaded transformer model on cpu
+2025-03-30 17:57:59 [INFO] ai_core.chatbot.interface (interface.py:237): Initializing unsupervised learning module
+2025-03-30 17:57:59 [INFO] ai_core.learning.unsupervised (unsupervised.py:49): Initialized unsupervised module with 10 clusters
+2025-03-30 17:57:59 [INFO] ai_core.chatbot.interface (interface.py:246): Initializing self-supervised learning module
+2025-03-30 17:57:59 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 17:58:01 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 17:58:01 [INFO] ai_core.chatbot.interface (interface.py:256): Initializing reinforcement learning module
+2025-03-30 17:58:01 [INFO] ai_core.chatbot.interface (interface.py:305): Learning modules initialized
+2025-03-30 17:58:01 [INFO] ai_core.chatbot.interface (interface.py:401): Cleared session data for None
+2025-03-30 17:58:01 [INFO] ai_core.chatbot.interface (interface.py:379): Started new session: session_1743350281_7206
+2025-03-30 17:58:01 [INFO] ai_core.chatbot.interface (interface.py:401): Cleared session data for session_1743350281_7206
+2025-03-30 17:58:01 [ERROR] root (main.py:142): Error setting up interface: 'ChatbotInterface' object has no attribute 'subscribe'
+2025-03-30 17:58:01 [ERROR] root (main.py:186): Fatal error: 'ChatbotInterface' object has no attribute 'subscribe'
+2025-03-30 18:00:02 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 18:00:05 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 18:00:05 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 18:00:08 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 18:00:08 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 18:00:10 [INFO] models.simple_nn (simple_nn.py:18): Successfully imported transformers library
+2025-03-30 18:00:10 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 18:00:10 [INFO] root (main.py:173): Starting in interactive mode
+2025-03-30 18:00:10 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 18:00:10 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 18:00:10 [INFO] models.simple_nn (simple_nn.py:59): Loading transformer model: distilgpt2
+2025-03-30 18:00:12 [INFO] models.simple_nn (simple_nn.py:67): Successfully loaded transformer model on cpu
+2025-03-30 18:00:12 [INFO] ai_core.chatbot.interface (interface.py:237): Initializing unsupervised learning module
+2025-03-30 18:00:12 [INFO] ai_core.learning.unsupervised (unsupervised.py:49): Initialized unsupervised module with 10 clusters
+2025-03-30 18:00:12 [INFO] ai_core.chatbot.interface (interface.py:246): Initializing self-supervised learning module
+2025-03-30 18:00:12 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 18:00:13 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 18:00:13 [INFO] ai_core.chatbot.interface (interface.py:256): Initializing reinforcement learning module
+2025-03-30 18:00:13 [INFO] ai_core.chatbot.interface (interface.py:305): Learning modules initialized
+2025-03-30 18:00:13 [INFO] ai_core.chatbot.interface (interface.py:410): Cleared session data for None
+2025-03-30 18:00:13 [INFO] ai_core.chatbot.interface (interface.py:388): Started new session: session_1743350413_3448
+2025-03-30 18:00:13 [INFO] ai_core.chatbot.interface (interface.py:410): Cleared session data for session_1743350413_3448
+2025-03-30 18:00:13 [ERROR] root (main.py:142): Error setting up interface: object NoneType can't be used in 'await' expression
+2025-03-30 18:00:13 [ERROR] root (main.py:186): Fatal error: object NoneType can't be used in 'await' expression
+2025-03-30 18:01:57 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 18:02:00 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 18:02:00 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 18:02:02 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 18:02:02 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 18:02:05 [INFO] models.simple_nn (simple_nn.py:18): Successfully imported transformers library
+2025-03-30 18:02:05 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 18:02:05 [INFO] root (main.py:173): Starting in interactive mode
+2025-03-30 18:02:05 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 18:02:05 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 18:02:05 [INFO] models.simple_nn (simple_nn.py:59): Loading transformer model: distilgpt2
+2025-03-30 18:02:06 [INFO] models.simple_nn (simple_nn.py:67): Successfully loaded transformer model on cpu
+2025-03-30 18:02:06 [INFO] ai_core.chatbot.interface (interface.py:237): Initializing unsupervised learning module
+2025-03-30 18:02:06 [INFO] ai_core.learning.unsupervised (unsupervised.py:49): Initialized unsupervised module with 10 clusters
+2025-03-30 18:02:06 [INFO] ai_core.chatbot.interface (interface.py:246): Initializing self-supervised learning module
+2025-03-30 18:02:06 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 18:02:07 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 18:02:07 [INFO] ai_core.chatbot.interface (interface.py:256): Initializing reinforcement learning module
+2025-03-30 18:02:07 [INFO] ai_core.chatbot.interface (interface.py:305): Learning modules initialized
+2025-03-30 18:02:07 [INFO] ai_core.chatbot.interface (interface.py:410): Cleared session data for None
+2025-03-30 18:02:07 [INFO] ai_core.chatbot.interface (interface.py:388): Started new session: session_1743350527_6651
+2025-03-30 18:02:07 [INFO] ai_core.chatbot.interface (interface.py:410): Cleared session data for session_1743350527_6651
+2025-03-30 18:02:07 [ERROR] root (main.py:142): Error setting up interface: object NoneType can't be used in 'await' expression
+2025-03-30 18:02:07 [ERROR] root (main.py:186): Fatal error: object NoneType can't be used in 'await' expression
+2025-03-30 18:03:23 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 18:03:26 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 18:03:26 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 18:03:29 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 18:03:29 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 18:03:31 [INFO] models.simple_nn (simple_nn.py:18): Successfully imported transformers library
+2025-03-30 18:03:31 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 18:03:31 [INFO] root (main.py:173): Starting in interactive mode
+2025-03-30 18:03:31 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 18:03:31 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 18:03:31 [INFO] models.simple_nn (simple_nn.py:59): Loading transformer model: distilgpt2
+2025-03-30 18:03:33 [INFO] models.simple_nn (simple_nn.py:67): Successfully loaded transformer model on cpu
+2025-03-30 18:03:33 [INFO] ai_core.chatbot.interface (interface.py:237): Initializing unsupervised learning module
+2025-03-30 18:03:33 [INFO] ai_core.learning.unsupervised (unsupervised.py:49): Initialized unsupervised module with 10 clusters
+2025-03-30 18:03:33 [INFO] ai_core.chatbot.interface (interface.py:246): Initializing self-supervised learning module
+2025-03-30 18:03:33 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 18:03:34 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 18:03:34 [INFO] ai_core.chatbot.interface (interface.py:256): Initializing reinforcement learning module
+2025-03-30 18:03:34 [INFO] ai_core.chatbot.interface (interface.py:305): Learning modules initialized
+2025-03-30 18:03:34 [INFO] ai_core.chatbot.interface (interface.py:410): Cleared session data for None
+2025-03-30 18:03:34 [INFO] ai_core.chatbot.interface (interface.py:388): Started new session: session_1743350614_1306
+2025-03-30 18:03:34 [INFO] ai_core.chatbot.interface (interface.py:410): Cleared session data for session_1743350614_1306
+2025-03-30 18:03:34 [ERROR] root (main.py:142): Error setting up interface: object NoneType can't be used in 'await' expression
+2025-03-30 18:03:34 [ERROR] root (main.py:186): Fatal error: object NoneType can't be used in 'await' expression
+2025-03-30 18:05:25 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 18:05:28 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 18:05:28 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 18:05:31 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 18:05:31 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 18:05:33 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-30 18:05:33 [WARNING] models (__init__.py:11): Could not import SimpleNN and AdvancedNN
+2025-03-30 18:05:33 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 18:05:33 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 18:05:33 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 18:05:33 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-30 18:05:36 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-30 18:05:36 [INFO] ai_core.chatbot.interface (interface.py:237): Initializing unsupervised learning module
+2025-03-30 18:05:36 [INFO] ai_core.learning.unsupervised (unsupervised.py:49): Initialized unsupervised module with 10 clusters
+2025-03-30 18:05:36 [INFO] ai_core.chatbot.interface (interface.py:246): Initializing self-supervised learning module
+2025-03-30 18:05:36 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 18:05:38 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 18:05:38 [INFO] ai_core.chatbot.interface (interface.py:256): Initializing reinforcement learning module
+2025-03-30 18:05:38 [INFO] ai_core.chatbot.interface (interface.py:305): Learning modules initialized
+2025-03-30 18:05:38 [INFO] ai_core.chatbot.interface (interface.py:410): Cleared session data for None
+2025-03-30 18:05:38 [INFO] ai_core.chatbot.interface (interface.py:388): Started new session: session_1743350738_6389
+2025-03-30 18:05:38 [INFO] ai_core.chatbot.interface (interface.py:410): Cleared session data for session_1743350738_6389
+2025-03-30 18:05:49 [ERROR] ai_core.learning.unsupervised (unsupervised.py:193): Error clustering text: This KMeans instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.
+2025-03-30 18:05:49 [ERROR] ai_core.learning.unsupervised (unsupervised.py:193): Error clustering text: This KMeans instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.
+2025-03-30 18:05:58 [ERROR] ai_core.learning.unsupervised (unsupervised.py:193): Error clustering text: This KMeans instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.
+2025-03-30 18:05:58 [ERROR] ai_core.learning.unsupervised (unsupervised.py:193): Error clustering text: This KMeans instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.
+2025-03-30 18:08:46 [INFO] ai_core.chatbot.interface (interface.py:915): Periodic training task cancelled
+2025-03-30 18:08:46 [INFO] root (main.py:203): Keyboard interrupt received. Exiting.
+2025-03-30 18:11:28 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 18:11:31 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 18:11:31 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 18:11:34 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 18:11:34 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 18:11:36 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-30 18:11:36 [WARNING] models (__init__.py:11): Could not import SimpleNN and AdvancedNN
+2025-03-30 18:11:36 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 18:11:36 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 18:11:36 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 18:11:36 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-30 18:11:39 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-30 18:11:39 [INFO] ai_core.chatbot.interface (interface.py:237): Initializing unsupervised learning module
+2025-03-30 18:11:39 [INFO] ai_core.learning.unsupervised (unsupervised.py:49): Initialized unsupervised module with 10 clusters
+2025-03-30 18:11:39 [INFO] ai_core.chatbot.interface (interface.py:246): Initializing self-supervised learning module
+2025-03-30 18:11:39 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 18:11:40 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 18:11:40 [INFO] ai_core.chatbot.interface (interface.py:256): Initializing reinforcement learning module
+2025-03-30 18:11:40 [INFO] ai_core.chatbot.interface (interface.py:305): Learning modules initialized
+2025-03-30 18:11:40 [INFO] ai_core.chatbot.interface (interface.py:410): Cleared session data for None
+2025-03-30 18:11:40 [INFO] ai_core.chatbot.interface (interface.py:388): Started new session: session_1743351100_7348
+2025-03-30 18:11:40 [INFO] ai_core.chatbot.interface (interface.py:410): Cleared session data for session_1743351100_7348
+2025-03-30 18:11:55 [INFO] ai_core.chatbot.interface (interface.py:915): Periodic training task cancelled
+2025-03-30 18:11:55 [INFO] root (main.py:256): Keyboard interrupt received. Exiting.
+2025-03-30 18:13:22 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 18:13:25 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 18:13:25 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 18:13:28 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 18:13:28 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 18:13:30 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-30 18:13:30 [WARNING] models (__init__.py:11): Could not import SimpleNN and AdvancedNN
+2025-03-30 18:13:30 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 18:13:30 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 18:13:30 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 18:13:30 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-30 18:13:31 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-30 18:13:31 [INFO] ai_core.chatbot.interface (interface.py:237): Initializing unsupervised learning module
+2025-03-30 18:13:31 [INFO] ai_core.learning.unsupervised (unsupervised.py:49): Initialized unsupervised module with 10 clusters
+2025-03-30 18:13:31 [INFO] ai_core.chatbot.interface (interface.py:246): Initializing self-supervised learning module
+2025-03-30 18:13:31 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 18:13:33 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 18:13:33 [INFO] ai_core.chatbot.interface (interface.py:256): Initializing reinforcement learning module
+2025-03-30 18:13:33 [INFO] ai_core.chatbot.interface (interface.py:305): Learning modules initialized
+2025-03-30 18:13:33 [INFO] ai_core.chatbot.interface (interface.py:410): Cleared session data for None
+2025-03-30 18:13:33 [INFO] ai_core.chatbot.interface (interface.py:388): Started new session: session_1743351213_4649
+2025-03-30 18:13:33 [INFO] ai_core.chatbot.interface (interface.py:410): Cleared session data for session_1743351213_4649
+2025-03-30 18:13:41 [ERROR] ai_core.learning.unsupervised (unsupervised.py:193): Error clustering text: This KMeans instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.
+2025-03-30 18:13:41 [ERROR] ai_core.learning.unsupervised (unsupervised.py:193): Error clustering text: This KMeans instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.
+2025-03-30 18:17:40 [ERROR] ai_core.learning.unsupervised (unsupervised.py:193): Error clustering text: This KMeans instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.
+2025-03-30 18:17:40 [INFO] ai_core.chatbot.interface (interface.py:924): Periodic training task cancelled
+2025-03-30 18:17:40 [INFO] root (main.py:260): Keyboard interrupt received. Exiting.
+2025-03-30 18:17:43 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 18:17:45 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 18:17:45 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 18:17:48 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 18:17:48 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 18:17:50 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-30 18:17:50 [WARNING] models (__init__.py:11): Could not import SimpleNN and AdvancedNN
+2025-03-30 18:17:50 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 18:17:50 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 18:17:50 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 18:17:50 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-30 18:17:52 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-30 18:17:52 [INFO] ai_core.chatbot.interface (interface.py:237): Initializing unsupervised learning module
+2025-03-30 18:17:52 [INFO] ai_core.learning.unsupervised (unsupervised.py:49): Initialized unsupervised module with 10 clusters
+2025-03-30 18:17:52 [INFO] ai_core.chatbot.interface (interface.py:246): Initializing self-supervised learning module
+2025-03-30 18:17:52 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 18:17:54 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 18:17:54 [INFO] ai_core.chatbot.interface (interface.py:256): Initializing reinforcement learning module
+2025-03-30 18:17:54 [INFO] ai_core.chatbot.interface (interface.py:305): Learning modules initialized
+2025-03-30 18:17:54 [ERROR] root (main.py:189): ChatbotInterface missing process_message method
+2025-03-30 18:17:54 [ERROR] root (main.py:206): Error setting up interface: Interface missing required methods
+2025-03-30 18:17:54 [ERROR] root (main.py:217): Failed to set up interface. Exiting.
+2025-03-30 18:17:54 [INFO] ai_core.chatbot.interface (interface.py:573): Periodic training task cancelled
+2025-03-30 18:20:18 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 18:20:20 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 18:20:20 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 18:20:23 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 18:20:23 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 18:20:25 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-30 18:20:25 [WARNING] models (__init__.py:11): Could not import SimpleNN and AdvancedNN
+2025-03-30 18:20:25 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 18:20:25 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 18:20:25 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 18:20:25 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-30 18:20:27 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-30 18:20:27 [INFO] ai_core.chatbot.interface (interface.py:237): Initializing unsupervised learning module
+2025-03-30 18:20:27 [INFO] ai_core.learning.unsupervised (unsupervised.py:49): Initialized unsupervised module with 10 clusters
+2025-03-30 18:20:27 [INFO] ai_core.chatbot.interface (interface.py:246): Initializing self-supervised learning module
+2025-03-30 18:20:27 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 18:20:28 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 18:20:28 [INFO] ai_core.chatbot.interface (interface.py:256): Initializing reinforcement learning module
+2025-03-30 18:20:28 [INFO] ai_core.chatbot.interface (interface.py:305): Learning modules initialized
+2025-03-30 18:20:28 [INFO] ai_core.chatbot.interface (interface.py:410): Cleared session data for None
+2025-03-30 18:20:28 [INFO] ai_core.chatbot.interface (interface.py:388): Started new session: session_1743351628_2667
+2025-03-30 18:20:28 [INFO] ai_core.chatbot.interface (interface.py:410): Cleared session data for session_1743351628_2667
+2025-03-30 18:20:39 [WARNING] ai_core.chatbot.interface (interface.py:926): Could not get message embedding: 'ChatbotInterface' object has no attribute 'get_embedding'
+2025-03-30 18:20:39 [WARNING] ai_core.chatbot.interface (interface.py:940): Could not get cluster information: 'ChatbotInterface' object has no attribute '_process_unsupervised'
+2025-03-30 18:20:39 [WARNING] ai_core.chatbot.interface (interface.py:842): Error processing for learning: 'ChatbotInterface' object has no attribute '_process_unsupervised'
+2025-03-30 18:20:39 [WARNING] ai_core.chatbot.interface (interface.py:980): Could not store interaction for RL: 'ChatbotInterface' object has no attribute 'get_embedding'
+2025-03-30 18:47:28 [INFO] ai_core.chatbot.interface (interface.py:457): Chatbot interface cleaned up successfully
+2025-03-30 18:55:44 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 18:55:47 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 18:55:47 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 19:42:13 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 19:42:16 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 19:42:16 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 19:42:18 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 19:42:18 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 19:42:21 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-30 19:42:21 [WARNING] models (__init__.py:11): Could not import SimpleNN and AdvancedNN
+2025-03-30 19:42:21 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 19:42:21 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 19:42:21 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 19:42:21 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-30 19:42:23 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-30 19:42:23 [INFO] ai_core.chatbot.interface (interface.py:280): Initializing unsupervised learning module
+2025-03-30 19:42:23 [INFO] ai_core.learning.unsupervised (unsupervised.py:49): Initialized unsupervised module with 10 clusters
+2025-03-30 19:42:23 [INFO] ai_core.chatbot.interface (interface.py:289): Initializing self-supervised learning module
+2025-03-30 19:42:23 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 19:42:25 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 19:42:25 [INFO] ai_core.chatbot.interface (interface.py:299): Initializing reinforcement learning module
+2025-03-30 19:42:25 [ERROR] ai_core.chatbot.interface (interface.py:351): Failed to initialize learning modules: RLConfig.__init__() got an unexpected keyword argument 'device'
+2025-03-30 19:42:25 [INFO] ai_core.chatbot.interface (interface.py:455): Cleared session data for None
+2025-03-30 19:42:25 [INFO] ai_core.chatbot.interface (interface.py:433): Started new session: session_1743356545_9159
+2025-03-30 19:42:25 [INFO] ai_core.chatbot.interface (interface.py:455): Cleared session data for session_1743356545_9159
+2025-03-30 19:42:31 [INFO] ai_core.chatbot.interface (interface.py:502): Chatbot interface cleaned up successfully
+2025-03-30 19:45:49 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 19:45:51 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 19:45:51 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 19:45:54 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 19:45:54 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 19:45:56 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-30 19:45:56 [WARNING] models (__init__.py:11): Could not import SimpleNN and AdvancedNN
+2025-03-30 19:45:56 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 19:45:56 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 19:45:56 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 19:45:56 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-30 19:45:58 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-30 19:45:58 [INFO] ai_core.chatbot.interface (interface.py:280): Initializing unsupervised learning module
+2025-03-30 19:45:58 [INFO] ai_core.learning.unsupervised (unsupervised.py:49): Initialized unsupervised module with 10 clusters
+2025-03-30 19:45:58 [INFO] ai_core.chatbot.interface (interface.py:289): Initializing self-supervised learning module
+2025-03-30 19:45:58 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 19:45:59 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 19:45:59 [INFO] ai_core.chatbot.interface (interface.py:299): Initializing reinforcement learning module
+2025-03-30 19:45:59 [ERROR] ai_core.chatbot.interface (interface.py:351): Failed to initialize learning modules: RLConfig.__init__() got an unexpected keyword argument 'device'
+2025-03-30 19:45:59 [INFO] ai_core.chatbot.interface (interface.py:455): Cleared session data for None
+2025-03-30 19:45:59 [INFO] ai_core.chatbot.interface (interface.py:433): Started new session: session_1743356759_4646
+2025-03-30 19:45:59 [INFO] ai_core.chatbot.interface (interface.py:455): Cleared session data for session_1743356759_4646
+2025-03-30 19:46:15 [INFO] ai_core.chatbot.interface (interface.py:502): Chatbot interface cleaned up successfully
+2025-03-30 19:48:33 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 19:48:35 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 19:48:35 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 20:16:46 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 20:16:49 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 20:16:49 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 20:16:52 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 20:16:52 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 20:16:54 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-30 20:16:54 [WARNING] models (__init__.py:11): Could not import SimpleNN and AdvancedNN
+2025-03-30 20:16:54 [INFO] root (main.py:79): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 20:16:54 [INFO] root (main.py:105): Initializing user interface...
+2025-03-30 20:16:54 [WARNING] root (main.py:115): spaCy not available. NLP features will be limited.
+2025-03-30 20:16:54 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-30 20:16:56 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-30 20:16:56 [INFO] ai_core.chatbot.interface (interface.py:280): Initializing unsupervised learning module
+2025-03-30 20:16:56 [INFO] ai_core.learning.unsupervised (unsupervised.py:49): Initialized unsupervised module with 10 clusters
+2025-03-30 20:16:56 [INFO] ai_core.chatbot.interface (interface.py:289): Initializing self-supervised learning module
+2025-03-30 20:16:56 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 20:16:58 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 20:16:58 [INFO] ai_core.chatbot.interface (interface.py:299): Initializing reinforcement learning module
+2025-03-30 20:16:58 [ERROR] ai_core.chatbot.interface (interface.py:350): Failed to initialize learning modules: RLTrainer.__init__() got an unexpected keyword argument 'embedder'
+2025-03-30 20:16:58 [INFO] ai_core.chatbot.interface (interface.py:454): Cleared session data for None
+2025-03-30 20:16:58 [INFO] ai_core.chatbot.interface (interface.py:432): Started new session: session_1743358618_2710
+2025-03-30 20:16:58 [INFO] ai_core.chatbot.interface (interface.py:454): Cleared session data for session_1743358618_2710
+2025-03-30 20:17:14 [WARNING] ai_core.chatbot.interface (interface.py:1187): Error in unsupervised processing: 'UnsupervisedLearningModule' object has no attribute 'predict_cluster'
+2025-03-30 20:18:16 [WARNING] ai_core.chatbot.interface (interface.py:1187): Error in unsupervised processing: 'UnsupervisedLearningModule' object has no attribute 'predict_cluster'
+2025-03-30 20:19:51 [WARNING] ai_core.chatbot.interface (interface.py:1187): Error in unsupervised processing: 'UnsupervisedLearningModule' object has no attribute 'predict_cluster'
+2025-03-30 20:20:18 [WARNING] ai_core.chatbot.interface (interface.py:1187): Error in unsupervised processing: 'UnsupervisedLearningModule' object has no attribute 'predict_cluster'
+2025-03-30 20:21:00 [INFO] ai_core.chatbot.interface (interface.py:501): Chatbot interface cleaned up successfully
+2025-03-30 20:27:01 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 20:27:04 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 20:27:04 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 20:27:06 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 20:27:06 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 20:27:08 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-30 20:27:08 [WARNING] models (__init__.py:11): Could not import SimpleNN and AdvancedNN
+2025-03-30 20:27:08 [INFO] root (main.py:81): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 20:27:08 [INFO] root (main.py:107): Initializing user interface...
+2025-03-30 20:27:08 [WARNING] root (main.py:117): spaCy not available. NLP features will be limited.
+2025-03-30 20:27:08 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-30 20:27:10 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-30 20:27:10 [INFO] ai_core.chatbot.interface (interface.py:280): Initializing unsupervised learning module
+2025-03-30 20:27:10 [INFO] ai_core.learning.unsupervised (unsupervised.py:49): Initialized unsupervised module with 10 clusters
+2025-03-30 20:27:10 [INFO] ai_core.chatbot.interface (interface.py:289): Initializing self-supervised learning module
+2025-03-30 20:27:10 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 20:27:11 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 20:27:11 [INFO] ai_core.chatbot.interface (interface.py:299): Initializing reinforcement learning module
+2025-03-30 20:27:11 [ERROR] ai_core.chatbot.interface (interface.py:350): Failed to initialize learning modules: RLTrainer.__init__() got an unexpected keyword argument 'embedder'
+2025-03-30 20:27:11 [INFO] ai_core.chatbot.interface (interface.py:454): Cleared session data for None
+2025-03-30 20:27:11 [INFO] ai_core.chatbot.interface (interface.py:432): Started new session: session_1743359231_5663
+2025-03-30 20:27:11 [INFO] ai_core.chatbot.interface (interface.py:454): Cleared session data for session_1743359231_5663
+2025-03-30 20:27:11 [WARNING] root (main.py:267): Could not import monitoring components: No module named 'network.debug'
+2025-03-30 20:27:17 [WARNING] ai_core.chatbot.interface (interface.py:1187): Error in unsupervised processing: 'UnsupervisedLearningModule' object has no attribute 'predict_cluster'
+2025-03-30 20:33:52 [INFO] ai_core.chatbot.interface (interface.py:501): Chatbot interface cleaned up successfully
+2025-03-30 20:33:54 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 20:33:57 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 20:33:57 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 20:34:00 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 20:34:00 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 20:34:02 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-30 20:34:02 [WARNING] models (__init__.py:11): Could not import SimpleNN and AdvancedNN
+2025-03-30 20:34:02 [INFO] root (main.py:81): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 20:34:02 [INFO] root (main.py:107): Initializing user interface...
+2025-03-30 20:34:02 [WARNING] root (main.py:117): spaCy not available. NLP features will be limited.
+2025-03-30 20:34:02 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-30 20:34:04 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-30 20:34:04 [INFO] ai_core.chatbot.interface (interface.py:279): Initializing unsupervised learning module
+2025-03-30 20:34:04 [INFO] ai_core.learning.unsupervised (unsupervised.py:32): Initialized unsupervised module with 10 clusters
+2025-03-30 20:34:04 [INFO] ai_core.chatbot.interface (interface.py:288): Initializing self-supervised learning module
+2025-03-30 20:34:04 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 20:34:05 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 20:34:05 [INFO] ai_core.chatbot.interface (interface.py:298): Initializing reinforcement learning module
+2025-03-30 20:34:05 [ERROR] ai_core.chatbot.interface (interface.py:344): Failed to initialize learning modules: name 'PrioritizedReplayBuffer' is not defined
+2025-03-30 20:34:05 [INFO] ai_core.chatbot.interface (interface.py:448): Cleared session data for None
+2025-03-30 20:34:05 [INFO] ai_core.chatbot.interface (interface.py:426): Started new session: session_1743359645_4931
+2025-03-30 20:34:05 [INFO] ai_core.chatbot.interface (interface.py:448): Cleared session data for session_1743359645_4931
+2025-03-30 20:34:05 [WARNING] root (main.py:255): Could not import monitoring components: No module named 'network.debug'
+2025-03-30 20:34:05 [ERROR] root (main.py:334): Error setting up monitoring dashboard: name 'dataclass' is not defined
+2025-03-30 20:34:16 [INFO] ai_core.chatbot.interface (interface.py:857): Preprocessing message: 'm'
+2025-03-30 20:34:22 [INFO] ai_core.chatbot.interface (interface.py:857): Preprocessing message: 's'
+2025-03-30 20:34:31 [INFO] ai_core.chatbot.interface (interface.py:857): Preprocessing message: 'c'
+2025-03-30 20:35:34 [INFO] ai_core.chatbot.interface (interface.py:495): Chatbot interface cleaned up successfully
+2025-03-30 20:39:44 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 20:39:47 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 20:39:47 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 20:39:49 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 20:39:49 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 20:39:52 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-30 20:39:52 [WARNING] models (__init__.py:11): Could not import SimpleNN and AdvancedNN
+2025-03-30 20:39:52 [INFO] root (main.py:81): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 20:39:52 [INFO] root (main.py:107): Initializing user interface...
+2025-03-30 20:39:52 [WARNING] root (main.py:117): spaCy not available. NLP features will be limited.
+2025-03-30 20:39:52 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-30 20:39:53 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-30 20:39:53 [INFO] ai_core.chatbot.interface (interface.py:282): Initializing unsupervised learning module
+2025-03-30 20:39:53 [INFO] ai_core.learning.unsupervised (unsupervised.py:32): Initialized unsupervised module with 10 clusters
+2025-03-30 20:39:53 [INFO] ai_core.chatbot.interface (interface.py:291): Initializing self-supervised learning module
+2025-03-30 20:39:53 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 20:39:58 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 20:39:58 [INFO] ai_core.chatbot.interface (interface.py:301): Initializing reinforcement learning module
+2025-03-30 20:39:58 [ERROR] ai_core.chatbot.interface (interface.py:345): Failed to initialize learning modules: name 'PrioritizedReplayBuffer' is not defined
+2025-03-30 20:39:58 [INFO] ai_core.chatbot.interface (interface.py:449): Cleared session data for None
+2025-03-30 20:39:58 [INFO] ai_core.chatbot.interface (interface.py:427): Started new session: session_1743359998_2355
+2025-03-30 20:39:58 [INFO] ai_core.chatbot.interface (interface.py:449): Cleared session data for session_1743359998_2355
+2025-03-30 20:39:58 [WARNING] root (main.py:255): Could not import monitoring components: No module named 'network.debug'
+2025-03-30 20:39:58 [INFO] root (main.py:286): Started mock network monitoring
+2025-03-30 20:40:46 [INFO] ai_core.chatbot.interface (interface.py:858): Preprocessing message: 'c'
+2025-03-30 20:40:57 [INFO] ai_core.chatbot.interface (interface.py:858): Preprocessing message: 'hello'
+2025-03-30 20:41:10 [INFO] ai_core.chatbot.interface (interface.py:858): Preprocessing message: 'what?'
+2025-03-30 20:41:33 [INFO] ai_core.chatbot.interface (interface.py:496): Chatbot interface cleaned up successfully
+2025-03-30 20:41:33 [INFO] root (main.py:292): Mock network monitor shutdown requested
+2025-03-30 22:22:10 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 22:22:14 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 22:22:14 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 22:22:17 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 22:22:17 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 22:22:20 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-30 22:22:20 [WARNING] models (__init__.py:11): Could not import SimpleNN and AdvancedNN
+2025-03-30 22:22:20 [INFO] root (main.py:81): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 22:22:20 [INFO] root (main.py:107): Initializing user interface...
+2025-03-30 22:22:20 [WARNING] root (main.py:117): spaCy not available. NLP features will be limited.
+2025-03-30 22:22:20 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-30 22:22:22 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-30 22:22:22 [INFO] ai_core.chatbot.interface (interface.py:282): Initializing unsupervised learning module
+2025-03-30 22:22:22 [INFO] ai_core.learning.unsupervised (unsupervised.py:32): Initialized unsupervised module with 10 clusters
+2025-03-30 22:22:22 [INFO] ai_core.chatbot.interface (interface.py:291): Initializing self-supervised learning module
+2025-03-30 22:22:22 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 22:22:23 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 22:22:23 [INFO] ai_core.chatbot.interface (interface.py:301): Initializing reinforcement learning module
+2025-03-30 22:22:23 [ERROR] ai_core.chatbot.interface (interface.py:345): Failed to initialize learning modules: name 'PrioritizedReplayBuffer' is not defined
+2025-03-30 22:22:23 [INFO] ai_core.chatbot.interface (interface.py:449): Cleared session data for None
+2025-03-30 22:22:23 [INFO] ai_core.chatbot.interface (interface.py:427): Started new session: session_1743366143_6984
+2025-03-30 22:22:23 [INFO] ai_core.chatbot.interface (interface.py:449): Cleared session data for session_1743366143_6984
+2025-03-30 22:22:23 [WARNING] root (main.py:255): Could not import monitoring components: No module named 'network.debug'
+2025-03-30 22:22:23 [INFO] root (main.py:286): Started mock network monitoring
+2025-03-30 22:25:59 [INFO] ai_core.chatbot.interface (interface.py:496): Chatbot interface cleaned up successfully
+2025-03-30 22:25:59 [INFO] root (main.py:292): Mock network monitor shutdown requested
+2025-03-30 22:26:01 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 22:26:04 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 22:26:04 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 22:26:07 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 22:26:08 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 22:26:10 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-30 22:26:10 [WARNING] models (__init__.py:11): Could not import SimpleNN and AdvancedNN
+2025-03-30 22:26:10 [INFO] root (main.py:81): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 22:26:10 [INFO] root (main.py:107): Initializing user interface...
+2025-03-30 22:26:10 [WARNING] root (main.py:117): spaCy not available. NLP features will be limited.
+2025-03-30 22:26:10 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-30 22:26:12 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-30 22:26:12 [INFO] ai_core.chatbot.interface (interface.py:282): Initializing unsupervised learning module
+2025-03-30 22:26:12 [INFO] ai_core.learning.unsupervised (unsupervised.py:32): Initialized unsupervised module with 10 clusters
+2025-03-30 22:26:12 [INFO] ai_core.chatbot.interface (interface.py:291): Initializing self-supervised learning module
+2025-03-30 22:26:12 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 22:26:14 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 22:26:14 [INFO] ai_core.chatbot.interface (interface.py:301): Initializing reinforcement learning module
+2025-03-30 22:26:14 [ERROR] ai_core.chatbot.interface (interface.py:345): Failed to initialize learning modules: name 'PrioritizedReplayBuffer' is not defined
+2025-03-30 22:26:14 [INFO] ai_core.chatbot.interface (interface.py:449): Cleared session data for None
+2025-03-30 22:26:14 [INFO] ai_core.chatbot.interface (interface.py:427): Started new session: session_1743366374_5289
+2025-03-30 22:26:14 [INFO] ai_core.chatbot.interface (interface.py:449): Cleared session data for session_1743366374_5289
+2025-03-30 22:26:14 [WARNING] root (main.py:255): Could not import monitoring components: No module named 'network.debug'
+2025-03-30 22:26:14 [INFO] root (main.py:286): Started mock network monitoring
+2025-03-30 22:27:13 [INFO] ai_core.chatbot.interface (interface.py:496): Chatbot interface cleaned up successfully
+2025-03-30 22:27:13 [INFO] root (main.py:292): Mock network monitor shutdown requested
+2025-03-30 22:28:59 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 22:29:02 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 22:29:02 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 22:31:35 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 22:31:38 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 22:31:38 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 22:31:41 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 22:31:41 [WARNING] root (__init__.py:18): Could not import all learning modules: No module named 'network.debug'
+2025-03-30 22:31:43 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-30 22:31:43 [WARNING] models (__init__.py:11): Could not import SimpleNN and AdvancedNN
+2025-03-30 22:31:43 [INFO] root (main.py:81): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 22:31:43 [INFO] root (main.py:107): Initializing user interface...
+2025-03-30 22:31:43 [WARNING] root (main.py:117): spaCy not available. NLP features will be limited.
+2025-03-30 22:31:43 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-30 22:31:45 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-30 22:31:45 [INFO] ai_core.chatbot.interface (interface.py:282): Initializing unsupervised learning module
+2025-03-30 22:31:45 [INFO] ai_core.learning.unsupervised (unsupervised.py:32): Initialized unsupervised module with 10 clusters
+2025-03-30 22:31:45 [INFO] ai_core.chatbot.interface (interface.py:291): Initializing self-supervised learning module
+2025-03-30 22:31:45 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 22:31:47 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 22:31:47 [INFO] ai_core.chatbot.interface (interface.py:301): Initializing reinforcement learning module
+2025-03-30 22:31:47 [INFO] ai_core.chatbot.rl_trainer (rl_trainer.py:206): RL trainer initialized with cpu device
+2025-03-30 22:31:47 [INFO] ai_core.chatbot.interface (interface.py:342): Learning modules initialized
+2025-03-30 22:31:47 [INFO] ai_core.chatbot.interface (interface.py:449): Cleared session data for None
+2025-03-30 22:31:47 [INFO] ai_core.chatbot.interface (interface.py:427): Started new session: session_1743366707_5594
+2025-03-30 22:31:47 [INFO] ai_core.chatbot.interface (interface.py:449): Cleared session data for session_1743366707_5594
+2025-03-30 22:31:47 [WARNING] root (main.py:255): Could not import monitoring components: No module named 'network.debug'
+2025-03-30 22:31:47 [INFO] root (main.py:286): Started mock network monitoring
+2025-03-30 22:32:58 [INFO] ai_core.chatbot.interface (interface.py:496): Chatbot interface cleaned up successfully
+2025-03-30 22:32:58 [INFO] root (main.py:292): Mock network monitor shutdown requested
+2025-03-30 22:35:07 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 22:35:10 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 22:35:10 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 22:35:13 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 22:35:14 [WARNING] root (__init__.py:18): Could not import all learning modules: cannot import name 'DebugManager' from 'network.debug' (C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\network\debug.py)
+2025-03-30 22:35:16 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-30 22:35:16 [WARNING] models (__init__.py:11): Could not import SimpleNN and AdvancedNN
+2025-03-30 22:35:16 [INFO] root (main.py:81): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 22:35:16 [INFO] root (main.py:107): Initializing user interface...
+2025-03-30 22:35:16 [WARNING] root (main.py:117): spaCy not available. NLP features will be limited.
+2025-03-30 22:35:16 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-30 22:35:19 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-30 22:35:19 [INFO] ai_core.chatbot.interface (interface.py:282): Initializing unsupervised learning module
+2025-03-30 22:35:19 [INFO] ai_core.learning.unsupervised (unsupervised.py:32): Initialized unsupervised module with 10 clusters
+2025-03-30 22:35:19 [INFO] ai_core.chatbot.interface (interface.py:291): Initializing self-supervised learning module
+2025-03-30 22:35:19 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 22:35:20 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 22:35:20 [INFO] ai_core.chatbot.interface (interface.py:301): Initializing reinforcement learning module
+2025-03-30 22:35:20 [INFO] ai_core.chatbot.rl_trainer (rl_trainer.py:206): RL trainer initialized with cpu device
+2025-03-30 22:35:20 [INFO] ai_core.chatbot.interface (interface.py:342): Learning modules initialized
+2025-03-30 22:35:20 [INFO] ai_core.chatbot.interface (interface.py:449): Cleared session data for None
+2025-03-30 22:35:20 [INFO] ai_core.chatbot.interface (interface.py:427): Started new session: session_1743366920_6811
+2025-03-30 22:35:20 [INFO] ai_core.chatbot.interface (interface.py:449): Cleared session data for session_1743366920_6811
+2025-03-30 22:35:20 [WARNING] root (main.py:255): Could not import monitoring components: cannot import name 'DebugManager' from 'network.debug' (C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\network\debug.py)
+2025-03-30 22:35:20 [INFO] root (main.py:286): Started mock network monitoring
+2025-03-30 22:36:07 [INFO] ai_core.chatbot.interface (interface.py:858): Preprocessing message: 'hi'
+2025-03-30 22:36:08 [WARNING] ai_core.chatbot.interface (interface.py:991): Error in unsupervised processing: Boolean value of Tensor with more than one value is ambiguous
+2025-03-30 22:36:25 [INFO] ai_core.model_storage (model_storage.py:49): Feedback stored: score=1.0
+2025-03-30 22:36:25 [ERROR] ai_core.learning.unsupervised (unsupervised.py:90): Error predicting cluster: 'PCA' object has no attribute 'components_'
+2025-03-30 22:36:25 [INFO] ai_core.chatbot.interface (interface.py:820): Stored feedback with score 1.0 for response
+2025-03-30 22:36:31 [INFO] ai_core.chatbot.interface (interface.py:858): Preprocessing message: 'c'
+2025-03-30 22:36:31 [WARNING] ai_core.chatbot.interface (interface.py:991): Error in unsupervised processing: Boolean value of Tensor with more than one value is ambiguous
+2025-03-30 22:36:47 [INFO] ai_core.chatbot.interface (interface.py:858): Preprocessing message: 'hello'
+2025-03-30 22:36:47 [WARNING] ai_core.chatbot.interface (interface.py:991): Error in unsupervised processing: Boolean value of Tensor with more than one value is ambiguous
+2025-03-30 22:37:18 [INFO] ai_core.chatbot.interface (interface.py:858): Preprocessing message: 'how are you?  '
+2025-03-30 22:37:18 [WARNING] ai_core.chatbot.interface (interface.py:991): Error in unsupervised processing: Boolean value of Tensor with more than one value is ambiguous
+2025-03-30 22:39:56 [INFO] ai_core.chatbot.interface (interface.py:612): Periodic training task cancelled
+2025-03-30 22:39:56 [INFO] ai_core.chatbot.interface (interface.py:496): Chatbot interface cleaned up successfully
+2025-03-30 22:39:56 [INFO] root (main.py:292): Mock network monitor shutdown requested
+2025-03-30 22:43:58 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 22:44:01 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 22:44:01 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 22:44:01 [WARNING] root (__init__.py:18): Could not import all learning modules: cannot import name 'NetworkMonitor' from 'network.monitoring' (C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\network\monitoring.py)
+2025-03-30 22:44:06 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-30 22:44:06 [WARNING] models (__init__.py:11): Could not import SimpleNN and AdvancedNN
+2025-03-30 22:44:06 [INFO] root (main.py:81): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 22:44:06 [INFO] root (main.py:107): Initializing user interface...
+2025-03-30 22:44:06 [WARNING] root (main.py:117): spaCy not available. NLP features will be limited.
+2025-03-30 22:44:06 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-30 22:44:22 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-30 22:44:22 [INFO] ai_core.chatbot.interface (interface.py:282): Initializing unsupervised learning module
+2025-03-30 22:44:22 [INFO] ai_core.learning.unsupervised (unsupervised.py:32): Initialized unsupervised module with 10 clusters
+2025-03-30 22:44:22 [INFO] ai_core.chatbot.interface (interface.py:291): Initializing self-supervised learning module
+2025-03-30 22:44:22 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 22:44:32 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 22:44:32 [INFO] ai_core.chatbot.interface (interface.py:301): Initializing reinforcement learning module
+2025-03-30 22:44:32 [INFO] ai_core.chatbot.rl_trainer (rl_trainer.py:206): RL trainer initialized with cpu device
+2025-03-30 22:44:32 [INFO] ai_core.chatbot.interface (interface.py:342): Learning modules initialized
+2025-03-30 22:44:32 [INFO] ai_core.chatbot.interface (interface.py:449): Cleared session data for None
+2025-03-30 22:44:32 [INFO] ai_core.chatbot.interface (interface.py:427): Started new session: session_1743367472_8399
+2025-03-30 22:44:32 [INFO] ai_core.chatbot.interface (interface.py:449): Cleared session data for session_1743367472_8399
+2025-03-30 22:44:32 [WARNING] root (main.py:255): Could not import monitoring components: cannot import name 'NetworkMonitor' from 'network.monitoring' (C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\network\monitoring.py)
+2025-03-30 22:44:32 [INFO] root (main.py:286): Started mock network monitoring
+2025-03-30 22:44:57 [INFO] ai_core.chatbot.interface (interface.py:858): Preprocessing message: 'c'
+2025-03-30 22:44:57 [WARNING] ai_core.chatbot.interface (interface.py:991): Error in unsupervised processing: Boolean value of Tensor with more than one value is ambiguous
+2025-03-30 22:45:12 [INFO] ai_core.chatbot.interface (interface.py:858): Preprocessing message: 'learn fast'
+2025-03-30 22:45:12 [WARNING] ai_core.chatbot.interface (interface.py:991): Error in unsupervised processing: Boolean value of Tensor with more than one value is ambiguous
+2025-03-30 22:45:25 [INFO] ai_core.chatbot.interface (interface.py:858): Preprocessing message: 'no'
+2025-03-30 22:45:25 [WARNING] ai_core.chatbot.interface (interface.py:991): Error in unsupervised processing: Boolean value of Tensor with more than one value is ambiguous
+2025-03-30 22:47:13 [INFO] ai_core.chatbot.interface (interface.py:612): Periodic training task cancelled
+2025-03-30 22:47:13 [INFO] ai_core.chatbot.interface (interface.py:496): Chatbot interface cleaned up successfully
+2025-03-30 22:47:13 [INFO] root (main.py:292): Mock network monitor shutdown requested
+2025-03-30 22:52:57 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-30 22:53:00 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-30 22:53:00 [INFO] config (__init__.py:116): Configuration loaded successfully
+2025-03-30 22:53:02 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-30 22:53:03 [WARNING] root (__init__.py:18): Could not import all learning modules: cannot import name 'DebugManager' from 'network.debug' (C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\network\debug.py)
+2025-03-30 22:53:05 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-30 22:53:05 [WARNING] models (__init__.py:11): Could not import SimpleNN and AdvancedNN
+2025-03-30 22:53:05 [INFO] root (main.py:81): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-30 22:53:05 [INFO] root (main.py:107): Initializing user interface...
+2025-03-30 22:53:05 [WARNING] root (main.py:117): spaCy not available. NLP features will be limited.
+2025-03-30 22:53:05 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-30 22:53:07 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-30 22:53:07 [INFO] ai_core.chatbot.interface (interface.py:282): Initializing unsupervised learning module
+2025-03-30 22:53:07 [INFO] ai_core.learning.unsupervised (unsupervised.py:32): Initialized unsupervised module with 10 clusters
+2025-03-30 22:53:07 [INFO] ai_core.chatbot.interface (interface.py:291): Initializing self-supervised learning module
+2025-03-30 22:53:07 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-30 22:53:08 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-30 22:53:08 [INFO] ai_core.chatbot.interface (interface.py:301): Initializing reinforcement learning module
+2025-03-30 22:53:08 [INFO] ai_core.chatbot.rl_trainer (rl_trainer.py:206): RL trainer initialized with cpu device
+2025-03-30 22:53:08 [INFO] ai_core.chatbot.interface (interface.py:342): Learning modules initialized
+2025-03-30 22:53:08 [INFO] ai_core.chatbot.interface (interface.py:449): Cleared session data for None
+2025-03-30 22:53:08 [INFO] ai_core.chatbot.interface (interface.py:427): Started new session: session_1743367988_1276
+2025-03-30 22:53:08 [INFO] ai_core.chatbot.interface (interface.py:449): Cleared session data for session_1743367988_1276
+2025-03-30 22:53:08 [WARNING] root (main.py:255): Could not import monitoring components: cannot import name 'DebugManager' from 'network.debug' (C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\network\debug.py)
+2025-03-30 22:53:08 [INFO] root (main.py:286): Started mock network monitoring
+2025-03-30 22:54:14 [INFO] ai_core.chatbot.interface (interface.py:496): Chatbot interface cleaned up successfully
+2025-03-30 22:54:14 [INFO] root (main.py:292): Mock network monitor shutdown requested
+2025-03-31 01:45:09 [INFO] root (logging_config.py:73): Logging configuration complete
+2025-03-31 01:45:20 [WARNING] config.blockchain_config (blockchain_config.py:59): Using development mode with invalid/missing private key
+2025-03-31 01:45:20 [WARNING] config.system_config (system_config.py:221): Config file not found: C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\config\system.json, using defaults
+2025-03-31 01:45:20 [INFO] config (__init__.py:291): Configuration loaded successfully
+2025-03-31 01:45:28 [WARNING] root (reputation.py:15): atomicwrites not available, using standard file operations
+2025-03-31 01:45:29 [WARNING] root (__init__.py:18): Could not import all learning modules: cannot import name 'DebugManager' from 'network.debug' (C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\network\debug.py)
+2025-03-31 01:45:29 [INFO] ai_core.module_registry (module_registry.py:64): Initializing module registry
+2025-03-31 01:45:29 [INFO] ai_core.resource_management (resource_management.py:56): Initializing resource manager
+2025-03-31 01:45:29 [INFO] ai_core.resource_management (resource_management.py:65): Resource manager initialized
+2025-03-31 01:45:29 [INFO] ai_core.module_registry (module_registry.py:167): Computed startup order: 
+2025-03-31 01:45:29 [INFO] ai_core.module_registry (module_registry.py:81): Module registry initialized
+2025-03-31 01:45:29 [WARNING] ai_core.module_registry (module_registry.py:154): Missing dependency: dnc_controller for module hybrid_memory
+2025-03-31 01:45:29 [WARNING] ai_core.module_registry (module_registry.py:154): Missing dependency: memory_manager for module hybrid_memory
+2025-03-31 01:45:29 [INFO] ai_core.module_registry (module_registry.py:167): Computed startup order: hybrid_memory
+2025-03-31 01:45:29 [INFO] ai_core.module_registry (module_registry.py:129): Saved module configuration to config\modules.json
+2025-03-31 01:45:29 [INFO] ai_core.resource_management (resource_management.py:94): Registered module: hybrid_memory (type: HybridMemorySystem)
+2025-03-31 01:45:29 [INFO] ai_core.module_registry (module_registry.py:231): Registered module: hybrid_memory (HybridMemorySystem)
+2025-03-31 01:45:44 [INFO] models.simple_nn (simple_nn.py:14): Successfully imported transformers library
+2025-03-31 01:45:44 [INFO] root (main.py:81): Successfully imported SimpleNN directly from models.simple_nn
+2025-03-31 01:45:44 [INFO] root (main.py:107): Initializing user interface...
+2025-03-31 01:45:44 [WARNING] root (main.py:117): spaCy not available. NLP features will be limited.
+2025-03-31 01:45:44 [INFO] models.simple_nn (simple_nn.py:41): Loading transformer model: distilgpt2
+2025-03-31 01:45:48 [INFO] models.simple_nn (simple_nn.py:44): Successfully loaded transformer model on cpu
+2025-03-31 01:45:48 [INFO] ai_core.chatbot.interface (interface.py:294): Initializing unsupervised learning module
+2025-03-31 01:45:48 [INFO] ai_core.learning.unsupervised (unsupervised.py:34): Initialized unsupervised module with 10 clusters
+2025-03-31 01:45:48 [INFO] ai_core.chatbot.interface (interface.py:303): Initializing self-supervised learning module
+2025-03-31 01:45:48 [INFO] ai_core.learning.self_supervised (self_supervised.py:69): Loading model distilbert-base-uncased
+2025-03-31 01:45:50 [INFO] ai_core.learning.self_supervised (self_supervised.py:105): Successfully initialized self-supervised learning with distilbert-base-uncased on cpu
+2025-03-31 01:45:50 [INFO] ai_core.chatbot.interface (interface.py:313): Initializing reinforcement learning module
+2025-03-31 01:45:50 [INFO] ai_core.chatbot.rl_trainer (rl_trainer.py:206): RL trainer initialized with cpu device
+2025-03-31 01:45:50 [INFO] ai_core.chatbot.interface (interface.py:357): Learning modules initialized
+2025-03-31 01:45:50 [INFO] ai_core.chatbot.interface (interface.py:464): Cleared session data for None
+2025-03-31 01:45:50 [INFO] ai_core.chatbot.interface (interface.py:442): Started new session: session_1743378350_5227
+2025-03-31 01:45:50 [INFO] ai_core.chatbot.interface (interface.py:464): Cleared session data for session_1743378350_5227
+2025-03-31 01:45:50 [WARNING] root (main.py:295): Could not import monitoring components: cannot import name 'DebugManager' from 'network.debug' (C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\network\debug.py)
+2025-03-31 01:45:50 [INFO] root (main.py:326): Started mock network monitoring
+2025-03-31 01:46:04 [INFO] ai_core.chatbot.interface (interface.py:873): Preprocessing message: 'c'
+2025-03-31 01:46:04 [WARNING] ai_core.chatbot.interface (interface.py:1006): Error in unsupervised processing: Boolean value of Tensor with more than one value is ambiguous
+2025-03-31 01:48:16 [INFO] ai_core.chatbot.interface (interface.py:627): Periodic training task cancelled
+2025-03-31 01:48:16 [INFO] ai_core.chatbot.interface (interface.py:511): Chatbot interface cleaned up successfully
+2025-03-31 01:48:16 [INFO] root (main.py:332): Mock network monitor shutdown requested
+2025-03-31 01:48:17 [ERROR] asyncio (base_events.py:1871): Task was destroyed but it is pending!
+task: <Task pending name='Task-2' coro=<ResourceManager._monitor_resources() running at C:\Users\Mr.V\Documents\GitHub\vAIn_p2p_AGI\ai_core\resource_management.py:104> wait_for=<Future pending cb=[Task.task_wakeup()]>>
