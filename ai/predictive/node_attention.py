@@ -213,28 +213,29 @@ class BayesianOptimizer:
         self._bounds = {k: (0.1, 10.0) for k in node_attention_layer.weights.keys()}
         
     async def optimize_weights(self) -> None:
-        """Simple optimization implementation."""
+        """Simple optimization implementation with reduced redundant computations."""
         try:
-            # Simple grid search as placeholder
+            # Simple grid search as placeholder with optimized computation
             best_score = 0.0
             best_weights = self.node_attention_layer.weights.copy()
             
-            for _ in range(10):
+            # Reduce iterations from 10 to 5 for efficiency
+            for _ in range(5):
                 weights = {
-                    k: random.uniform(self._bounds[k][0], self.__bounds[k][1])
+                    k: random.uniform(self._bounds[k][0], self._bounds[k][1])
                     for k in self._bounds
                 }
                 self.node_attention_layer.update_weights(weights)
-                scores = []
-                for _ in range(5):
-                    result = await self.node_attention_layer.compute_attention({
-                        "test-node": weights
-                    })
-                    scores.append(result[0][1] if result else 0)
-                avg_score = np.mean(scores)
+                
+                # Single evaluation instead of 5 repeated ones
+                result = await self.node_attention_layer.compute_attention({
+                    "test-node": weights
+                })
+                avg_score = result[0][1] if result else 0.0
+                
                 if avg_score > best_score:
                     best_score = avg_score
-                    best_weights = weights.copy()
+                    best_weights = weights
                     
             self.node_attention_layer.update_weights(best_weights)
             
