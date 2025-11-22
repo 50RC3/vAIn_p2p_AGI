@@ -1,6 +1,7 @@
 import torch
 from typing import List, Dict, Optional, Tuple
 import copy
+import time
 from torch import nn, optim
 from torch.utils.data import DataLoader
 from .federated_client import FederatedClient
@@ -136,6 +137,8 @@ class FederatedLearning:
         if is_mobile and not hasattr(self, 'mobile_optimizer'):
             self.mobile_optimizer = MobileOptimizer(compression_rate=0.1)
 
+        # Note: deepcopy is expensive but necessary for model isolation
+        # Consider using model.clone() method if available in the model class
         local_model = copy.deepcopy(self.global_model)
         optimizer = optim.SGD(local_model.parameters(), lr=self.lr)
 
@@ -237,7 +240,7 @@ class FederatedLearning:
             self.error_accumulator[key] = errors[key]
         return compressed
 
-    async def update_global_intelligence(self, local_models: List[nn.Module]) -> float:
+    def update_global_intelligence(self, local_models: List[nn.Module]) -> float:
         """Track and update global intelligence score"""
         try:
             # Calculate cognitive improvements
@@ -295,7 +298,7 @@ class FederatedLearning:
         """Hierarchical aggregation through cluster leaders"""
         try:
             # Update global intelligence first
-            await self.update_global_intelligence(local_models)
+            self.update_global_intelligence(local_models)
             
             # Update Byzantine threshold based on history
             self._update_byzantine_threshold()
@@ -347,8 +350,8 @@ class FederatedLearning:
                 cluster_aggregate = self._aggregate_compressed_updates(compressed_updates)
                 cluster_models.append(cluster_aggregate)
             
-            # Final aggregation across clusters
-            final_model = copy.deepcopy(local_models[0])
+            # Final aggregation across clusters - reuse existing model to avoid deepcopy
+            final_model = local_models[0]  # Reuse first model instead of deepcopy
             final_update = self._aggregate_compressed_updates(cluster_models)
             final_model.load_state_dict(
                 self.compression.decompress_model_updates(final_update)
@@ -378,8 +381,8 @@ class FederatedLearning:
             # Normalize weights
             leader_weights = torch.softmax(torch.tensor(leader_weights), dim=0)
             
-            # Aggregate leader models
-            final_model = copy.deepcopy(local_models[0])
+            # Aggregate leader models - reuse existing model to avoid deepcopy overhead
+            final_model = local_models[0]  # Reuse first model
             aggregated_state = self._aggregate_states(
                 [model.state_dict() for model in leader_models],
                 leader_weights
@@ -392,18 +395,35 @@ class FederatedLearning:
             raise FederatedTrainingError(f"Aggregation failed: {str(e)}")
 
     def _aggregate_compressed_updates(self, compressed_updates: List[Dict]) -> Dict:
-        # Aggregate while preserving sparsity
-        # ...existing code...
+        """Aggregate compressed updates while preserving sparsity."""
+        if not compressed_updates:
+            return {}
+        
+        # Initialize aggregated update with zeros
+        aggregated = {}
+        for key in compressed_updates[0].keys():
+            aggregated[key] = sum(update[key] for update in compressed_updates) / len(compressed_updates)
+        
+        return aggregated
 
     def _compute_pairwise_distances(self, models: List[nn.Module]) -> torch.Tensor:
+        """Compute pairwise distances using vectorized operations for better performance."""
         n = len(models)
-        distances = torch.zeros((n, n))
         
-        for i in range(n):
-            for j in range(i + 1, n):
-                dist = self._model_distance(models[i], models[j])
-                distances[i][j] = distances[j][i] = dist
-                
+        # Stack all model parameters into a single tensor for vectorized computation
+        param_vectors = []
+        for model in models:
+            # Flatten all parameters into a single vector
+            params = torch.cat([p.data.flatten() for p in model.parameters()])
+            param_vectors.append(params)
+        
+        # Stack into a matrix [n_models, n_params]
+        param_matrix = torch.stack(param_vectors)
+        
+        # Compute pairwise L2 distances using broadcasting
+        # distances[i,j] = ||params[i] - params[j]||_2
+        distances = torch.cdist(param_matrix.unsqueeze(0), param_matrix.unsqueeze(0), p=2).squeeze(0)
+        
         return distances
 
     def _model_distance(self, model1: nn.Module, model2: nn.Module) -> float:

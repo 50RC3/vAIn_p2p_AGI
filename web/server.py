@@ -6,6 +6,7 @@ import json
 import logging
 from datetime import datetime
 import sys
+from collections import deque
 
 # Add project root to path to allow imports from other modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -50,8 +51,9 @@ rooms = {}
 messages = {}
 
 # Offline operation support (queues messages when offline)
+# Using deque for O(1) append and popleft operations instead of list
 offline_mode = False
-message_queue = []
+message_queue = deque()
 sync_in_progress = False
 
 # Directory for offline storage
@@ -69,14 +71,15 @@ def save_offline_message(message, room_id):
         offline_file = os.path.join(offline_dir, f'offline_queue_{datetime.now().strftime("%Y%m%d")}.json')
         
         with open(offline_file, 'w') as f:
-            json.dump(message_queue, f)
+            # Convert deque to list for JSON serialization
+            json.dump(list(message_queue), f)
             
         logger.info(f"Message saved to offline queue ({len(message_queue)} messages pending)")
     except Exception as e:
         logger.error(f"Failed to save offline message: {e}")
 
 def process_offline_queue():
-    """Process queued messages once back online"""
+    """Process queued messages once back online - optimized with deque"""
     global sync_in_progress, message_queue
     
     if offline_mode or sync_in_progress or not message_queue:
@@ -86,12 +89,13 @@ def process_offline_queue():
     logger.info(f"Processing offline message queue ({len(message_queue)} messages)")
     
     try:
-        # Sort by timestamp
-        message_queue.sort(key=lambda x: x['timestamp'])
+        # Sort by timestamp - convert to list for sorting, then back to deque
+        sorted_messages = sorted(message_queue, key=lambda x: x['timestamp'])
+        message_queue = deque(sorted_messages)
         
-        # Process messages
+        # Process messages using efficient popleft() operation
         while message_queue:
-            item = message_queue.pop(0)
+            item = message_queue.popleft()  # O(1) operation instead of pop(0) which is O(n)
             room_id = item['room_id']
             message = item['message']
             
